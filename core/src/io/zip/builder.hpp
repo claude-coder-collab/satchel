@@ -10,6 +10,7 @@
 #include "pipeline/context.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -27,6 +28,10 @@ struct BuilderOptions
     std::size_t sample_window = 128u << 10;
     // Deflate is kept only if it saves at least this fraction.
     double min_deflate_saving = 0.02;
+    // Readme template (empty: the default); see readme.hpp for placeholders.
+    std::string readme_template;
+    // Where multi-mono spill files go (empty: the system temporary directory).
+    std::filesystem::path temp_dir;
 };
 
 struct EntryResult

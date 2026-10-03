@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #pragma once
 
+#include "codecs/flac/flac_format.hpp"
 #include "common/status.hpp"
 #include "io/file_system.hpp"
 #include "io/stream.hpp"
@@ -84,6 +85,12 @@ public:
 
     Result<std::size_t> read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len);
 
+    // Reads only the FLAC metadata of a ".flac" entry (cached). nullopt for other entries or
+    // unreadable FLAC. Sets flac_restorable / flac_group on the entry.
+    std::optional<flac::Header> flac_header(std::size_t index);
+    // Probes every ".flac" entry.
+    void probe_flac();
+
 private:
     explicit ArchiveReader(IChunkedStream& input) :
         input_(input)
@@ -95,6 +102,9 @@ private:
     std::mutex io_mutex_;
     std::vector<ZipEntryInfo> entries_;
     std::vector<std::optional<std::uint64_t>> data_offsets_;
+    std::mutex probe_mutex_;
+    std::vector<std::uint8_t> probed_;
+    std::vector<std::optional<flac::Header>> flac_headers_;
     std::optional<ArchiveMetadata> metadata_;
     std::string comment_;
     bool zip64_ = false;

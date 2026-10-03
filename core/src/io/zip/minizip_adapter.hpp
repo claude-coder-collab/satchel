@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,9 @@ public:
     // The mz_stream* handed to mz_zip_open.
     void* handle();
     VoidResult flush();
+    // Overwrites bytes already written at an absolute offset (seekable output only), then
+    // returns to the end of the output.
+    VoidResult patch(std::uint64_t offset, std::span<const std::uint8_t> bytes);
     // Further writes are dropped (used to release minizip state after a failed build).
     void discard_writes();
     [[nodiscard]] const std::optional<Error>& error() const { return error_; }

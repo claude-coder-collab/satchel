@@ -3,6 +3,7 @@
 #include "io/zip/extractor.hpp"
 
 #include "codecs/codec.hpp"
+#include "codecs/flac/restore.hpp"
 #include "io/zip/path_policy.hpp"
 
 #include <algorithm>
@@ -20,6 +21,52 @@
 
 namespace zp
 {
+
+namespace
+{
+
+// Passes an entry's decompressed bytes through and checks size and CRC-32 at the end.
+class CrcCheckingStream final : public IChunkedStream
+{
+public:
+    CrcCheckingStream(std::unique_ptr<IChunkedStream> inner, const ZipEntryInfo& entry, std::atomic<std::uint64_t>& progress) :
+        inner_(std::move(inner)),
+        entry_(entry),
+        progress_(progress)
+    {
+    }
+
+    Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override
+    {
+        auto n = inner_->read(buf, len);
+        if (!n)
+            return n;
+        if (*n == 0)
+        {
+            if (size_ != entry_.uncompressed_size)
+                return fail(Status::CorruptArchive, std::format("'{}' is shorter than recorded", entry_.name));
+            if (crc_ != entry_.crc32)
+                return fail(Status::CrcMismatch, std::format("CRC-32 of '{}' does not match", entry_.name));
+            return 0;
+        }
+        crc_ = crc32_update(crc_, { buf, *n });
+        size_ += *n;
+        progress_.fetch_add(*n);
+        if (size_ > entry_.uncompressed_size)
+            return fail(Status::CorruptArchive, std::format("'{}' is larger than recorded", entry_.name));
+        return n;
+    }
+    [[nodiscard]] std::uint64_t tell() const override { return size_; }
+
+private:
+    std::unique_ptr<IChunkedStream> inner_;
+    const ZipEntryInfo& entry_;
+    std::atomic<std::uint64_t>& progress_;
+    std::uint32_t crc_ = 0;
+    std::uint64_t size_ = 0;
+};
+
+}
 
 bool ExtractionPlan::needs_decisions() const
 {
@@ -71,8 +118,11 @@ Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::
         std::size_t entry;
         std::string target;
         std::string key;
+        std::vector<std::size_t> members;
     };
     std::vector<Candidate> candidates;
+    std::set<flac::ProjectBlock::GroupId> groups_done;
+    bool probed_all = false;
 
     for (const auto idx : chosen)
     {
@@ -97,8 +147,59 @@ Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::
             plan.issues.push_back({ ExtractIssueKind::UnsupportedMethod, idx, e.name, e.encrypted ? std::string("encrypted entries are not supported") : std::format("compression method {} is not supported", e.raw_method) });
             continue;
         }
+        std::vector<std::size_t> members;
+        if (options_.restore_wav && e.kind == ItemKind::File)
+        {
+            const auto header = reader_.flac_header(idx);
+            if (header && header->project)
+            {
+                const auto& project = *header->project;
+                if (project.layout == flac::Layout::MultiMonoMember)
+                {
+                    if (groups_done.contains(project.group_id))
+                        continue;
+                    groups_done.insert(project.group_id);
+                    if (!probed_all)
+                    {
+                        reader_.probe_flac();
+                        probed_all = true;
+                    }
+                    std::vector<std::size_t> group;
+                    std::vector<flac::Header> headers;
+                    for (std::size_t j = 0; j < entries.size(); ++j)
+                    {
+                        auto h = reader_.flac_header(j);
+                        if (h && h->project && h->project->layout == flac::Layout::MultiMonoMember && h->project->group_id == project.group_id)
+                        {
+                            group.push_back(j);
+                            headers.push_back(std::move(*h));
+                        }
+                    }
+                    auto order = flac::order_members(headers);
+                    if (!order)
+                    {
+                        for (const auto j : group)
+                            plan.issues.push_back({ ExtractIssueKind::IncompleteGroup, j, entries[j].name, order.error().message });
+                        continue;
+                    }
+                    for (const auto o : *order)
+                        members.push_back(group[o]);
+                }
+                else
+                    members.push_back(idx);
+                const auto& original = project.original_name;
+                auto clean = PathPolicy::sanitize_for_extraction(original);
+                if (!clean || *clean != original || original.contains('/'))
+                {
+                    plan.issues.push_back({ ExtractIssueKind::UnsafePath, idx, e.name, std::format("restored name '{}' is not a plain file name", original) });
+                    continue;
+                }
+                const auto slash = target->rfind('/');
+                *target = (slash == std::string::npos ? std::string{} : target->substr(0, slash + 1)) + original;
+            }
+        }
         auto key = PathPolicy::collision_key(*target);
-        candidates.push_back({ idx, std::move(*target), key ? std::move(*key) : std::string{} });
+        candidates.push_back({ idx, std::move(*target), key ? std::move(*key) : std::string{}, std::move(members) });
     }
 
     std::map<std::string, std::vector<std::size_t>> by_key;
@@ -146,7 +247,7 @@ Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::
         if (refused.contains(c))
             continue;
         const auto& e = entries[candidates[c].entry];
-        ExtractItem item{ candidates[c].entry, candidates[c].target, e.kind, ItemDecision::Write };
+        ExtractItem item{ candidates[c].entry, candidates[c].target, e.kind, ItemDecision::Write, candidates[c].members };
         if (e.kind == ItemKind::File && sink_.exists(item.target))
         {
             switch (options_.overwrite)
@@ -196,7 +297,10 @@ ExtractResult ArchiveExtractor::execute(const ExtractionPlan& plan, ProgressSink
         else
         {
             files.push_back(&item);
-            total += entries[item.entry].uncompressed_size;
+            if (item.members.empty())
+                total += entries[item.entry].uncompressed_size;
+            for (const auto m : item.members)
+                total += entries[m].uncompressed_size;
         }
     }
 
@@ -235,7 +339,37 @@ ExtractResult ArchiveExtractor::execute(const ExtractionPlan& plan, ProgressSink
                 tasks.done();
                 return;
             }
+            auto restore = [&]() -> VoidResult {
+                std::vector<flac::Header> headers;
+                for (const auto m : item->members)
+                {
+                    auto h = reader_.flac_header(m);
+                    if (!h)
+                        return fail(Status::CorruptArchive, std::format("'{}' is no longer readable as FLAC", entries[m].name));
+                    headers.push_back(std::move(*h));
+                }
+                auto out = sink_.create_file(item->target, item->decision == ItemDecision::Replace);
+                if (!out)
+                    return std::unexpected(out.error());
+                const auto opener = [&](std::size_t k) -> Result<std::unique_ptr<IChunkedStream>> {
+                    const auto m = item->members[k];
+                    auto in = reader_.open_entry(m);
+                    if (!in)
+                        return std::unexpected(in.error());
+                    return std::unique_ptr<IChunkedStream>(std::make_unique<CrcCheckingStream>(std::move(*in), entries[m], done));
+                };
+                const auto sink = [&](std::span<const std::uint8_t> bytes) -> VoidResult {
+                    if (cancelled.load())
+                        return fail(Status::Cancelled, "cancelled");
+                    return (*out)->write(bytes);
+                };
+                if (auto r = flac::restore(headers, opener, sink); !r)
+                    return r;
+                return (*out)->commit(e.mtime, e.unix_mode);
+            };
             auto run = [&]() -> VoidResult {
+                if (!item->members.empty())
+                    return restore();
                 auto in = reader_.open_entry(item->entry);
                 if (!in)
                     return std::unexpected(in.error());
@@ -314,9 +448,10 @@ ExtractResult ArchiveExtractor::execute(const ExtractionPlan& plan, ProgressSink
     }
     if (result.status == Status::Ok && plan.error_count() > 0)
     {
-        result.status = plan.issues[static_cast<std::size_t>(std::ranges::find_if(plan.issues, &ExtractIssue::is_error) - plan.issues.begin())].kind == ExtractIssueKind::UnsafePath
-            ? Status::UnsafePath
-            : Status::NameCollision;
+        const auto& first = *std::ranges::find_if(plan.issues, &ExtractIssue::is_error);
+        result.status = first.kind == ExtractIssueKind::UnsafePath ? Status::UnsafePath
+            : first.kind == ExtractIssueKind::IncompleteGroup      ? Status::IncompleteGroup
+                                                                   : Status::NameCollision;
         result.message = std::format("{} entr{} refused", plan.error_count(), plan.error_count() == 1 ? "y" : "ies");
     }
     return result;

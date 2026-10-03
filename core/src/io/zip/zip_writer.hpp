@@ -62,6 +62,8 @@ public:
     Result<WrittenEntry> begin_entry(const EntryHeader& header);
     VoidResult write(std::span<const std::uint8_t> data);
     VoidResult end_entry(std::uint32_t crc, std::uint64_t compressed_size, std::uint64_t uncompressed_size);
+    // Overwrites data of the open entry (offset relative to its first data byte). Seekable output only.
+    VoidResult patch(std::uint64_t offset, std::span<const std::uint8_t> bytes);
     VoidResult finish(const std::string& comment);
     // Drops the archive; nothing more is written to the output.
     void abandon();
@@ -77,6 +79,7 @@ private:
     MinizipStreamAdapter adapter_;
     MinizipHandle zip_;
     bool descriptors_ = false;
+    std::uint64_t data_start_ = 0;
     bool in_entry_ = false;
     bool finished_ = false;
     std::uint64_t count_ = 0;

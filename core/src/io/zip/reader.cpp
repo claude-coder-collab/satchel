@@ -413,6 +413,8 @@ Result<std::unique_ptr<ArchiveReader>> ArchiveReader::open(IChunkedStream& input
         return std::unexpected(adapter.error_or(Status::CorruptArchive, "the central directory is damaged"));
     reader->zip64_ = std::ranges::any_of(reader->entries_, &ZipEntryInfo::zip64) || reader->entries_.size() >= 0xFFFF;
     reader->data_offsets_.resize(reader->entries_.size());
+    reader->probed_.resize(reader->entries_.size());
+    reader->flac_headers_.resize(reader->entries_.size());
     return reader;
 }
 
@@ -507,6 +509,50 @@ Result<CopiedEntry> ArchiveReader::copy_raw(std::size_t index, const std::string
     if (auto r = writer.end_entry(e.crc32, e.compressed_size, e.uncompressed_size); !r)
         return std::unexpected(r.error());
     return CopiedEntry{ w->zip64, e.raw_method, e.crc32, e.compressed_size, e.uncompressed_size };
+}
+
+}
+
+namespace zp
+{
+
+std::optional<flac::Header> ArchiveReader::flac_header(std::size_t index)
+{
+    if (index >= entries_.size())
+        return std::nullopt;
+    {
+        std::lock_guard lock(probe_mutex_);
+        if (probed_[index])
+            return flac_headers_[index];
+    }
+    auto& e = entries_[index];
+    std::optional<flac::Header> header;
+    const auto& n = e.name;
+    const bool is_flac_name = n.size() > 5 && std::equal(n.end() - 5, n.end(), ".flac", [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; });
+    if (is_flac_name && e.kind == ItemKind::File && e.method != EntryMethod::Unsupported)
+    {
+        if (auto stream = open_entry(index))
+        {
+            if (auto h = flac::read_header(**stream))
+                header = std::move(*h);
+        }
+    }
+    std::lock_guard lock(probe_mutex_);
+    probed_[index] = 1;
+    flac_headers_[index] = header;
+    if (header && header->project)
+    {
+        e.flac_restorable = true;
+        if (header->project->layout == flac::Layout::MultiMonoMember)
+            e.flac_group = FlacGroupInfo{ header->project->group_id, header->project->channel_index, header->project->channel_count };
+    }
+    return header;
+}
+
+void ArchiveReader::probe_flac()
+{
+    for (std::size_t i = 0; i < entries_.size(); ++i)
+        flac_header(i);
 }
 
 }

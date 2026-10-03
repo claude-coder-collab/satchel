@@ -15,11 +15,15 @@ target_include_directories(zp_capi_c_check PRIVATE ${PROJECT_SOURCE_DIR}/core/in
 set_target_properties(zp_capi_c_check PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON)
 
 add_executable(zp_tests
+    support/pcm_fixtures.cpp
     support/test_support.cpp
     unit/test_archive_metadata.cpp
     unit/test_bytes.cpp
     unit/test_codecs.cpp
+    unit/test_flac_format.cpp
+    unit/test_hash.cpp
     unit/test_path_policy.cpp
+    unit/test_pcm.cpp
     unit/test_planner.cpp
     unit/test_reader.cpp
     unit/test_streams.cpp
@@ -30,6 +34,7 @@ add_executable(zp_tests
     integration/test_editor.cpp
     integration/test_extract_plan.cpp
     integration/test_filesystem.cpp
+    integration/test_flac.cpp
     integration/test_interop.cpp
 )
 target_include_directories(zp_tests PRIVATE support)

@@ -196,7 +196,10 @@ typedef struct zp_plan_entry
     int has_group;
     uint8_t group_id[16];
     uint16_t channel_index;
+    uint16_t channel_count;
     int fallback_reason; /* -1 if none */
+    const char* fallback_detail; /* "" if none */
+    const char* restored_name; /* FLAC entries: archive path of the restored original, else "" */
 } zp_plan_entry_t;
 
 typedef struct zp_conflict
@@ -241,6 +244,8 @@ ZP_API void zp_plan_free(zp_plan_t* plan);
 typedef struct zp_build_options
 {
     uint64_t small_entry_threshold; /* 0 = default */
+    const char* readme_template; /* NULL = default; placeholders {APP_NAME} {APP_VERSION} {DEARCHIVER_URL} {FILE_LIST} */
+    const char* temp_dir; /* NULL = system temporary directory (multi-mono spill files) */
 } zp_build_options_t;
 
 typedef struct zp_entry_result
@@ -254,6 +259,9 @@ typedef struct zp_entry_result
     int status;
     const char* message;
 } zp_entry_result_t;
+
+/* Readme template used when zp_build_options_t.readme_template is NULL. */
+ZP_API const char* zp_default_readme_template(void);
 
 /* Returns the build status. *out_result (if non-NULL) receives per-entry results even when the
  * build fails; free it with zp_build_result_free. */

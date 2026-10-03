@@ -51,7 +51,9 @@ Checks: >
   -bugprone-exception-escape,
   -modernize-use-nodiscard,
   -readability-simplify-boolean-expr,
-  -readability-inconsistent-ifelse-braces
+  -readability-inconsistent-ifelse-braces,
+  -readability-avoid-return-with-void-value,
+  -cppcoreguidelines-pro-type-union-access
 CheckOptions:
   cppcoreguidelines-special-member-functions.AllowImplicitlyDeletedCopyOrMove: true
   cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
