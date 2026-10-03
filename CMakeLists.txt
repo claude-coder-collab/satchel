@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 3.28)
+
+project(satchel VERSION 0.1.0 DESCRIPTION "Lossless media packaging as standard zip archives" LANGUAGES C CXX)
+
+if(MSVC)
+    set(ZP_CXX_STANDARD 23)
+else()
+    set(ZP_CXX_STANDARD 26)
+endif()
+set(CMAKE_CXX_STANDARD ${ZP_CXX_STANDARD})
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+set(ZP_VERSION "" CACHE STRING "Version string embedded in binaries and archives (empty: the project version)")
+if(NOT ZP_VERSION)
+    set(ZP_VERSION "${PROJECT_VERSION}")
+endif()
+
+include(cmake/ProjectOptions.cmake)
+include(cmake/Dependencies.cmake)
+
+add_subdirectory(core)
+
+if(ZP_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

@@ -1,0 +1,16 @@
+name: Set up LLVM
+description: Install Clang, clang-format and clang-tidy from apt.llvm.org
+inputs:
+  version:
+    description: LLVM major version
+    default: "22"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        wget -q https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh ${{ inputs.version }}
+        sudo apt-get install -y clang-format-${{ inputs.version }} clang-tidy-${{ inputs.version }}
+        rm llvm.sh

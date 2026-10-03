@@ -1,0 +1,36 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": { "CMAKE_CONFIGURATION_TYPES": "Debug;Release" }
+        },
+        { "name": "gcc", "inherits": "base", "cacheVariables": { "CMAKE_C_COMPILER": "gcc", "CMAKE_CXX_COMPILER": "g++" } },
+        { "name": "clang", "inherits": "base", "cacheVariables": { "CMAKE_C_COMPILER": "clang", "CMAKE_CXX_COMPILER": "clang++" } },
+        { "name": "msvc", "inherits": "base", "cacheVariables": { "CMAKE_C_COMPILER": "cl", "CMAKE_CXX_COMPILER": "cl" } },
+        { "name": "clang-asan", "inherits": "clang", "cacheVariables": { "ZP_ENABLE_SANITIZERS": "ON" } },
+        { "name": "clang-tsan", "inherits": "clang", "cacheVariables": { "ZP_ENABLE_TSAN": "ON" } }
+    ],
+    "buildPresets": [
+        { "name": "gcc-debug", "configurePreset": "gcc", "configuration": "Debug" },
+        { "name": "gcc-release", "configurePreset": "gcc", "configuration": "Release" },
+        { "name": "clang-debug", "configurePreset": "clang", "configuration": "Debug" },
+        { "name": "clang-release", "configurePreset": "clang", "configuration": "Release" },
+        { "name": "msvc-debug", "configurePreset": "msvc", "configuration": "Debug" },
+        { "name": "msvc-release", "configurePreset": "msvc", "configuration": "Release" },
+        { "name": "clang-asan", "configurePreset": "clang-asan", "configuration": "Debug" },
+        { "name": "clang-tsan", "configurePreset": "clang-tsan", "configuration": "Debug" }
+    ],
+    "testPresets": [
+        { "name": "gcc-debug", "configurePreset": "gcc", "configuration": "Debug", "output": { "outputOnFailure": true } },
+        { "name": "clang-debug", "configurePreset": "clang", "configuration": "Debug", "output": { "outputOnFailure": true } },
+        { "name": "clang-release", "configurePreset": "clang", "configuration": "Release", "output": { "outputOnFailure": true } },
+        { "name": "msvc-release", "configurePreset": "msvc", "configuration": "Release", "output": { "outputOnFailure": true } },
+        { "name": "clang-asan", "configurePreset": "clang-asan", "configuration": "Debug", "output": { "outputOnFailure": true } },
+        { "name": "clang-tsan", "configurePreset": "clang-tsan", "configuration": "Debug", "output": { "outputOnFailure": true } }
+    ]
+}
