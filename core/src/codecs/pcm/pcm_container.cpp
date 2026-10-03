@@ -572,7 +572,7 @@ Result<PcmScan> scan_w64(Scanner& sc)
     std::uint64_t pos = 40;
     std::optional<WaveFormat> fmt;
     bool have_data = false;
-    const auto align8 = [](std::uint64_t v) { return (v + 7) & ~7ull; };
+    const auto align8 = [](std::uint64_t v) -> std::uint64_t { return (v + 7) & ~std::uint64_t{ 7 }; };
     while (pos < container_end)
     {
         if (container_end - pos < 24)
