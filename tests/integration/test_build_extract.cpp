@@ -51,7 +51,7 @@ TEST_CASE("plan, build, read, extract round-trip is byte-identical", "[integrati
         REQUIRE(x.files.contains(item.archive_path));
         const auto& f = x.files[item.archive_path];
         auto s = item.open().value();
-        std::vector<std::uint8_t> original(item.size);
+        std::vector<std::uint8_t> original(static_cast<std::size_t>(item.size));
         REQUIRE(s->read_full(original).value() == item.size);
         CHECK(f.data == original);
         CHECK(f.mtime == item.mtime_seconds());
@@ -231,7 +231,7 @@ TEST_CASE("compressed output matches the golden value", "[integration][deflate][
         for (std::size_t i = 0; i < r->entries().size(); ++i)
         {
             auto raw = r->open_raw(i).value();
-            std::vector<std::uint8_t> bytes(r->entries()[i].compressed_size);
+            std::vector<std::uint8_t> bytes(static_cast<std::size_t>(r->entries()[i].compressed_size));
             REQUIRE(raw->read_full(bytes).value() == bytes.size());
             crc = crc32_update(crc, bytes);
         }

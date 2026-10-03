@@ -69,6 +69,33 @@ jobs:
       - name: clang-tidy
         run: run-clang-tidy-23 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp'
 
+  wasm:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.10
+          actions-cache-folder: emsdk-cache
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure
+        run: emcmake cmake --preset wasm -DZP_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build/wasm --config Release
+      - name: Test
+        run: ctest --test-dir build/wasm -C Release --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: satchel-wasm
+          path: |
+            build/wasm/bindings/js/Release/satchel.mjs
+            build/wasm/bindings/js/Release/satchel.wasm
+          retention-days: 14
+
   macos:
     runs-on: macos-latest
     steps:
