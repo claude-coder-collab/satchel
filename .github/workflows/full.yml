@@ -1,0 +1,26 @@
+name: Full
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+env:
+  TZ: UTC
+
+jobs:
+  tsan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build unzip zip p7zip-full
+      - name: Configure
+        run: cmake --preset clang-tsan -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23
+      - name: Build
+        run: cmake --build build/clang-tsan --config Debug
+      - name: Test
+        env:
+          TSAN_OPTIONS: halt_on_error=1 second_deadlock_stack=1
+        run: ctest --test-dir build/clang-tsan -C Debug --output-on-failure

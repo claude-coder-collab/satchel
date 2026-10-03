@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+// Copyright (c) 2026 Venn Audio Ltd.
+#include "common/product.hpp"
+
+namespace zp::product {
+
+std::string_view version() noexcept
+{
+    return "@ZP_VERSION@";
+}
+
+}

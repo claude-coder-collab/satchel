@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TZ: UTC
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+      - name: clang-format
+        run: find core tests \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) -print0 | xargs -0 clang-format-23 --dry-run --Werror
+      - name: SPDX headers
+        run: |
+          missing=$(find core tests \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' -o -name '*.in' \) -print0 | xargs -0 grep -L 'SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial' || true)
+          if [ -n "$missing" ]; then echo "Missing SPDX header:"; echo "$missing"; exit 1; fi
+
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc
+            preset: gcc
+            config: Release
+            cc: gcc-14
+            cxx: g++-14
+          - name: clang-asan
+            preset: clang-asan
+            config: Debug
+            cc: clang-23
+            cxx: clang++-23
+    name: linux (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+        if: startsWith(matrix.name, 'clang')
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build unzip zip p7zip-full
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DZP_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build/${{ matrix.preset }} --config ${{ matrix.config }}
+      - name: Test
+        run: ctest --test-dir build/${{ matrix.preset }} -C ${{ matrix.config }} --output-on-failure -j 4
+
+  tidy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure
+        run: cmake --preset clang -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23
+      - name: Generate sources
+        run: cmake --build build/clang --config Debug --target zp_core
+      - name: clang-tidy
+        run: run-clang-tidy-23 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp'
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: brew install ninja
+      - name: Configure
+        run: cmake --preset clang -DZP_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build/clang --config Release
+      - name: Test
+        run: ctest --test-dir build/clang -C Release --output-on-failure -j 4
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure
+        run: cmake --preset msvc -DZP_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build/msvc --config Release
+      - name: Test
+        run: ctest --test-dir build/msvc -C Release --output-on-failure -j 4
