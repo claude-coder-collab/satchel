@@ -63,6 +63,8 @@ struct ExtractItem
     std::string target;
     ItemKind kind = ItemKind::File;
     ItemDecision decision = ItemDecision::Write;
+    // Restored from FLAC: the member entries in channel order (one for a single FLAC file).
+    std::vector<std::size_t> members;
 };
 
 struct ExtractionPlan

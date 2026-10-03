@@ -52,6 +52,7 @@ Namespace `zp`. C API prefix `zp_` (as in the zip design doc).
 | zlib-ng | 2.3.3 | native API (`ZLIB_COMPAT=OFF`), static |
 | minizip-ng | 4.2.2 | `MZ_ZLIB=ON` against the fetched zlib-ng; every other backend, crypto, iconv off. There is no `MZ_ZIP64` option in 4.x: Zip64 is always available |
 | utf8proc | 2.12.0 | NFC and case folding |
+| libFLAC | 1.5.0 | `WITH_ASM=OFF` (no SIMD), `-ffp-contract=off`, no Ogg, no multithreading: encoder output is identical on every CPU |
 | Catch2 | 3.16.0 | tests only |
 
 ## 4. Decisions and deviations
@@ -187,7 +188,128 @@ require the magic; anything else is a foreign comment (`nullopt`).
   in the same directory, fsync, `rename`/`ReplaceFileW`, directory fsync). The input is opened with
   `FILE_SHARE_DELETE` on Windows so the replace can happen while it is open.
 
-### 4.8 WebAssembly
+### 4.8 FLAC (main spec 7.2)
+
+**Detection (plan time).** Every file of at least 12 bytes is opened and its first bytes checked
+for RIFF/WAVE, RF64/WAVE, BW64/WAVE, FORM/AIFF, FORM/AIFC, `caff` v1 and the Wave64 `riff`/`wave`
+GUIDs. The extension does not matter. `scan_pcm` walks the chunk headers with seeks and splits the
+file into:
+
+    blocks before the audio header | audio header | samples | zero padding | blocks after | trailing
+
+The blocks must tile the file exactly, or the file falls back to store. Rules per container:
+
+| Container | First block | Audio header block | Audio padding |
+|---|---|---|---|
+| WAV, RF64, BW64 | 12 bytes (`RIFF`/`RF64` + size + `WAVE`) | 8 bytes (`data` + size) | to 2 bytes |
+| AIFF, AIFF-C | 12 bytes (`FORM` + size + type) | 16 bytes (`SSND` + size + offset + blockSize) | to 2 bytes |
+| Wave64 | 40 bytes (riff GUID + size + wave GUID) | 24 bytes (data GUID + size) | to 8 bytes |
+| CAF | 8 bytes (file header) | 16 bytes (`data` + size + edit count) | none |
+
+Other chunks are one block each, *including* their pad byte. These rules match what
+`flac --keep-foreign-metadata` 1.5.0 writes. They were found by running the tool on test files,
+not by reading its GPL code. The tool's documentation says the main chunk header and the form
+type are separate blocks; the tool actually writes them as one 12-byte block.
+
+**Fallback (store, keep name, `FLAC_FALLBACK` warning).** These cases fall back:
+
+- float samples; non-PCM WAVE formats; unknown EXTENSIBLE subformats;
+- AIFF-C compression other than `NONE`/`twos`/`sowt`;
+- CAF other than integer `lpcm` with one frame per packet;
+- bits outside 4–32 or containers wider than 4 bytes;
+- a sample rate of 0, above 1,048,575 Hz, or not a whole number;
+- 2^36 frames or more;
+- a block or trailing data larger than 16,777,211 bytes;
+- any structural problem: missing or duplicate fmt/COMM/desc/data, data before the format chunk,
+  sizes past the container or file end, placeholder sizes, a partial last frame, non-zero padding
+  after the audio, a non-zero SSND offset, an SSND size that disagrees with COMM.
+
+Fallback entries are always stored, not deflated (zip design 6).
+
+**Encoding.**
+- FLAC bits per sample is always 8 × the container byte width, never the "valid bits", so any
+  low-bit content survives. Zero low bits cost almost nothing thanks to FLAC's wasted-bits
+  detection. 8-bit WAV/Wave64 samples are unsigned and are converted to signed (XOR 0x80).
+- The fixed block size is 4096 for every level, so STREAMINFO min/max block size = 4096. Levels
+  map to libFLAC presets. The encoder tries streamable-subset mode first and drops it when libFLAC
+  refuses the settings (for example rates above 655,350 Hz).
+- Segments: 64 blocks × 4096 frames. Each one is encoded by a fresh libFLAC encoder; its metadata
+  writes are dropped and its frames renumbered (CRC-8 and CRC-16 recomputed). The output is
+  byte-identical to one sequential encoder at every level 0–8 (tested).
+- Block order: `fLaC`, STREAMINFO, VORBIS_COMMENT (vendor = libFLAC's vendor string), standard
+  foreign blocks (layout 0 only), project block (last). No padding or seek table.
+- FLAC entries are stored in the zip (method 0) with a Zip64 size hint of
+  header + frames × channels × bytes + 34 bytes per block.
+
+**Hashes and patching.**
+- A hasher thread computes the SHA-256 of the whole source file and the FLAC MD5 of the samples. The
+  MD5 input is signed little-endian samples of the container width. For multi-mono there is one
+  MD5 per channel. Its queue holds at most 16 chunks of 1 MiB, outside the memory budget.
+- Seekable output: the header is written with zeroed MD5, frame sizes and SHA-256. At the end the
+  writer patches the header in place through the adapter. The entry CRC is
+  `crc32_combine(crc(final header), crc(frames), len(frames))`.
+- Non-seekable output (multichannel only): two passes. The first reads the whole file for the
+  hashes, then the header is written complete. STREAMINFO min/max frame size is 0 ("unknown") in
+  this case, the only difference from seekable output.
+- Multi-mono members are written to spill files in `BuilderOptions.temp_dir` (default: the system
+  temp directory), patched there, then copied into the archive in channel order. They never need
+  two passes. Spill files are removed on success, failure and cancel.
+
+**Project block** (all integers big-endian): ID (4) | schema 1 | layout | group ID (16) |
+channel index | channel count | u16 name length + name | u32 length + private data | u32 length +
+trailing bytes | SHA-256 (32).
+
+- The original name is the file name only (no folders). If the user renamed the FLAC entry, it is
+  the new stem plus the original extension.
+- Private storage (layout 1 in `_ch01` only, and layout 2): the records encoded as FLAC APPLICATION
+  metadata blocks (4-byte header + 4-byte ID + chunk bytes, ID `riff`/`aiff`/`w64 `/`caff`),
+  concatenated. It is stored as u32 BE uncompressed length + raw deflate (level 9).
+- Trailing bytes go in the project block of the multichannel file or of `_ch01`.
+- Group ID: the first 16 bytes of SHA-256("satchel multi-mono group\n" + stem + size + mtime), with
+  RFC 9562 version-8/variant bits. The spec says "random"; deriving it keeps archives
+  reproducible.
+
+**Mirrored tags.**
+- The spec table is implemented from `bext`, `iXML` (simple element search with XML entity
+  decoding), `LIST/INFO` and AIFF `NAME`/`AUTH`/`ANNO`.
+- Non-UTF-8 text is read as Latin-1.
+- `ENCODER` = "Satchel <version>". Multi-mono members add `CHANNEL`, `CHANNELS` and `TRACK_NAME`.
+
+**Names and collisions.**
+- `take1.WAV` → `take1.flac`. More than 8 channels → `take1_chNN.flac` (at least 2 digits).
+- A converted entry also claims its *restored* name in the collision check, so archives never
+  collide on extraction either.
+- A multi-mono group is one unit: renaming any member renames all of them (new stem +
+  `_chNN.flac`), and skip or "store unconverted" applies to the whole group.
+- The readme cannot be the target of a resolution.
+
+**Readme.**
+- Template placeholders: `{APP_NAME}`, `{APP_VERSION}`, `{DEARCHIVER_URL}`, `{FILE_LIST}`. The
+  default template is the spec text with `{FILE_LIST}` after "Files that were converted:".
+- Rows show archive paths, aligned. Output is CRLF and UTF-8 without BOM, deflated like other
+  files.
+- Its mtime is the newest input file's. Files skipped with `SOURCE_CHANGED` are left out.
+- The editor drops the old readme (named in the archive metadata) and builds a new one when any
+  converted entry, new or kept, remains.
+
+**Extraction and restore.**
+- `.flac` entries are probed by reading their metadata only (`ArchiveReader::flac_header`, cached).
+  Probing is lazy: listing stays central-directory-only.
+- A FLAC entry with our project block is restorable. The target is the entry's folder plus the
+  stored original name, which must be a plain file name.
+- Multi-mono: selecting any member selects the group. Members must share group ID, channel count
+  and SHA-256, have distinct indices 1..N, and match in sample count and bits per sample;
+  otherwise every member gets `INCOMPLETE_GROUP`.
+- Restore re-runs `scan_pcm` on a virtual file made of the records, zeros for the audio and the
+  trailing bytes, which recovers the container layout and its padding. It then writes records,
+  decoded samples, padding and trailing bytes while hashing.
+- Checks: zip CRC-32 of every member (checked as the stream is consumed), libFLAC's MD5 check,
+  sample count, and SHA-256. Any failure deletes the partial output.
+- `flac::restore` also rebuilds FLAC files made by `flac --keep-foreign-metadata` (no project
+  block, so no SHA-256). The extractor does not restore those automatically, because they do not
+  carry our ID (spec).
+
+### 4.9 WebAssembly
 
 - Preset `wasm` (configure with `emcmake cmake --preset wasm`; Emscripten 6.0.10 in CI). All code is
   built with `-pthread`; linking uses `ALLOW_MEMORY_GROWTH` and a 1 MiB stack.
@@ -203,7 +325,7 @@ require the magic; anything else is a foreign comment (`nullopt`).
 - `ZP_API` in `zp.h` marks exports: `used` + default visibility under Emscripten and GCC/Clang,
   `dllexport`/`dllimport` for a Windows DLL (`ZP_SHARED_BUILD` / `ZP_SHARED`).
 
-### 4.9 C API
+### 4.10 C API
 
 `core/include/zp/zp.h`. Additions beyond the design doc's list: stream constructors (file, atomic
 file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
@@ -218,7 +340,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | 1. Zip layer: store, plan/execute, collisions, symlinks, path safety (native) | Done |
 | 2. WASM build + OPFS spike | WASM build, Node tests and module done; browser glue (Worker, OPFS, File System Access) and the device spike are pending |
 | 3. Deflate: parallel deflate, store heuristic | Done |
-| 4. FLAC path | Not started |
+| 4. FLAC path | Done: all six containers, multichannel and multi-mono, tags, readme, editor regeneration |
 | 5. PHP and Python bindings | Not started |
 | 6. CLI, then GUI | Not started |
 
@@ -232,6 +354,13 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 ## 6. Testing
 
 - `ctest` (or `zp_tests`) runs everything; tags: `[path] [planner] [reader] [zip_writer] [zip64]
-  [codec] [stream] [metadata] [integration] [extract] [editor] [filesystem] [interop] [capi]`.
+  [codec] [stream] [metadata] [integration] [extract] [editor] [filesystem] [interop] [capi]
+  [hash] [pcm] [tags] [flac] [readme] [golden]`.
+- Golden tests pin the compressed bytes of deflate and FLAC; they pass on arm64, x86-64 and WASM.
+- PCM fixtures are generated in C++ (`tests/support/pcm_fixtures.cpp`): every container, bit
+  depths 8–32, EXTENSIBLE, odd-sized and trailing chunks, chunks after the audio, trailing bytes,
+  float, compressed and placeholder variants.
+- Interop with the `flac` tool (when installed): `flac -t` and `flac -d --keep-foreign-metadata` on
+  our files, and our restore of files encoded by `flac --keep-foreign-metadata`.
 - Interop tests run Info-ZIP `unzip`/`zip` and 7-Zip when they are installed and skip otherwise.
 - Sanitizers: `clang-asan` and `clang-tsan` presets. clang-tidy: `.clang-tidy` at the root.

@@ -24,6 +24,9 @@ VoidResult ArchiveEditor::open(IChunkedStream& input)
         return std::unexpected(reader.error());
     entries_.clear();
     warnings_.clear();
+    (*reader)->probe_flac();
+    const auto& meta = (*reader)->metadata();
+    const std::string readme = meta ? meta->readme_name : std::string{};
     const auto& list = (*reader)->entries();
     for (std::size_t i = 0; i < list.size(); ++i)
     {
@@ -37,7 +40,20 @@ VoidResult ArchiveEditor::open(IChunkedStream& input)
             warnings_.push_back({ WarningKind::SymlinkSkipped, e.name, "symbolic link entries are dropped when the archive is rewritten" });
             continue;
         }
+        if (!readme.empty() && e.name == readme)
+            continue;
         PlanEntry p;
+        if (auto h = (*reader)->flac_header(i); h && h->project)
+        {
+            p.kept_restorable = true;
+            p.kept_restored_name = h->project->original_name;
+            p.channel_count = h->project->channel_count;
+            if (h->project->layout == flac::Layout::MultiMonoMember)
+            {
+                p.group_id = h->project->group_id;
+                p.channel_index = h->project->channel_index;
+            }
+        }
         p.item.source_path = "archive:" + e.name;
         p.item.archive_path = e.name;
         p.item.kind = e.kind;
@@ -72,6 +88,8 @@ VoidResult ArchiveEditor::remove(std::size_t index)
 {
     if (index >= entries_.size())
         return fail(Status::InvalidArgument, "entry index out of range");
+    if (entries_[index].codec == PlanCodec::Generated)
+        return fail(Status::InvalidArgument, "the generated readme cannot be edited");
     entries_.erase(entries_.begin() + static_cast<std::ptrdiff_t>(index));
     return {};
 }
@@ -109,6 +127,7 @@ ArchivePlan ArchiveEditor::plan() const
     p.options = options_;
     p.entries = entries_;
     p.warnings = warnings_;
+    ArchivePlanner::ensure_readme(p);
     ArchivePlanner::check(p);
     return p;
 }

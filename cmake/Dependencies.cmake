@@ -45,4 +45,22 @@ FetchContent_Declare(utf8proc
 )
 FetchContent_MakeAvailable(utf8proc)
 
+foreach(opt BUILD_CXXLIBS BUILD_PROGRAMS BUILD_EXAMPLES BUILD_DOCS WITH_OGG WITH_ASM WITH_AVX WITH_FORTIFY_SOURCE WITH_STACK_PROTECTOR
+            INSTALL_MANPAGES INSTALL_PKGCONFIG_MODULES INSTALL_CMAKE_CONFIG_MODULE ENABLE_MULTITHREADING)
+    set(${opt} OFF CACHE BOOL "" FORCE)
+endforeach()
+FetchContent_Declare(flac
+    URL https://github.com/xiph/flac/archive/refs/tags/1.5.0.tar.gz
+    URL_HASH SHA256=aea54ed186ad07a34750399cb27fc216a2b62d0ffcd6dc2e3064a3518c3146f8
+    SYSTEM
+    EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(flac)
+# Identical encoder output on every platform: no SIMD paths and no FMA contraction.
+if(MSVC)
+    target_compile_options(FLAC PRIVATE /fp:precise)
+else()
+    target_compile_options(FLAC PRIVATE -ffp-contract=off)
+endif()
+
 find_package(Threads REQUIRED)

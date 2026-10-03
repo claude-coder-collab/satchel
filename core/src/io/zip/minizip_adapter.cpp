@@ -181,6 +181,23 @@ VoidResult MinizipStreamAdapter::flush()
     return {};
 }
 
+VoidResult MinizipStreamAdapter::patch(std::uint64_t offset, std::span<const std::uint8_t> bytes)
+{
+    if (auto r = flush(); !r)
+        return r;
+    auto& inner = *impl_->inner;
+    if (!inner.seekable())
+        return fail(Status::Internal, "cannot patch a non-seekable output");
+    const auto end = inner.tell();
+    if (offset + bytes.size() > end)
+        return fail(Status::Internal, "patch beyond the written data");
+    if (auto r = inner.seek(offset); !r)
+        return r;
+    if (auto r = inner.write_all(bytes); !r)
+        return r;
+    return inner.seek(end);
+}
+
 void MinizipStreamAdapter::discard_writes()
 {
     impl_->pending.clear();

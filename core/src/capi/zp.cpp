@@ -10,6 +10,7 @@
 #include "io/zip/extractor.hpp"
 #include "io/zip/planner.hpp"
 #include "io/zip/reader.hpp"
+#include "io/zip/readme.hpp"
 #include "pipeline/context.hpp"
 
 #include <algorithm>
@@ -52,6 +53,7 @@ struct zp_plan
 {
     Context* context = nullptr;
     ArchivePlan plan;
+    mutable std::vector<std::string> restored_names;
 };
 
 struct zp_build_result
@@ -473,7 +475,12 @@ int zp_plan_get_entry(const zp_plan_t* plan, size_t i, zp_plan_entry_t* out)
     if (e.group_id)
         std::memcpy(out->group_id, e.group_id->data(), 16);
     out->channel_index = e.channel_index.value_or(0);
+    out->channel_count = e.channel_count;
     out->fallback_reason = e.flac_fallback_reason ? static_cast<int>(*e.flac_fallback_reason) : -1;
+    out->fallback_detail = e.flac_fallback_detail.c_str();
+    plan->restored_names.resize(plan->plan.entries.size());
+    plan->restored_names[i] = e.is_converted() ? e.restored_name() : std::string{};
+    out->restored_name = plan->restored_names[i].c_str();
     return ZP_OK;
 }
 
@@ -549,6 +556,11 @@ void zp_plan_free(zp_plan_t* plan)
     delete plan;
 }
 
+const char* zp_default_readme_template(void)
+{
+    return default_readme_template().data();
+}
+
 int zp_build(zp_plan_t* plan, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result)
 {
     ZP_REQUIRE(plan && output, ZP_INVALID_ARGUMENT);
@@ -559,6 +571,10 @@ int zp_build(zp_plan_t* plan, zp_stream_t* output, const zp_build_options_t* opt
             BuilderOptions o;
             if (options && options->small_entry_threshold)
                 o.small_entry_threshold = options->small_entry_threshold;
+            if (options && options->readme_template)
+                o.readme_template = options->readme_template;
+            if (options && options->temp_dir)
+                o.temp_dir = path_from_utf8(options->temp_dir);
             ArchiveBuilder builder(*output->stream, *plan->context, o);
             CallbackProgress p(progress, user);
             auto result = std::make_unique<zp_build_result>();
@@ -634,6 +650,7 @@ size_t zp_reader_entry_count(const zp_reader_t* reader)
 int zp_reader_get_entry(const zp_reader_t* reader, size_t i, zp_entry_info_t* out)
 {
     ZP_REQUIRE(reader && out && i < reader->reader->entries().size(), ZP_INVALID_ARGUMENT);
+    reader->reader->flac_header(i);
     const auto& e = reader->reader->entries()[i];
     *out = {};
     out->name = e.name.c_str();

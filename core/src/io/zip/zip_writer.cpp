@@ -125,6 +125,7 @@ Result<WrittenEntry> ZipWriter::begin_entry(const EntryHeader& header)
     if (rc != MZ_OK)
         return std::unexpected(last_error(rc, std::format("cannot write header for '{}'", header.name)));
     in_entry_ = true;
+    data_start_ = position();
     return written;
 }
 
@@ -152,6 +153,15 @@ VoidResult ZipWriter::end_entry(std::uint32_t crc, std::uint64_t compressed_size
         return std::unexpected(last_error(rc, "cannot finish entry"));
     ++count_;
     return {};
+}
+
+VoidResult ZipWriter::patch(std::uint64_t offset, std::span<const std::uint8_t> bytes)
+{
+    if (!in_entry_)
+        return fail(Status::Internal, "no entry open");
+    if (descriptors_)
+        return fail(Status::Internal, "cannot patch a non-seekable output");
+    return adapter_.patch(data_start_ + offset, bytes);
 }
 
 VoidResult ZipWriter::finish(const std::string& comment)

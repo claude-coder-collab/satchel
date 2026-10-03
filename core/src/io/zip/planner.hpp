@@ -25,6 +25,8 @@ public:
     static Result<ArchivePlan> replan(const ArchivePlan& plan, const std::vector<Resolution>& resolutions);
     // Recomputes conflicts from scratch.
     static void check(ArchivePlan& plan);
+    // Adds the readme entry when the plan has converted audio, removes it otherwise.
+    static void ensure_readme(ArchivePlan& plan);
 
     // Turns enumerated items into plan entries (shared with the editor).
     Result<std::vector<PlanEntry>> make_entries(std::vector<InputItem> items, std::vector<Warning>& warnings) const;

@@ -2,22 +2,13 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "io/zip/builder.hpp"
 
-#include "codecs/deflate.hpp"
-
+#include "io/zip/build_job.hpp"
 #include "io/zip/reader.hpp"
 #include "io/zip/zip_writer.hpp"
 
 #include <algorithm>
-#include <atomic>
-#include <condition_variable>
 #include <format>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <optional>
-#include <string>
-#include <utility>
-#include <vector>
+#include <random>
 
 namespace zp
 {
@@ -25,262 +16,61 @@ namespace zp
 namespace
 {
 
-enum class SegmentKind : std::uint8_t {
-    Data,
-    Directory,
-    Kept,
-    SkipEntry,
-    Fatal,
-};
+using build::FlacState;
+using build::Job;
+using build::Segment;
+using build::SegmentKind;
 
-struct Segment
+void merge_frame_sizes(FlacState& st, std::size_t k, std::uint32_t min_frame, std::uint32_t max_frame)
 {
-    SegmentKind kind = SegmentKind::Data;
-    std::size_t entry = 0;
-    bool first = true;
-    bool last = true;
-    ZipMethod method = ZipMethod::Store;
-    std::vector<std::uint8_t> output;
-    std::uint32_t crc = 0;
-    std::uint64_t input_size = 0;
-    std::uint64_t budget = 0;
-    Error error;
-};
-
-class Job
-{
-public:
-    Job(const ArchivePlan& job_plan, Context& job_context, const BuilderOptions& job_options) :
-        plan(job_plan),
-        context(job_context),
-        options(job_options),
-        budget(job_context.memory_budget()),
-        store(CodecRegistry::make_encoder(ZipMethod::Store, 0)),
-        deflate(CodecRegistry::make_encoder(ZipMethod::Deflate, job_plan.options.deflate_level))
-    {
-    }
-
-    void post(std::size_t seq, Segment s)
-    {
-        std::lock_guard lock(mutex);
-        ready.emplace(seq, std::move(s));
-        cv.notify_all();
-    }
-
-    void finish_reading(std::size_t total)
-    {
-        std::lock_guard lock(mutex);
-        total_segments = total;
-        cv.notify_all();
-    }
-
-    void abort()
-    {
-        cancelled.store(true);
-        budget.cancel();
-        std::lock_guard lock(mutex);
-        cv.notify_all();
-    }
-
-    const ArchivePlan& plan;
-    Context& context;
-    const BuilderOptions& options;
-    ByteBudget budget;
-    std::unique_ptr<SegmentEncoder> store;
-    std::unique_ptr<SegmentEncoder> deflate;
-    TaskCounter tasks;
-    std::atomic<bool> cancelled{ false };
-
-    std::mutex mutex;
-    std::condition_variable cv;
-    std::map<std::size_t, Segment> ready;
-    std::optional<std::size_t> total_segments;
-};
-
-std::uint64_t deflate_size_hint(std::uint64_t size)
-{
-    return size + size / 256 + (1u << 20);
+    if (max_frame == 0)
+        return;
+    st.min_frame[k] = st.min_frame[k] == 0 ? min_frame : std::min(st.min_frame[k], min_frame);
+    st.max_frame[k] = std::max(st.max_frame[k], max_frame);
 }
 
-bool deflate_pays_off(std::size_t compressed, std::size_t original, double min_saving)
+// Final metadata for stream k once hashes and frame sizes are known. Same length as the
+// placeholder version.
+std::vector<std::uint8_t> final_header(FlacState& st, std::size_t k)
 {
-    return original > 0 && static_cast<double>(compressed) <= static_cast<double>(original) * (1.0 - min_saving);
+    auto& hp = st.headers[k];
+    hp.info.min_frame_size = st.min_frame[k];
+    hp.info.max_frame_size = st.max_frame[k];
+    if (st.hashes)
+    {
+        hp.info.md5 = st.hashes->md5[st.hashes->md5.size() == 1 ? 0 : k];
+        hp.project.sha256 = st.hashes->sha256;
+    }
+    return flac::assemble_header(hp).bytes;
 }
 
-enum class EntryMode : std::uint8_t {
-    Fixed, // method chosen by the reader
-    Auto, // single segment; the worker keeps deflate only if it pays off
-};
-
-void read_entries(Job& job)
+Result<std::filesystem::path> spill_dir(const BuilderOptions& options)
 {
-    std::size_t seq = 0;
+    if (!options.temp_dir.empty())
+        return options.temp_dir;
+    std::error_code ec;
+    auto dir = std::filesystem::temp_directory_path(ec);
+    if (ec)
+        return fail(Status::IoError, std::format("no temporary directory: {}", ec.message()));
+    return dir;
+}
 
-    const auto fatal = [&](std::size_t entry, Error e) {
-        Segment s;
-        s.kind = SegmentKind::Fatal;
-        s.entry = entry;
-        s.error = std::move(e);
-        job.post(seq++, std::move(s));
-    };
-
-    for (std::size_t i = 0; i < job.plan.entries.size() && !job.cancelled.load(); ++i)
+Result<build::SpillFile> create_spill(const std::filesystem::path& dir)
+{
+    static std::atomic<std::uint64_t> counter{ 0 };
+    std::random_device rd;
+    for (int attempt = 0; attempt < 16; ++attempt)
     {
-        const auto& entry = job.plan.entries[i];
-        if (entry.is_directory() || entry.codec == PlanCodec::Kept)
-        {
-            Segment s;
-            s.kind = entry.is_directory() ? SegmentKind::Directory : SegmentKind::Kept;
-            s.entry = i;
-            job.post(seq++, std::move(s));
+        auto path = dir / std::format("satchel-spill-{:08x}-{}.flac", rd(), counter.fetch_add(1));
+        auto f = FileStream::open(path, FileMode::CreateNew);
+        if (!f)
             continue;
-        }
-
-        auto now = entry.item.current();
-        if (!now || *now != entry.snapshot)
-        {
-            Segment s;
-            s.kind = SegmentKind::SkipEntry;
-            s.entry = i;
-            s.error = now ? Error{ Status::SourceChanged, std::format("'{}' changed after planning", entry.item.source_path) } : now.error();
-            if (!now)
-                s.error.status = Status::SourceChanged;
-            job.post(seq++, std::move(s));
-            continue;
-        }
-
-        auto stream = entry.item.open();
-        if (!stream)
-        {
-            fatal(i, stream.error());
-            break;
-        }
-
-        const std::uint64_t size = entry.snapshot.size;
-        const Error change{ Status::SourceChanged, std::format("'{}' changed while it was being read", entry.item.source_path) };
-        bool failed = false;
-
-        EntryMode mode = EntryMode::Fixed;
-        const SegmentEncoder* encoder = job.store.get();
-        std::vector<std::uint8_t> prefix;
-        std::uint64_t seg_size = encoder->segment_size();
-        if (size > 0 && size <= job.options.small_entry_threshold)
-        {
-            mode = EntryMode::Auto;
-            encoder = job.deflate.get();
-            seg_size = size;
-        }
-        else if (size > 0)
-        {
-            prefix.resize(static_cast<std::size_t>(std::min<std::uint64_t>(job.options.sample_window, size)));
-            auto got = (*stream)->read_full(prefix);
-            if (!got || *got != prefix.size())
-            {
-                fatal(i, got ? change : got.error());
-                break;
-            }
-            auto sample = deflate_buffer(prefix, job.plan.options.deflate_level);
-            if (!sample)
-            {
-                fatal(i, sample.error());
-                break;
-            }
-            if (deflate_pays_off(sample->size(), prefix.size(), job.options.min_deflate_saving))
-                encoder = job.deflate.get();
-            seg_size = encoder->segment_size();
-        }
-
-        std::uint64_t remaining = size;
-        std::vector<std::uint8_t> history;
-        bool first = true;
-        do
-        {
-            const auto n = static_cast<std::size_t>(std::min<std::uint64_t>(seg_size, remaining));
-            const std::uint64_t cost = encoder->method() == ZipMethod::Store ? n : 2ull * n + 1024;
-            if (!job.budget.acquire(cost))
-            {
-                failed = true;
-                break;
-            }
-            std::vector<std::uint8_t> buf(n);
-            const auto from_prefix = std::min(prefix.size(), n);
-            std::copy_n(prefix.begin(), from_prefix, buf.begin());
-            prefix.erase(prefix.begin(), prefix.begin() + static_cast<std::ptrdiff_t>(from_prefix));
-            auto got = (*stream)->read_full(std::span(buf).subspan(from_prefix));
-            const bool last = remaining == n;
-            if (!got || *got != n - from_prefix)
-            {
-                job.budget.release(cost);
-                fatal(i, got ? change : got.error());
-                failed = true;
-                break;
-            }
-            if (last)
-            {
-                std::uint8_t probe = 0;
-                auto extra = (*stream)->read(&probe, 1);
-                if (!extra || *extra != 0)
-                {
-                    job.budget.release(cost);
-                    fatal(i, extra ? change : extra.error());
-                    failed = true;
-                    break;
-                }
-            }
-
-            std::vector<std::uint8_t> hist;
-            if (encoder->history_size() > 0 && !history.empty())
-                hist = history;
-            if (encoder->history_size() > 0 && !last)
-            {
-                const auto keep = std::min<std::size_t>(encoder->history_size(), buf.size());
-                history.assign(buf.end() - static_cast<std::ptrdiff_t>(keep), buf.end());
-            }
-
-            const auto my_seq = seq++;
-            job.tasks.add();
-            job.context.workers().submit([&job, encoder, mode, my_seq, i, first, last, cost, data = std::move(buf), hist = std::move(hist)]() mutable {
-                Segment s;
-                s.entry = i;
-                s.first = first;
-                s.last = last;
-                s.method = encoder->method();
-                s.input_size = data.size();
-                s.budget = cost;
-                s.crc = crc32_update(0, data);
-                if (mode == EntryMode::Auto)
-                {
-                    auto out = deflate_buffer(data, job.plan.options.deflate_level);
-                    if (!out)
-                    {
-                        s.kind = SegmentKind::Fatal;
-                        s.error = out.error();
-                    }
-                    else if (deflate_pays_off(out->size(), data.size(), job.options.min_deflate_saving))
-                        s.output = std::move(*out);
-                    else
-                    {
-                        s.method = ZipMethod::Store;
-                        s.output = std::move(data);
-                    }
-                }
-                else if (auto out = encoder->encode(hist, std::move(data), last))
-                    s.output = std::move(*out);
-                else
-                {
-                    s.kind = SegmentKind::Fatal;
-                    s.error = out.error();
-                }
-                job.post(my_seq, std::move(s));
-                job.tasks.done();
-            });
-            remaining -= n;
-            first = false;
-        } while (remaining > 0);
-        if (failed)
-            break;
+        build::SpillFile s;
+        s.path = std::move(path);
+        s.stream = std::move(*f);
+        return s;
     }
-    job.finish_reading(seq);
+    return fail(Status::IoError, std::format("cannot create a temporary file in '{}'", path_to_utf8(dir)));
 }
 
 }
@@ -288,7 +78,7 @@ void read_entries(Job& job)
 ArchiveBuilder::ArchiveBuilder(IChunkedStream& output, Context& context, BuilderOptions options) :
     output_(output),
     context_(context),
-    options_(options)
+    options_(std::move(options))
 {
 }
 
@@ -320,10 +110,10 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
         return result;
     }
 
-    Job job(plan, context_, options_);
+    Job job(plan, context_, options_, output_.seekable());
     job.tasks.add();
     context_.services().submit([&job] {
-        read_entries(job);
+        build::read_entries(job);
         job.tasks.done();
     });
 
@@ -333,11 +123,39 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
     std::optional<EntryResult> current;
     std::size_t next = 0;
     std::string readme_name;
+    std::vector<std::uint8_t> copy_buffer;
 
     const auto fail_with = [&](Error e) {
         if (!failure)
             failure = std::move(e);
         job.abort();
+    };
+
+    const auto begin = [&](const PlanEntry& entry, std::size_t index, ZipMethod method, std::optional<std::uint64_t> hint) -> bool {
+        EntryHeader h{ entry.output_name, false, method, plan.options.deflate_level, entry.item.mtime_seconds(), entry.item.unix_mode, hint };
+        auto w = (*writer)->begin_entry(h);
+        if (!w)
+        {
+            fail_with(w.error());
+            return false;
+        }
+        result.zip64 |= w->zip64;
+        current = EntryResult{ index, entry.output_name, method, 0, 0, 0, Status::Ok, {} };
+        return true;
+    };
+
+    const auto finish_current = [&](std::uint32_t crc, std::uint64_t size) -> bool {
+        if (auto r = (*writer)->end_entry(crc, size, size); !r)
+        {
+            fail_with(r.error());
+            return false;
+        }
+        current->crc32 = crc;
+        current->compressed_size = size;
+        current->uncompressed_size = size;
+        result.per_entry.push_back(std::move(*current));
+        current.reset();
+        return true;
     };
 
     while (!failure)
@@ -406,16 +224,9 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
             {
                 if (seg.first)
                 {
-                    const auto size = entry.snapshot.size;
-                    EntryHeader h{ entry.output_name, false, seg.method, plan.options.deflate_level, entry.item.mtime_seconds(), entry.item.unix_mode, seg.method == ZipMethod::Store ? size : deflate_size_hint(size) };
-                    auto w = (*writer)->begin_entry(h);
-                    if (!w)
-                    {
-                        fail_with(w.error());
+                    const auto size = entry.codec == PlanCodec::Generated ? seg.input_size : entry.snapshot.size;
+                    if (!begin(entry, seg.entry, seg.method, seg.method == ZipMethod::Store ? size : build::deflate_size_hint(size)))
                         break;
-                    }
-                    result.zip64 |= w->zip64;
-                    current = EntryResult{ seg.entry, entry.output_name, seg.method, 0, 0, 0, Status::Ok, {} };
                     if (entry.codec == PlanCodec::Generated)
                         readme_name = entry.output_name;
                 }
@@ -433,7 +244,8 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
                 cur.crc32 = crc32_combine(cur.crc32, seg.crc, seg.input_size);
                 cur.compressed_size += seg.output.size();
                 cur.uncompressed_size += seg.input_size;
-                done_bytes += seg.input_size;
+                if (entry.codec != PlanCodec::Generated)
+                    done_bytes += seg.input_size;
                 if (seg.last)
                 {
                     if (auto r = (*writer)->end_entry(cur.crc32, cur.compressed_size, cur.uncompressed_size); !r)
@@ -444,6 +256,142 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
                     result.per_entry.push_back(std::move(cur));
                     current.reset();
                 }
+                break;
+            }
+            case SegmentKind::FlacHeader:
+            {
+                auto& st = *seg.flac;
+                const auto& header = st.assembled[0].bytes;
+                const auto hint = header.size() + flac::encoded_size_bound(*entry.pcm, entry.pcm->frames, entry.pcm->channels);
+                if (!begin(entry, seg.entry, ZipMethod::Store, hint))
+                    break;
+                if (auto r = (*writer)->write(header); !r)
+                    fail_with(r.error());
+                break;
+            }
+            case SegmentKind::FlacFrames:
+            {
+                auto& st = *seg.flac;
+                if (auto r = (*writer)->write(seg.output); !r)
+                {
+                    fail_with(r.error());
+                    break;
+                }
+                st.frames_crc = crc32_combine(st.frames_crc, seg.crc, seg.output.size());
+                st.frames_bytes[0] += seg.output.size();
+                merge_frame_sizes(st, 0, seg.min_frame, seg.max_frame);
+                done_bytes += seg.input_size;
+                break;
+            }
+            case SegmentKind::FlacEnd:
+            {
+                auto& st = *seg.flac;
+                if (st.hasher)
+                    st.hashes = st.hasher->wait();
+                std::vector<std::uint8_t> header;
+                if (st.patch_hashes)
+                {
+                    header = final_header(st, 0);
+                    if (auto r = (*writer)->patch(0, header); !r)
+                    {
+                        fail_with(r.error());
+                        break;
+                    }
+                }
+                else
+                    header = st.assembled[0].bytes;
+                const auto crc = crc32_combine(crc32_update(0, header), st.frames_crc, st.frames_bytes[0]);
+                finish_current(crc, header.size() + st.frames_bytes[0]);
+                done_bytes += entry.pcm->non_audio_bytes();
+                break;
+            }
+            case SegmentKind::MonoStart:
+            {
+                auto& st = *seg.flac;
+                auto dir = spill_dir(options_);
+                if (!dir)
+                {
+                    fail_with(dir.error());
+                    break;
+                }
+                for (std::size_t k = 0; k < st.entries.size() && !failure; ++k)
+                {
+                    auto spill = create_spill(*dir);
+                    if (!spill)
+                    {
+                        fail_with(spill.error());
+                        break;
+                    }
+                    if (auto r = spill->stream->write_all(st.assembled[k].bytes); !r)
+                        fail_with(r.error());
+                    st.spills.push_back(std::move(*spill));
+                }
+                break;
+            }
+            case SegmentKind::MonoFrames:
+            {
+                auto& st = *seg.flac;
+                if (auto r = st.spills[seg.channel].stream->write_all(seg.output); !r)
+                {
+                    fail_with(r.error());
+                    break;
+                }
+                st.frames_bytes[seg.channel] += seg.output.size();
+                merge_frame_sizes(st, seg.channel, seg.min_frame, seg.max_frame);
+                done_bytes += seg.input_size;
+                break;
+            }
+            case SegmentKind::MonoMember:
+            {
+                auto& st = *seg.flac;
+                const auto k = seg.channel;
+                if (st.hasher && !st.hashes)
+                    st.hashes = st.hasher->wait();
+                auto& spill = st.spills[k];
+                const auto header = final_header(st, k);
+                auto& fs = *spill.stream;
+                const auto size = fs.tell();
+                if (auto r = fs.seek(0); !r)
+                {
+                    fail_with(r.error());
+                    break;
+                }
+                if (auto r = fs.write_all(header); !r)
+                {
+                    fail_with(r.error());
+                    break;
+                }
+                if (!begin(entry, seg.entry, ZipMethod::Store, size))
+                    break;
+                if (auto r = fs.seek(0); !r)
+                {
+                    fail_with(r.error());
+                    break;
+                }
+                copy_buffer.resize(1u << 20);
+                std::uint32_t crc = 0;
+                std::uint64_t copied = 0;
+                while (copied < size && !failure)
+                {
+                    const auto want = static_cast<std::size_t>(std::min<std::uint64_t>(copy_buffer.size(), size - copied));
+                    auto n = fs.read(copy_buffer.data(), want);
+                    if (!n || *n != want)
+                    {
+                        fail_with(n ? Error{ Status::IoError, "temporary file is shorter than expected" } : n.error());
+                        break;
+                    }
+                    const std::span<const std::uint8_t> chunk(copy_buffer.data(), *n);
+                    crc = crc32_update(crc, chunk);
+                    if (auto r = (*writer)->write(chunk); !r)
+                        fail_with(r.error());
+                    copied += *n;
+                }
+                if (failure)
+                    break;
+                finish_current(crc, size);
+                spill = build::SpillFile{};
+                if (k == 0)
+                    done_bytes += entry.pcm->non_audio_bytes();
                 break;
             }
         }
