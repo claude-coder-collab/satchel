@@ -32,6 +32,11 @@ if(EMSCRIPTEN)
     add_subdirectory(bindings/js)
 endif()
 
+option(ZP_BUILD_CLI "Build the command-line tool" ON)
+if(ZP_BUILD_CLI AND NOT EMSCRIPTEN)
+    add_subdirectory(desktop/cli)
+endif()
+
 if(ZP_BUILD_TESTS)
     add_subdirectory(tests)
 endif()

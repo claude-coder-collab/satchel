@@ -56,6 +56,11 @@ jobs:
         run: cmake --build build/${{ matrix.preset }} --config ${{ matrix.config }}
       - name: Test
         run: ctest --test-dir build/${{ matrix.preset }} -C ${{ matrix.config }} --output-on-failure -j 4
+      - name: CLI tests
+        if: matrix.name == 'gcc'
+        run: |
+          pip install pytest
+          SATCHEL_CLI=build/${{ matrix.preset }}/desktop/cli/${{ matrix.config }}/satchel python3 -m pytest -q tests/cli
 
   tidy:
     runs-on: ubuntu-24.04
@@ -67,9 +72,9 @@ jobs:
       - name: Configure
         run: cmake --preset clang -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23
       - name: Generate sources
-        run: cmake --build build/clang --config Debug --target zp_core
+        run: cmake --build build/clang --config Debug --target zp_core satchel_cli
       - name: clang-tidy
-        run: run-clang-tidy-23 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp'
+        run: run-clang-tidy-23 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp' 'desktop/.*\.cpp'
 
   bindings:
     runs-on: ubuntu-24.04
@@ -148,3 +153,8 @@ jobs:
         run: cmake --build build/msvc --config Release
       - name: Test
         run: ctest --test-dir build/msvc -C Release --output-on-failure -j 4
+      - name: CLI tests
+        shell: bash
+        run: |
+          pip install pytest
+          SATCHEL_CLI=build/msvc/desktop/cli/Release/satchel.exe python -m pytest -q tests/cli

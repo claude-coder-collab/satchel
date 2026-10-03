@@ -347,7 +347,39 @@ trailing bytes | SHA-256 (32).
 - Tests: `pytest` in `bindings/python`, `php tests/run.php` in `bindings/php`. Python and PHP
   produce byte-identical archives for the same input (checked when PHP is installed).
 
-### 4.11 C API
+### 4.11 Command-line tool (main spec 12.1)
+
+`desktop/cli` builds `satchel` (CLI11 2.7.2, nlohmann/json 3.12.0). It uses only the C API, via
+the header-only wrapper `desktop/common/zp_cpp.hpp` (RAII handles, typed errors, list readers),
+which the GUI will reuse.
+
+| Command | Purpose |
+|---|---|
+| `create ARCHIVE PATH...` | Plan and build. `ARCHIVE` `-` writes a streamed zip to stdout. `--no-flac`, `--deflate-level`, `--flac-level`, `--rename NAME=NEW`, `--skip NAME`, `--store-unconverted NAME`, `--resolutions FILE.json`, `--dry-run`, `--readme-template FILE`, `--temp-dir DIR` |
+| `extract ARCHIVE [ENTRY...]` | `-d DIR` (default `.`), `--keep-flac`, `--include-readme`, `--overwrite ask\|skip\|replace` |
+| `list ARCHIVE` | Table or JSON: name, sizes, method (store/deflate/flac/flac-mono), restores-to, channel, mtime, creator |
+| `verify ARCHIVE` | Extraction to the null sink: CRC-32 plus full restore and SHA-256 for FLAC; nothing is written |
+| `edit ARCHIVE` | `--add PATH`, `--remove NAME`, `--rename NAME=NEW`, `--replace NAME=PATH`, `-o OUT` (default: replace in place atomically) |
+| `restore FILE.flac` | Rebuild the original from a standalone FLAC (ours or `flac --keep-foreign-metadata`), `-o OUT` |
+
+- Every command takes `--json` (machine-readable result on stdout), `-q/--quiet`,
+  `-y/--yes`, `--threads` and `--memory` (MB).
+- A resolution `NAME` can be a planned output name, the original (restored) name, the source
+  path or `#index`. The JSON file holds `[{"entry": NAME|INDEX, "action":
+  rename|skip|store-unconverted, "new_name": ...}]`.
+- Skipped symlinks: an interactive run asks; a non-interactive run without `--yes` stops with
+  exit 4. FLAC fallbacks are printed as warnings and never stop the run.
+- Existing files on extraction with `--overwrite ask`: asked per file when interactive, else exit 4.
+- The progress bar goes to stderr only on a terminal. Ctrl+C cancels (exit 130); the archive's
+  temporary file is removed.
+- Exit codes: 0 ok, 1 error, 2 usage, 3 unresolved conflicts, 4 declined, 5 finished with errors
+  (`SOURCE_CHANGED`, refused or failed entries), 130 cancelled.
+- C API additions for the CLI: `zp_restore_flac`, `zp_flac_original_name`,
+  `zp_entry_info_t.flac_original_name`.
+- Tests: `tests/cli/test_cli.py` (pytest; `SATCHEL_CLI` points to the binary). It runs on Linux and
+  Windows in CI.
+
+### 4.12 C API
 
 `core/include/zp/zp.h`. Additions beyond the design doc's list: stream constructors (file, atomic
 file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
@@ -364,7 +396,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Done: all six containers, multichannel and multi-mono, tags, readme, editor regeneration |
 | 5. PHP and Python bindings | Done (wheels/packages with the bundled library come with releases) |
-| 6. CLI, then GUI | Not started |
+| 6. CLI, then GUI | CLI done; GUI not started |
 
 ### Needs hardware, accounts or people (cannot be done in CI)
 
