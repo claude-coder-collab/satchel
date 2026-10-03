@@ -22,3 +22,4 @@ satchel = ["_cdef.h", "*.so", "*.dylib", "*.dll"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
