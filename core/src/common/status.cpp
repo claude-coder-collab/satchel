@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "common/status.hpp"
 
+#include <string_view>
+
 namespace zp
 {
 

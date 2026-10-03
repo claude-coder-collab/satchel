@@ -12,9 +12,17 @@
 #include <array>
 #include <cstring>
 #include <format>
+#include <memory>
+#include <mutex>
 #include <mz.h>
 #include <mz_strm.h>
 #include <mz_zip.h>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace zp
 {

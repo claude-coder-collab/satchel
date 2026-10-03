@@ -2,7 +2,12 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "codecs/deflate.hpp"
 
+#include <algorithm>
 #include <format>
+#include <memory>
+#include <span>
+#include <utility>
+#include <vector>
 #include <zlib-ng.h>
 
 namespace zp

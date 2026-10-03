@@ -3,7 +3,12 @@
 #include "io/input_source.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <format>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace zp
 {

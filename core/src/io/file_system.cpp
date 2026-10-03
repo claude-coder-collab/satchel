@@ -11,12 +11,21 @@
 #ifdef _WIN32
     #include <windows.h>
 #else
+    #include <algorithm>
+    #include <array>
     #include <cerrno>
+    #include <cstdlib>
     #include <cstring>
     #include <fcntl.h>
+    #include <filesystem>
+    #include <memory>
+    #include <optional>
+    #include <string>
+    #include <string_view>
     #include <sys/stat.h>
     #include <sys/time.h>
     #include <unistd.h>
+    #include <utility>
 #endif
 
 namespace zp

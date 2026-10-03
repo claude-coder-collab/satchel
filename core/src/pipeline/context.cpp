@@ -3,6 +3,10 @@
 #include "pipeline/context.hpp"
 
 #include <algorithm>
+#include <functional>
+#include <mutex>
+#include <thread>
+#include <utility>
 
 namespace zp
 {

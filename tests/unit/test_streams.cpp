@@ -6,6 +6,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <filesystem>
+
 using namespace zp;
 
 TEST_CASE("memory stream read/write/seek boundaries", "[stream]")

@@ -6,12 +6,20 @@
 #include "common/bytes.hpp"
 #include "io/file_system.hpp"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
+#include <filesystem>
 #include <format>
 #include <fstream>
+#include <map>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <random>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace zp::test
 {

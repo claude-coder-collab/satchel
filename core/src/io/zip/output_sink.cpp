@@ -4,7 +4,16 @@
 
 #include "io/file_system.hpp"
 
+#include <filesystem>
 #include <format>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <span>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace zp
 {

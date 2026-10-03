@@ -5,11 +5,17 @@
 #include "io/zip/reader.hpp"
 #include "io/zip/zip_writer.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <format>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace zp
 {

@@ -5,6 +5,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
+#include <vector>
+
 using namespace zp;
 
 TEST_CASE("filesystem input walks in byte order and skips links", "[filesystem]")

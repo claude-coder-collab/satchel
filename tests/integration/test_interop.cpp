@@ -4,7 +4,9 @@
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <filesystem>
 #include <format>
+#include <string>
 
 using namespace zp;
 

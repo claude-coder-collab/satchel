@@ -5,8 +5,12 @@
 #include "io/file_system.hpp"
 
 #include <cstdlib>
+#include <filesystem>
 #include <format>
+#include <string>
+#include <string_view>
 #include <utf8proc.h>
+#include <utility>
 #include <vector>
 
 namespace zp

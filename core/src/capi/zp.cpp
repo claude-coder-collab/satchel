@@ -12,11 +12,15 @@
 #include "io/zip/reader.hpp"
 #include "pipeline/context.hpp"
 
+#include <algorithm>
 #include <cstring>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <new>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 

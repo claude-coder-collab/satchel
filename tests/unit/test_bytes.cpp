@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <string>
+
 using namespace zp;
 
 TEST_CASE("base64 known vectors", "[bytes]")

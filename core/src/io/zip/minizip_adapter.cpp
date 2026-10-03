@@ -3,9 +3,13 @@
 #include "io/zip/minizip_adapter.hpp"
 
 #include <cstring>
+#include <memory>
 #include <mz.h>
 #include <mz_strm.h>
 #include <mz_zip.h>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace zp
 {

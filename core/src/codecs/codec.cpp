@@ -6,6 +6,11 @@
 
 #include <zlib-ng.h>
 
+#include <memory>
+#include <span>
+#include <utility>
+#include <vector>
+
 namespace zp
 {
 

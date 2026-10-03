@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <span>
 
 namespace zp
 {

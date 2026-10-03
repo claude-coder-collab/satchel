@@ -7,6 +7,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <memory>
+#include <span>
+#include <string>
+#include <utility>
+#include <vector>
+
 using namespace zp;
 
 TEST_CASE("crc32 known vector and combine", "[codec]")

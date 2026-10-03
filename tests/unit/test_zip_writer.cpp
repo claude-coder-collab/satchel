@@ -6,6 +6,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <span>
+#include <string>
+#include <vector>
+
 using namespace zp;
 
 namespace
@@ -25,7 +30,7 @@ struct LocalHeader
 
 LocalHeader parse_local(const std::vector<std::uint8_t>& zip, std::size_t offset)
 {
-    ByteReader r(std::span(zip).subspan(offset));
+    ByteReader r{ std::span(zip).subspan(offset) };
     REQUIRE(r.u32le() == 0x04034b50u);
     LocalHeader h{};
     h.version_needed = *r.u16le();
@@ -105,7 +110,7 @@ TEST_CASE("data-descriptor path for non-seekable output", "[zip_writer]")
     CHECK(h.csize == 0);
     CHECK(h.usize == 0);
     const std::size_t data_at = 30 + h.name.size() + h.extra.size();
-    ByteReader d(std::span(zip).subspan(data_at + data.size()));
+    ByteReader d{ std::span(zip).subspan(data_at + data.size()) };
     CHECK(d.u32le() == 0x08074b50u);
     CHECK(d.u32le() == crc32_update(0, data));
     CHECK(d.u32le() == data.size());

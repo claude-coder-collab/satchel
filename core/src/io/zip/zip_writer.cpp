@@ -4,11 +4,16 @@
 
 #include "common/bytes.hpp"
 
+#include <algorithm>
 #include <format>
 #include <limits>
+#include <memory>
 #include <mz.h>
 #include <mz_strm.h>
 #include <mz_zip.h>
+#include <optional>
+#include <span>
+#include <string_view>
 #include <utility>
 
 namespace zp

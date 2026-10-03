@@ -3,9 +3,11 @@
 #include "test_support.hpp"
 #include "zp/zp.h"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstring>
 #include <string>
+#include <vector>
 
 extern "C" int zp_c_header_check(void);
 

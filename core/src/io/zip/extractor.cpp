@@ -10,8 +10,13 @@
 #include <chrono>
 #include <format>
 #include <map>
+#include <mutex>
 #include <set>
+#include <span>
+#include <string>
 #include <tuple>
+#include <utility>
+#include <vector>
 
 namespace zp
 {

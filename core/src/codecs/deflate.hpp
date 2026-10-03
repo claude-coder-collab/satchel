@@ -5,6 +5,7 @@
 #include "codecs/codec.hpp"
 
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace zp

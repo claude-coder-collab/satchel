@@ -7,11 +7,13 @@
 #include "io/stream.hpp"
 #include "io/zip/archive_metadata.hpp"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace zp
