@@ -37,6 +37,10 @@ class InflateStream final : public IChunkedStream
 {
 public:
     static Result<std::unique_ptr<IChunkedStream>> create(std::unique_ptr<IChunkedStream> raw);
+    InflateStream(const InflateStream&) = delete;
+    InflateStream& operator=(const InflateStream&) = delete;
+    InflateStream(InflateStream&&) = delete;
+    InflateStream& operator=(InflateStream&&) = delete;
     ~InflateStream() override;
 
     Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override;

@@ -47,7 +47,7 @@ Result<std::vector<std::uint8_t>> run_deflate(std::span<const std::uint8_t> hist
         if (zng_deflateSetDictionary(s, history.data(), static_cast<uint32_t>(history.size())) != Z_OK)
             return fail(Status::Internal, "deflateSetDictionary failed");
     }
-    std::vector<std::uint8_t> out(zng_deflateBound(s, input.size()) + 16);
+    std::vector<std::uint8_t> out(zng_deflateBound(s, static_cast<unsigned long>(input.size())) + 16);
     s->next_in = input.data();
     s->avail_in = static_cast<uint32_t>(input.size());
     s->next_out = out.data();

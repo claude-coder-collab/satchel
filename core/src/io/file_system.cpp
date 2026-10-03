@@ -322,6 +322,7 @@ VoidResult atomic_replace(const std::filesystem::path& from, const std::filesyst
     }
     if (!MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
         return fail(Status::IoError, win_error("cannot replace", to));
+    return {};
 #else
     if (::rename(from.c_str(), to.c_str()) != 0)
         return fail(Status::IoError, posix_error("cannot replace", to));

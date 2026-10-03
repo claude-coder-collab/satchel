@@ -47,6 +47,10 @@ class FileStream final : public IChunkedStream
 {
 public:
     static Result<std::unique_ptr<FileStream>> open(const std::filesystem::path& p, FileMode mode);
+    FileStream(const FileStream&) = delete;
+    FileStream& operator=(const FileStream&) = delete;
+    FileStream(FileStream&&) = delete;
+    FileStream& operator=(FileStream&&) = delete;
     ~FileStream() override;
 
     Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override;
@@ -80,6 +84,10 @@ class AtomicFileStream final : public IChunkedStream
 {
 public:
     static Result<std::unique_ptr<AtomicFileStream>> create(const std::filesystem::path& target, bool sync_on_commit = true);
+    AtomicFileStream(const AtomicFileStream&) = delete;
+    AtomicFileStream& operator=(const AtomicFileStream&) = delete;
+    AtomicFileStream(AtomicFileStream&&) = delete;
+    AtomicFileStream& operator=(AtomicFileStream&&) = delete;
     ~AtomicFileStream() override;
 
     Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override { return file_->read(buf, len); }

@@ -56,5 +56,5 @@ CheckOptions:
   cppcoreguidelines-special-member-functions.AllowImplicitlyDeletedCopyOrMove: true
   cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
 WarningsAsErrors: ''
-HeaderFilterRegex: '(core|desktop|bindings)/.*'
+HeaderFilterRegex: '(core/src|desktop|bindings)/.*'
 FormatStyle: file
