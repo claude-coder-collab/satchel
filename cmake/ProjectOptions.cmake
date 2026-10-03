@@ -35,3 +35,8 @@ if(ZP_SANITIZER_FLAGS)
     add_compile_options(${ZP_SANITIZER_FLAGS})
     add_link_options(${ZP_SANITIZER_FLAGS})
 endif()
+
+if(EMSCRIPTEN)
+    add_compile_options(-pthread)
+    add_link_options(-pthread -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1MB)
+endif()

@@ -22,9 +22,16 @@ endif()
 include(cmake/ProjectOptions.cmake)
 include(cmake/Dependencies.cmake)
 
-add_subdirectory(core)
-
 if(ZP_BUILD_TESTS)
     enable_testing()
+endif()
+
+add_subdirectory(core)
+if(EMSCRIPTEN)
+    set(ZP_WASM_MAXIMUM_MEMORY "512MB" CACHE STRING "WebAssembly memory limit of the browser module")
+    add_subdirectory(bindings/js)
+endif()
+
+if(ZP_BUILD_TESTS)
     add_subdirectory(tests)
 endif()

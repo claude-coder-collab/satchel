@@ -187,7 +187,23 @@ require the magic; anything else is a foreign comment (`nullopt`).
   in the same directory, fsync, `rename`/`ReplaceFileW`, directory fsync). The input is opened with
   `FILE_SHARE_DELETE` on Windows so the replace can happen while it is open.
 
-### 4.8 C API
+### 4.8 WebAssembly
+
+- Preset `wasm` (configure with `emcmake cmake --preset wasm`; Emscripten 6.0.10 in CI). All code is
+  built with `-pthread`; linking uses `ALLOW_MEMORY_GROWTH` and a 1 MiB stack.
+- `bindings/js` builds `satchel.mjs` + `satchel.wasm`: an ES module (`createSatchel()`) that
+  exports every `ZP_API` function of `zp.h` (the export list is generated from the header) plus
+  `ccall`, `cwrap`, `addFunction` and heap helpers. Maximum memory 512 MB
+  (`ZP_WASM_MAXIMUM_MEMORY`), pthread pool `min(hardwareConcurrency, 16) + 3` (N workers + reader,
+  hasher and the caller), growable if more threads are needed.
+- The module blocks while a job runs, so in a browser it must run inside a Web Worker (main spec 3);
+  under Node it can run on the main thread.
+- The Catch2 suite is also built for WASM and runs under Node (`-sPROXY_TO_PTHREAD`, `NODERAWFS`);
+  `bindings/js/test/smoke.mjs` exercises the module through the C API.
+- `ZP_API` in `zp.h` marks exports: `used` + default visibility under Emscripten and GCC/Clang,
+  `dllexport`/`dllimport` for a Windows DLL (`ZP_SHARED_BUILD` / `ZP_SHARED`).
+
+### 4.9 C API
 
 `core/include/zp/zp.h`. Additions beyond the design doc's list: stream constructors (file, atomic
 file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
@@ -200,7 +216,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | Spec step (main spec 10) | Status |
 |---|---|
 | 1. Zip layer: store, plan/execute, collisions, symlinks, path safety (native) | Done |
-| 2. WASM build + OPFS spike | Not started |
+| 2. WASM build + OPFS spike | WASM build, Node tests and module done; browser glue (Worker, OPFS, File System Access) and the device spike are pending |
 | 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Not started |
 | 5. PHP and Python bindings | Not started |

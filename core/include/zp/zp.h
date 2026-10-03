@@ -17,6 +17,18 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(ZP_SHARED_BUILD) && defined(_WIN32)
+    #define ZP_API __declspec(dllexport)
+#elif defined(ZP_SHARED) && defined(_WIN32)
+    #define ZP_API __declspec(dllimport)
+#elif defined(__EMSCRIPTEN__)
+    #define ZP_API __attribute__((used, visibility("default")))
+#elif defined(__GNUC__)
+    #define ZP_API __attribute__((visibility("default")))
+#else
+    #define ZP_API
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -115,26 +127,26 @@ typedef struct zp_editor zp_editor_t;
 /* Progress callback: return 0 to continue, non-zero to cancel. */
 typedef int (*zp_progress_fn)(void* user, uint64_t done, uint64_t total);
 
-const char* zp_last_error(void);
-const char* zp_status_name(int status);
-const char* zp_version(void);
+ZP_API const char* zp_last_error(void);
+ZP_API const char* zp_status_name(int status);
+ZP_API const char* zp_version(void);
 
 /* ---- context: owns the thread pool and memory budget ----------------------------------- */
 
-zp_context_t* zp_context_create(int threads, uint64_t memory_budget); /* 0 = defaults */
-void zp_context_free(zp_context_t* ctx);
+ZP_API zp_context_t* zp_context_create(int threads, uint64_t memory_budget); /* 0 = defaults */
+ZP_API void zp_context_free(zp_context_t* ctx);
 
 /* ---- streams --------------------------------------------------------------------------- */
 
-zp_stream_t* zp_stream_open_file(const char* path);
+ZP_API zp_stream_t* zp_stream_open_file(const char* path);
 /* Writes to a temporary file next to `path`; zp_stream_commit atomically replaces `path`.
  * Freeing an uncommitted stream removes the temporary file. */
-zp_stream_t* zp_stream_create_file(const char* path);
-int zp_stream_commit(zp_stream_t* stream);
-zp_stream_t* zp_stream_memory(void);
-zp_stream_t* zp_stream_memory_from(const uint8_t* data, size_t len);
+ZP_API zp_stream_t* zp_stream_create_file(const char* path);
+ZP_API int zp_stream_commit(zp_stream_t* stream);
+ZP_API zp_stream_t* zp_stream_memory(void);
+ZP_API zp_stream_t* zp_stream_memory_from(const uint8_t* data, size_t len);
 /* Pointer into a memory stream's buffer; valid until the stream is written to or freed. */
-int zp_stream_memory_data(const zp_stream_t* stream, const uint8_t** data, size_t* len);
+ZP_API int zp_stream_memory_data(const zp_stream_t* stream, const uint8_t** data, size_t* len);
 
 typedef struct zp_stream_callbacks
 {
@@ -149,17 +161,17 @@ typedef struct zp_stream_callbacks
     int64_t (*size)(void* user);
 } zp_stream_callbacks_t;
 
-zp_stream_t* zp_stream_from_callbacks(const zp_stream_callbacks_t* callbacks);
-void zp_stream_free(zp_stream_t* stream);
+ZP_API zp_stream_t* zp_stream_from_callbacks(const zp_stream_callbacks_t* callbacks);
+ZP_API void zp_stream_free(zp_stream_t* stream);
 
 /* ---- inputs ---------------------------------------------------------------------------- */
 
 /* Each path becomes a top-level entry; folders are archived recursively. */
-zp_input_t* zp_input_from_paths(const char* const* paths, size_t count);
-zp_input_t* zp_input_memory(void);
-int zp_input_memory_add_file(zp_input_t* input, const char* archive_path, const uint8_t* data, size_t len, int64_t mtime, uint32_t unix_mode);
-int zp_input_memory_add_directory(zp_input_t* input, const char* archive_path, int64_t mtime, uint32_t unix_mode);
-void zp_input_free(zp_input_t* input);
+ZP_API zp_input_t* zp_input_from_paths(const char* const* paths, size_t count);
+ZP_API zp_input_t* zp_input_memory(void);
+ZP_API int zp_input_memory_add_file(zp_input_t* input, const char* archive_path, const uint8_t* data, size_t len, int64_t mtime, uint32_t unix_mode);
+ZP_API int zp_input_memory_add_directory(zp_input_t* input, const char* archive_path, int64_t mtime, uint32_t unix_mode);
+ZP_API void zp_input_free(zp_input_t* input);
 
 /* ---- planning -------------------------------------------------------------------------- */
 
@@ -170,7 +182,7 @@ typedef struct zp_plan_options
     int flac_level; /* default 5 */
 } zp_plan_options_t;
 
-void zp_plan_options_init(zp_plan_options_t* options);
+ZP_API void zp_plan_options_init(zp_plan_options_t* options);
 
 typedef struct zp_plan_entry
 {
@@ -210,19 +222,19 @@ typedef struct zp_resolution
     const char* new_name; /* ZP_RESOLVE_RENAME only */
 } zp_resolution_t;
 
-zp_plan_t* zp_plan_create(zp_context_t* ctx, zp_input_t* input, const zp_plan_options_t* options);
-size_t zp_plan_entry_count(const zp_plan_t* plan);
-int zp_plan_get_entry(const zp_plan_t* plan, size_t i, zp_plan_entry_t* out);
-size_t zp_plan_conflict_count(const zp_plan_t* plan);
-int zp_plan_get_conflict(const zp_plan_t* plan, size_t i, zp_conflict_t* out);
-size_t zp_plan_warning_count(const zp_plan_t* plan);
-int zp_plan_get_warning(const zp_plan_t* plan, size_t i, zp_warning_t* out);
+ZP_API zp_plan_t* zp_plan_create(zp_context_t* ctx, zp_input_t* input, const zp_plan_options_t* options);
+ZP_API size_t zp_plan_entry_count(const zp_plan_t* plan);
+ZP_API int zp_plan_get_entry(const zp_plan_t* plan, size_t i, zp_plan_entry_t* out);
+ZP_API size_t zp_plan_conflict_count(const zp_plan_t* plan);
+ZP_API int zp_plan_get_conflict(const zp_plan_t* plan, size_t i, zp_conflict_t* out);
+ZP_API size_t zp_plan_warning_count(const zp_plan_t* plan);
+ZP_API int zp_plan_get_warning(const zp_plan_t* plan, size_t i, zp_warning_t* out);
 /* Applies all resolutions at once (indices refer to the plan before the call). On failure the
  * plan is unchanged. Skipped entries disappear, so indices shift afterwards. */
-int zp_plan_resolve(zp_plan_t* plan, const zp_resolution_t* resolutions, size_t count);
-int zp_plan_executable(const zp_plan_t* plan);
-uint64_t zp_plan_total_bytes(const zp_plan_t* plan);
-void zp_plan_free(zp_plan_t* plan);
+ZP_API int zp_plan_resolve(zp_plan_t* plan, const zp_resolution_t* resolutions, size_t count);
+ZP_API int zp_plan_executable(const zp_plan_t* plan);
+ZP_API uint64_t zp_plan_total_bytes(const zp_plan_t* plan);
+ZP_API void zp_plan_free(zp_plan_t* plan);
 
 /* ---- building -------------------------------------------------------------------------- */
 
@@ -245,11 +257,11 @@ typedef struct zp_entry_result
 
 /* Returns the build status. *out_result (if non-NULL) receives per-entry results even when the
  * build fails; free it with zp_build_result_free. */
-int zp_build(zp_plan_t* plan, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result);
-size_t zp_build_result_entry_count(const zp_build_result_t* result);
-int zp_build_result_get_entry(const zp_build_result_t* result, size_t i, zp_entry_result_t* out);
-int zp_build_result_zip64(const zp_build_result_t* result);
-void zp_build_result_free(zp_build_result_t* result);
+ZP_API int zp_build(zp_plan_t* plan, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result);
+ZP_API size_t zp_build_result_entry_count(const zp_build_result_t* result);
+ZP_API int zp_build_result_get_entry(const zp_build_result_t* result, size_t i, zp_entry_result_t* out);
+ZP_API int zp_build_result_zip64(const zp_build_result_t* result);
+ZP_API void zp_build_result_free(zp_build_result_t* result);
 
 /* ---- reading and extraction ------------------------------------------------------------ */
 
@@ -273,18 +285,18 @@ typedef struct zp_entry_info
 } zp_entry_info_t;
 
 /* The reader keeps using `input`; free the reader before the stream. */
-zp_reader_t* zp_reader_open(zp_context_t* ctx, zp_stream_t* input);
-size_t zp_reader_entry_count(const zp_reader_t* reader);
-int zp_reader_get_entry(const zp_reader_t* reader, size_t i, zp_entry_info_t* out);
+ZP_API zp_reader_t* zp_reader_open(zp_context_t* ctx, zp_stream_t* input);
+ZP_API size_t zp_reader_entry_count(const zp_reader_t* reader);
+ZP_API int zp_reader_get_entry(const zp_reader_t* reader, size_t i, zp_entry_info_t* out);
 /* Copies the creating application's version (from the archive comment) into buf. */
-int zp_reader_get_app_version(const zp_reader_t* reader, char* buf, size_t len);
-int zp_reader_zip64(const zp_reader_t* reader);
-void zp_reader_free(zp_reader_t* reader);
+ZP_API int zp_reader_get_app_version(const zp_reader_t* reader, char* buf, size_t len);
+ZP_API int zp_reader_zip64(const zp_reader_t* reader);
+ZP_API void zp_reader_free(zp_reader_t* reader);
 
-zp_sink_t* zp_sink_filesystem(const char* destination);
+ZP_API zp_sink_t* zp_sink_filesystem(const char* destination);
 /* Discards output: extraction then only verifies CRCs (and hashes for restored audio). */
-zp_sink_t* zp_sink_null(void);
-void zp_sink_free(zp_sink_t* sink);
+ZP_API zp_sink_t* zp_sink_null(void);
+ZP_API void zp_sink_free(zp_sink_t* sink);
 
 typedef struct zp_extract_options
 {
@@ -293,7 +305,7 @@ typedef struct zp_extract_options
     int overwrite; /* ZP_OVERWRITE_*, default ASK */
 } zp_extract_options_t;
 
-void zp_extract_options_init(zp_extract_options_t* options);
+ZP_API void zp_extract_options_init(zp_extract_options_t* options);
 
 typedef struct zp_extract_issue
 {
@@ -321,31 +333,31 @@ typedef struct zp_extract_outcome
 } zp_extract_outcome_t;
 
 /* sel = NULL / n = 0: every entry. The plan keeps using reader and sink. */
-zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options);
-size_t zp_xplan_issue_count(const zp_xplan_t* xplan);
-int zp_xplan_get_issue(const zp_xplan_t* xplan, size_t i, zp_extract_issue_t* out);
-size_t zp_xplan_item_count(const zp_xplan_t* xplan);
-int zp_xplan_get_item(const zp_xplan_t* xplan, size_t i, zp_extract_item_t* out);
+ZP_API zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options);
+ZP_API size_t zp_xplan_issue_count(const zp_xplan_t* xplan);
+ZP_API int zp_xplan_get_issue(const zp_xplan_t* xplan, size_t i, zp_extract_issue_t* out);
+ZP_API size_t zp_xplan_item_count(const zp_xplan_t* xplan);
+ZP_API int zp_xplan_get_item(const zp_xplan_t* xplan, size_t i, zp_extract_item_t* out);
 /* ZP_DECISION_SKIP or ZP_DECISION_REPLACE for an item that exists at the destination. */
-int zp_xplan_decide(zp_xplan_t* xplan, size_t item, int decision);
-int zp_extract(zp_xplan_t* xplan, zp_progress_fn progress, void* user);
-size_t zp_xplan_outcome_count(const zp_xplan_t* xplan);
-int zp_xplan_get_outcome(const zp_xplan_t* xplan, size_t i, zp_extract_outcome_t* out);
-void zp_xplan_free(zp_xplan_t* xplan);
+ZP_API int zp_xplan_decide(zp_xplan_t* xplan, size_t item, int decision);
+ZP_API int zp_extract(zp_xplan_t* xplan, zp_progress_fn progress, void* user);
+ZP_API size_t zp_xplan_outcome_count(const zp_xplan_t* xplan);
+ZP_API int zp_xplan_get_outcome(const zp_xplan_t* xplan, size_t i, zp_extract_outcome_t* out);
+ZP_API void zp_xplan_free(zp_xplan_t* xplan);
 
 /* ---- editing --------------------------------------------------------------------------- */
 
 /* The editor keeps using `input`; free the editor before the stream. Entry indices refer to
  * the current zp_editor_plan() order. */
-zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input);
-int zp_editor_add(zp_editor_t* editor, zp_input_t* input);
-int zp_editor_remove(zp_editor_t* editor, size_t i);
-int zp_editor_rename(zp_editor_t* editor, size_t i, const char* new_name);
+ZP_API zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input);
+ZP_API int zp_editor_add(zp_editor_t* editor, zp_input_t* input);
+ZP_API int zp_editor_remove(zp_editor_t* editor, size_t i);
+ZP_API int zp_editor_rename(zp_editor_t* editor, size_t i, const char* new_name);
 /* Replaces entry i with the first file of `input`. */
-int zp_editor_replace(zp_editor_t* editor, size_t i, zp_input_t* input);
-zp_plan_t* zp_editor_plan(zp_editor_t* editor);
-int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user);
-void zp_editor_free(zp_editor_t* editor);
+ZP_API int zp_editor_replace(zp_editor_t* editor, size_t i, zp_input_t* input);
+ZP_API zp_plan_t* zp_editor_plan(zp_editor_t* editor);
+ZP_API int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user);
+ZP_API void zp_editor_free(zp_editor_t* editor);
 
 #ifdef __cplusplus
 }

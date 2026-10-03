@@ -30,7 +30,7 @@ std::vector<std::uint8_t> original_archive()
 std::vector<std::uint8_t> raw_of(ArchiveReader& r, std::size_t i)
 {
     auto s = r.open_raw(i).value();
-    std::vector<std::uint8_t> out(r.entries()[i].compressed_size);
+    std::vector<std::uint8_t> out(static_cast<std::size_t>(r.entries()[i].compressed_size));
     REQUIRE(s->read_full(out).value() == out.size());
     return out;
 }
