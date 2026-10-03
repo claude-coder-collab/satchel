@@ -17,7 +17,8 @@ else()
     target_compile_options(zp_project_options INTERFACE
         -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow
         $<$<COMPILE_LANGUAGE:CXX>:-Wold-style-cast -Wnon-virtual-dtor -Woverloaded-virtual>
-        -Wcast-align -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough -Wundef)
+        -Wcast-align -Wdouble-promotion
+        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wnull-dereference> -Wformat=2 -Wimplicit-fallthrough -Wundef)
     if(ZP_WARNINGS_AS_ERRORS)
         target_compile_options(zp_project_options INTERFACE -Werror)
     endif()

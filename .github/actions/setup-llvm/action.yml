@@ -3,7 +3,7 @@ description: Install Clang, clang-format and clang-tidy from apt.llvm.org
 inputs:
   version:
     description: LLVM major version
-    default: "22"
+    default: "23"
 runs:
   using: composite
   steps:

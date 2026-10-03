@@ -73,20 +73,20 @@ TEST_CASE("archives made by Info-ZIP zip are read and extracted", "[interop]")
     dir.write("src/a.txt", test::text_like(50000, 1));
     dir.write("src/b.bin", test::random_bytes(10000, 2));
     dir.mkdir("src/empty");
-#ifndef _WIN32
+    #ifndef _WIN32
     std::filesystem::create_symlink("a.txt", dir.path() / "src" / "link");
-#endif
+    #endif
     const auto zip = dir.path() / "infozip.zip";
     REQUIRE(test::run(std::format("cd {} && {} -qry {} src", q(dir.path()), q(*zip_tool), q(zip))) == 0);
     auto x = test::extract_all(test::read_file(zip));
     CHECK(x.files["src/a.txt"].data == test::text_like(50000, 1));
     CHECK(x.files["src/b.bin"].data == test::random_bytes(10000, 2));
     CHECK(x.dirs.contains("src/empty"));
-#ifndef _WIN32
+    #ifndef _WIN32
     bool warned = false;
     for (const auto& i : x.plan.issues)
         warned |= i.kind == ExtractIssueKind::SymlinkSkipped;
     CHECK(warned);
-#endif
+    #endif
 }
 #endif

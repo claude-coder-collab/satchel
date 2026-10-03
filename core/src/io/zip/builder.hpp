@@ -14,7 +14,8 @@
 #include <string>
 #include <vector>
 
-namespace zp {
+namespace zp
+{
 
 class ArchiveReader;
 

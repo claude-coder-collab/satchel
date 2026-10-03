@@ -8,7 +8,8 @@
 
 using namespace zp;
 
-namespace {
+namespace
+{
 
 void mixed_tree(MemoryInputSource& in)
 {

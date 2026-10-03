@@ -11,12 +11,13 @@
 #include <map>
 #include <mutex>
 
-namespace zp {
-
-namespace {
-
-enum class SegmentKind : std::uint8_t
+namespace zp
 {
+
+namespace
+{
+
+enum class SegmentKind : std::uint8_t {
     Data,
     Directory,
     Kept,
@@ -41,12 +42,12 @@ struct Segment
 class Job
 {
 public:
-    Job(const ArchivePlan& plan, Context& context) :
-        plan(plan),
-        context(context),
-        budget(context.memory_budget()),
+    Job(const ArchivePlan& job_plan, Context& job_context) :
+        plan(job_plan),
+        context(job_context),
+        budget(job_context.memory_budget()),
         store(CodecRegistry::make_encoder(ZipMethod::Store, 0)),
-        deflate(CodecRegistry::make_encoder(ZipMethod::Deflate, plan.options.deflate_level))
+        deflate(CodecRegistry::make_encoder(ZipMethod::Deflate, job_plan.options.deflate_level))
     {
     }
 
@@ -291,7 +292,9 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
 
         switch (seg.kind)
         {
-            case SegmentKind::Fatal: fail_with(seg.error); break;
+            case SegmentKind::Fatal:
+                fail_with(seg.error);
+                break;
             case SegmentKind::SkipEntry:
                 result.per_entry.push_back({ seg.entry, entry.output_name, ZipMethod::Store, 0, 0, 0, seg.error.status, seg.error.message });
                 break;
@@ -336,8 +339,7 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
                 if (seg.first)
                 {
                     const auto size = entry.snapshot.size;
-                    EntryHeader h{ entry.output_name, false, seg.method, plan.options.deflate_level, entry.item.mtime_seconds(), entry.item.unix_mode,
-                        seg.method == ZipMethod::Store ? size : deflate_size_hint(size) };
+                    EntryHeader h{ entry.output_name, false, seg.method, plan.options.deflate_level, entry.item.mtime_seconds(), entry.item.unix_mode, seg.method == ZipMethod::Store ? size : deflate_size_hint(size) };
                     auto w = (*writer)->begin_entry(h);
                     if (!w)
                     {

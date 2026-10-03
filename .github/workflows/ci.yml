@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-llvm
       - name: clang-format
-        run: find core tests \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) -print0 | xargs -0 clang-format-22 --dry-run --Werror
+        run: find core tests \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) -print0 | xargs -0 clang-format-23 --dry-run --Werror
       - name: SPDX headers
         run: |
           missing=$(find core tests \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' -o -name '*.in' \) -print0 | xargs -0 grep -L 'SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial' || true)
@@ -39,8 +39,8 @@ jobs:
           - name: clang-asan
             preset: clang-asan
             config: Debug
-            cc: clang-22
-            cxx: clang++-22
+            cc: clang-23
+            cxx: clang++-23
     name: linux (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v4
@@ -63,11 +63,11 @@ jobs:
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: Configure
-        run: cmake --preset clang -DCMAKE_C_COMPILER=clang-22 -DCMAKE_CXX_COMPILER=clang++-22
+        run: cmake --preset clang -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23
       - name: Generate sources
         run: cmake --build build/clang --config Debug --target zp_core
       - name: clang-tidy
-        run: run-clang-tidy-22 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp'
+        run: run-clang-tidy-23 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp'
 
   macos:
     runs-on: macos-latest
