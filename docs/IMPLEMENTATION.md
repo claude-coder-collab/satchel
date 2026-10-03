@@ -325,7 +325,29 @@ trailing bytes | SHA-256 (32).
 - `ZP_API` in `zp.h` marks exports: `used` + default visibility under Emscripten and GCC/Clang,
   `dllexport`/`dllimport` for a Windows DLL (`ZP_SHARED_BUILD` / `ZP_SHARED`).
 
-### 4.10 C API
+### 4.10 Bindings (main spec 5)
+
+- `zp_shared` builds `libsatchel` (`.so`/`.dylib`/`satchel.dll`) from the whole core archive. Only
+  `zp_*` symbols are exported (version script on Linux, `-exported_symbol` on macOS, `dllexport`
+  via `ZP_SHARED_BUILD` on Windows).
+- `tools/gen_cdef.py` turns `zp.h` into plain C declarations (no preprocessor) for cffi and PHP
+  FFI: `bindings/python/satchel/_cdef.h` and `bindings/php/src/zp_cdef.h`. CI checks they are
+  current.
+- Python (`bindings/python`, package `satchel`, cffi ABI mode): `Context`, `Plan` (entries,
+  conflicts, warnings, `resolve`, `build` to a file atomically or `build_bytes`), `Archive`
+  (entries, `extraction_plan`, `extract`, `verify`), `ExtractionPlan` (issues, items, `decide`),
+  `Editor` (`add`, `remove`, `rename`, `replace`, `commit` in place). Errors raise `SatchelError`
+  with `status`/`name`. Progress callbacks return `False` to cancel; exceptions raised in a
+  callback cancel the job and are re-raised.
+- PHP (`bindings/php/src/Satchel.php`, namespace `Satchel`, PHP ≥ 8.1, `ffi.enable=1`): the same
+  objects with PHP arrays for results; errors throw `SatchelException`.
+- The library is found through `SATCHEL_LIBRARY`, next to the package, or in `build/*/core/*`.
+- `zp_last_status()` was added to the C API so bindings can report the status after a NULL
+  return.
+- Tests: `pytest` in `bindings/python`, `php tests/run.php` in `bindings/php`. Python and PHP
+  produce byte-identical archives for the same input (checked when PHP is installed).
+
+### 4.11 C API
 
 `core/include/zp/zp.h`. Additions beyond the design doc's list: stream constructors (file, atomic
 file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
@@ -341,7 +363,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | 2. WASM build + OPFS spike | WASM build, Node tests and module done; browser glue (Worker, OPFS, File System Access) and the device spike are pending |
 | 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Done: all six containers, multichannel and multi-mono, tags, readme, editor regeneration |
-| 5. PHP and Python bindings | Not started |
+| 5. PHP and Python bindings | Done (wheels/packages with the bundled library come with releases) |
 | 6. CLI, then GUI | Not started |
 
 ### Needs hardware, accounts or people (cannot be done in CI)

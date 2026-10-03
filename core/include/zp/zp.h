@@ -128,6 +128,8 @@ typedef struct zp_editor zp_editor_t;
 typedef int (*zp_progress_fn)(void* user, uint64_t done, uint64_t total);
 
 ZP_API const char* zp_last_error(void);
+/* Status code of the last failure on the calling thread (useful after a NULL return). */
+ZP_API int zp_last_status(void);
 ZP_API const char* zp_status_name(int status);
 ZP_API const char* zp_version(void);
 
