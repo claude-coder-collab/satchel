@@ -168,3 +168,76 @@ TEST_CASE("more than 65535 entries uses Zip64 end records", "[integration][zip64
     CHECK(r->entries().size() == count);
     CHECK(r->entries().back().name == std::format("d{:03}/f{:05}", (count - 1) / 1000, count - 1));
 }
+
+TEST_CASE("deflate is chosen only when it pays off", "[integration][deflate]")
+{
+    MemoryInputSource in;
+    in.add_file("text.txt", test::text_like(500000, 1));
+    in.add_file("noise.bin", test::random_bytes(500000, 2));
+    in.add_file("big-text.txt", test::text_like(9u << 20, 3));
+    in.add_file("big-noise.bin", test::random_bytes(9u << 20, 4));
+    in.add_file("tiny.txt", test::text_bytes("abc"));
+    in.add_file("empty", {});
+    auto b = test::build(in);
+    REQUIRE(b.result.status == Status::Ok);
+    const auto& r = b.result.per_entry;
+    REQUIRE(r.size() == 6);
+    CHECK(r[0].method == ZipMethod::Deflate);
+    CHECK(r[0].compressed_size < r[0].uncompressed_size / 3);
+    CHECK(r[1].method == ZipMethod::Store);
+    CHECK(r[1].compressed_size == r[1].uncompressed_size);
+    CHECK(r[2].method == ZipMethod::Deflate);
+    CHECK(r[3].method == ZipMethod::Store);
+    CHECK(r[4].method == ZipMethod::Store);
+    CHECK(r[5].method == ZipMethod::Store);
+    auto x = test::extract_all(b.zip);
+    REQUIRE(x.result.status == Status::Ok);
+    CHECK(x.files["big-text.txt"].data == test::text_like(9u << 20, 3));
+    CHECK(x.files["big-noise.bin"].data == test::random_bytes(9u << 20, 4));
+}
+
+TEST_CASE("deflate level is honoured", "[integration][deflate]")
+{
+    MemoryInputSource in;
+    in.add_file("text.txt", test::text_like(3u << 20, 5));
+    PlannerOptions fast;
+    fast.deflate_level = 1;
+    PlannerOptions best;
+    best.deflate_level = 9;
+    auto a = test::build(in, fast);
+    auto b = test::build(in, best);
+    REQUIRE(a.result.status == Status::Ok);
+    REQUIRE(b.result.status == Status::Ok);
+    CHECK(b.result.per_entry[0].compressed_size < a.result.per_entry[0].compressed_size);
+}
+
+// Compressed bytes must be identical on every platform and CPU (main spec 6.1). The value is
+// the CRC-32 over every entry's raw data in archive order.
+TEST_CASE("compressed output matches the golden value", "[integration][deflate][golden]")
+{
+    MemoryInputSource in;
+    in.add_file("a.txt", test::text_like(7u << 20, 11));
+    in.add_file("b.txt", test::text_like(300000, 12));
+    in.add_file("c.bin", test::random_bytes(2u << 20, 13));
+    for (int level = 1; level <= 9; level += 4)
+    {
+        PlannerOptions o;
+        o.deflate_level = level;
+        auto b = test::build(in, o);
+        REQUIRE(b.result.status == Status::Ok);
+        MemoryStream s(b.zip);
+        auto r = ArchiveReader::open(s).value();
+        std::uint32_t crc = 0;
+        for (std::size_t i = 0; i < r->entries().size(); ++i)
+        {
+            auto raw = r->open_raw(i).value();
+            std::vector<std::uint8_t> bytes(r->entries()[i].compressed_size);
+            REQUIRE(raw->read_full(bytes).value() == bytes.size());
+            crc = crc32_update(crc, bytes);
+        }
+        UNSCOPED_INFO("level " << level << " golden crc " << std::hex << crc);
+        const std::uint32_t expected = level == 1 ? 0x99ce4a23u : level == 5 ? 0x5f177051u
+                                                                             : 0x9f8c29a7u;
+        CHECK(crc == expected);
+    }
+}
