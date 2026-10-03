@@ -134,6 +134,18 @@ require the magic; anything else is a foreign comment (`nullopt`).
   (deflate) bytes before reading a segment; the writer releases them after writing. A single
   request larger than the budget is granted when nothing else is held. `BuildResult` reports the
   peak.
+- Method choice for `GENERAL` entries (main spec 6.1):
+  - empty files are stored;
+  - entries up to `small_entry_threshold` (4 MiB) are one segment: the worker deflates the whole
+    entry and keeps the result only if it saves at least 2 % (`min_deflate_saving`), otherwise the
+    entry is stored;
+  - larger entries: the reader deflates the first 128 KiB (`sample_window`) at the plan's level and
+    picks deflate (1 MiB segments) or store (4 MiB segments) for the whole entry by the same 2 %
+    rule.
+  This is `small_entry_threshold`'s meaning here; the design doc gives only its default.
+- Deflate output is pinned by the zlib-ng version and settings (raw deflate, window 15, memLevel 8,
+  default strategy). A golden test checks the CRC-32 of the compressed bytes of a fixed input at
+  levels 1, 5 and 9 on every CI platform.
 - `SOURCE_CHANGED`: a size/mtime mismatch before reading leaves that entry out and records
   `SOURCE_CHANGED` in its result; the archive is still completed and the build status is
   `SOURCE_CHANGED`. A file that changes *while* it is read (short read or extra data) fails the
@@ -189,7 +201,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 |---|---|
 | 1. Zip layer: store, plan/execute, collisions, symlinks, path safety (native) | Done |
 | 2. WASM build + OPFS spike | Not started |
-| 3. Deflate: parallel deflate, store heuristic | Encoder and decoder exist; planner/builder still store everything |
+| 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Not started |
 | 5. PHP and Python bindings | Not started |
 | 6. CLI, then GUI | Not started |

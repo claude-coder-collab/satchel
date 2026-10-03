@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "io/zip/builder.hpp"
 
+#include "codecs/deflate.hpp"
+
 #include "io/zip/reader.hpp"
 #include "io/zip/zip_writer.hpp"
 
@@ -48,9 +50,10 @@ struct Segment
 class Job
 {
 public:
-    Job(const ArchivePlan& job_plan, Context& job_context) :
+    Job(const ArchivePlan& job_plan, Context& job_context, const BuilderOptions& job_options) :
         plan(job_plan),
         context(job_context),
+        options(job_options),
         budget(job_context.memory_budget()),
         store(CodecRegistry::make_encoder(ZipMethod::Store, 0)),
         deflate(CodecRegistry::make_encoder(ZipMethod::Deflate, job_plan.options.deflate_level))
@@ -81,6 +84,7 @@ public:
 
     const ArchivePlan& plan;
     Context& context;
+    const BuilderOptions& options;
     ByteBudget budget;
     std::unique_ptr<SegmentEncoder> store;
     std::unique_ptr<SegmentEncoder> deflate;
@@ -97,6 +101,16 @@ std::uint64_t deflate_size_hint(std::uint64_t size)
 {
     return size + size / 256 + (1u << 20);
 }
+
+bool deflate_pays_off(std::size_t compressed, std::size_t original, double min_saving)
+{
+    return original > 0 && static_cast<double>(compressed) <= static_cast<double>(original) * (1.0 - min_saving);
+}
+
+enum class EntryMode : std::uint8_t {
+    Fixed, // method chosen by the reader
+    Auto, // single segment; the worker keeps deflate only if it pays off
+};
 
 void read_entries(Job& job)
 {
@@ -142,26 +156,59 @@ void read_entries(Job& job)
             break;
         }
 
-        const SegmentEncoder& encoder = *job.store;
-        const auto seg_size = encoder.segment_size();
-        std::uint64_t remaining = entry.snapshot.size;
+        const std::uint64_t size = entry.snapshot.size;
+        const Error change{ Status::SourceChanged, std::format("'{}' changed while it was being read", entry.item.source_path) };
+        bool failed = false;
+
+        EntryMode mode = EntryMode::Fixed;
+        const SegmentEncoder* encoder = job.store.get();
+        std::vector<std::uint8_t> prefix;
+        std::uint64_t seg_size = encoder->segment_size();
+        if (size > 0 && size <= job.options.small_entry_threshold)
+        {
+            mode = EntryMode::Auto;
+            encoder = job.deflate.get();
+            seg_size = size;
+        }
+        else if (size > 0)
+        {
+            prefix.resize(static_cast<std::size_t>(std::min<std::uint64_t>(job.options.sample_window, size)));
+            auto got = (*stream)->read_full(prefix);
+            if (!got || *got != prefix.size())
+            {
+                fatal(i, got ? change : got.error());
+                break;
+            }
+            auto sample = deflate_buffer(prefix, job.plan.options.deflate_level);
+            if (!sample)
+            {
+                fatal(i, sample.error());
+                break;
+            }
+            if (deflate_pays_off(sample->size(), prefix.size(), job.options.min_deflate_saving))
+                encoder = job.deflate.get();
+            seg_size = encoder->segment_size();
+        }
+
+        std::uint64_t remaining = size;
         std::vector<std::uint8_t> history;
         bool first = true;
-        bool failed = false;
         do
         {
             const auto n = static_cast<std::size_t>(std::min<std::uint64_t>(seg_size, remaining));
-            const std::uint64_t cost = encoder.method() == ZipMethod::Store ? n : 2ull * n + 1024;
+            const std::uint64_t cost = encoder->method() == ZipMethod::Store ? n : 2ull * n + 1024;
             if (!job.budget.acquire(cost))
             {
                 failed = true;
                 break;
             }
             std::vector<std::uint8_t> buf(n);
-            auto got = (*stream)->read_full(buf);
+            const auto from_prefix = std::min(prefix.size(), n);
+            std::copy_n(prefix.begin(), from_prefix, buf.begin());
+            prefix.erase(prefix.begin(), prefix.begin() + static_cast<std::ptrdiff_t>(from_prefix));
+            auto got = (*stream)->read_full(std::span(buf).subspan(from_prefix));
             const bool last = remaining == n;
-            Error change{ Status::SourceChanged, std::format("'{}' changed while it was being read", entry.item.source_path) };
-            if (!got || *got != n)
+            if (!got || *got != n - from_prefix)
             {
                 job.budget.release(cost);
                 fatal(i, got ? change : got.error());
@@ -182,27 +229,42 @@ void read_entries(Job& job)
             }
 
             std::vector<std::uint8_t> hist;
-            if (encoder.history_size() > 0 && !history.empty())
+            if (encoder->history_size() > 0 && !history.empty())
                 hist = history;
-            if (encoder.history_size() > 0 && !last)
+            if (encoder->history_size() > 0 && !last)
             {
-                const auto keep = std::min<std::size_t>(encoder.history_size(), buf.size());
+                const auto keep = std::min<std::size_t>(encoder->history_size(), buf.size());
                 history.assign(buf.end() - static_cast<std::ptrdiff_t>(keep), buf.end());
             }
 
             const auto my_seq = seq++;
             job.tasks.add();
-            job.context.workers().submit([&job, &encoder, my_seq, i, first, last, cost, data = std::move(buf), hist = std::move(hist)]() mutable {
+            job.context.workers().submit([&job, encoder, mode, my_seq, i, first, last, cost, data = std::move(buf), hist = std::move(hist)]() mutable {
                 Segment s;
                 s.entry = i;
                 s.first = first;
                 s.last = last;
-                s.method = encoder.method();
+                s.method = encoder->method();
                 s.input_size = data.size();
                 s.budget = cost;
                 s.crc = crc32_update(0, data);
-                auto out = encoder.encode(hist, std::move(data), last);
-                if (out)
+                if (mode == EntryMode::Auto)
+                {
+                    auto out = deflate_buffer(data, job.plan.options.deflate_level);
+                    if (!out)
+                    {
+                        s.kind = SegmentKind::Fatal;
+                        s.error = out.error();
+                    }
+                    else if (deflate_pays_off(out->size(), data.size(), job.options.min_deflate_saving))
+                        s.output = std::move(*out);
+                    else
+                    {
+                        s.method = ZipMethod::Store;
+                        s.output = std::move(data);
+                    }
+                }
+                else if (auto out = encoder->encode(hist, std::move(data), last))
                     s.output = std::move(*out);
                 else
                 {
@@ -258,7 +320,7 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
         return result;
     }
 
-    Job job(plan, context_);
+    Job job(plan, context_, options_);
     job.tasks.add();
     context_.services().submit([&job] {
         read_entries(job);
