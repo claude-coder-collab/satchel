@@ -21,7 +21,12 @@ class ArchiveReader;
 
 struct BuilderOptions
 {
+    // Entries up to this size are encoded as one segment, and the store/deflate choice uses
+    // the whole entry. Larger entries are cut into segments and decided from a sample.
     std::uint64_t small_entry_threshold = 4ull << 20;
+    std::size_t sample_window = 128u << 10;
+    // Deflate is kept only if it saves at least this fraction.
+    double min_deflate_saving = 0.02;
 };
 
 struct EntryResult
