@@ -43,7 +43,8 @@ std::string vendor_string();
 class Decoder
 {
 public:
-    static Result<std::unique_ptr<Decoder>> open(IChunkedStream& in);
+    // check_md5: verify the STREAMINFO MD5 signature at finish().
+    static Result<std::unique_ptr<Decoder>> open(IChunkedStream& in, bool check_md5 = true);
     Decoder(const Decoder&) = delete;
     Decoder& operator=(const Decoder&) = delete;
     Decoder(Decoder&&) = delete;

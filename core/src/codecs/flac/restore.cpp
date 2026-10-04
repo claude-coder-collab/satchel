@@ -186,7 +186,7 @@ VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open,
         auto s = open(m);
         if (!s)
             return std::unexpected(s.error());
-        auto d = Decoder::open(**s);
+        auto d = Decoder::open(**s, !lead.project);
         if (!d)
             return std::unexpected(d.error());
         if ((*d)->bits_per_sample() != info.bits_per_sample || (*d)->channels() != (mono ? 1 : channels))

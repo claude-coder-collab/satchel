@@ -125,7 +125,7 @@ std::size_t Context::resolve_threads(int threads)
 Context::Context(int threads, std::uint64_t memory_budget) :
     memory_budget_(memory_budget == 0 ? default_memory_budget : memory_budget),
     workers_(resolve_threads(threads)),
-    services_(2)
+    services_(3)
 {
 }
 

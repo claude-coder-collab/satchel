@@ -5,13 +5,35 @@
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
+#include <optional>
 #include <string>
+#include <vector>
 
 using namespace zp;
 
+namespace
+{
+
+struct PortableSha
+{
+    PortableSha() { Sha256::set_hardware_enabled(false); }
+    PortableSha(const PortableSha&) = delete;
+    PortableSha& operator=(const PortableSha&) = delete;
+    PortableSha(PortableSha&&) = delete;
+    PortableSha& operator=(PortableSha&&) = delete;
+    ~PortableSha() { Sha256::set_hardware_enabled(true); }
+};
+
+}
+
 TEST_CASE("SHA-256 known vectors", "[hash]")
 {
+    std::optional<PortableSha> portable;
+    if (GENERATE(false, true))
+        portable.emplace();
+    CAPTURE(Sha256::hardware_accelerated());
     CHECK(to_hex(Sha256::of(as_bytes(""))) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     CHECK(to_hex(Sha256::of(as_bytes("abc"))) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     CHECK(to_hex(Sha256::of(as_bytes("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")))
@@ -27,6 +49,20 @@ TEST_CASE("SHA-256 is independent of chunking", "[hash]")
     for (std::size_t off = 0, step = 1; off < data.size(); off += step, step = step * 3 % 977 + 1)
         s.update(std::span(data).subspan(off, std::min(step, data.size() - off)));
     CHECK(s.finish() == Sha256::of(data));
+}
+
+TEST_CASE("hardware and portable SHA-256 agree", "[hash]")
+{
+    INFO("hardware SHA-256: " << Sha256::hardware_accelerated());
+    const auto data = test::random_bytes(70000, 9);
+    std::vector<Sha256::Digest> fast;
+    for (std::size_t len = 0; len <= 300; ++len)
+        fast.push_back(Sha256::of(std::span(data).first(len)));
+    fast.push_back(Sha256::of(data));
+    PortableSha portable;
+    for (std::size_t len = 0; len <= 300; ++len)
+        CHECK(Sha256::of(std::span(data).first(len)) == fast[len]);
+    CHECK(Sha256::of(data) == fast.back());
 }
 
 TEST_CASE("MD5 known vectors", "[hash]")

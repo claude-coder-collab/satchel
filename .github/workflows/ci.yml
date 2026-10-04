@@ -61,6 +61,9 @@ jobs:
         run: |
           pip install pytest
           SATCHEL_CLI=build/${{ matrix.preset }}/desktop/cli/${{ matrix.config }}/satchel python3 -m pytest -q tests/cli
+      - name: Benchmark (smoke)
+        if: matrix.name == 'gcc'
+        run: build/${{ matrix.preset }}/bench/${{ matrix.config }}/zp_bench --size 32
 
   tidy:
     runs-on: ubuntu-24.04
@@ -163,3 +166,5 @@ jobs:
         run: |
           pip install pytest
           SATCHEL_CLI=build/msvc/desktop/cli/Release/satchel.exe python -m pytest -q tests/cli
+      - name: Benchmark (smoke)
+        run: build/msvc/bench/Release/zp_bench.exe --size 32

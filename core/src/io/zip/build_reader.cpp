@@ -316,11 +316,14 @@ void Reader::flac(std::size_t i, IChunkedStream& stream)
     {
         auto& job = job_;
         state->hasher = std::make_shared<flac::HashJob>(layout, mono);
-        job.tasks.add();
-        job.context.services().submit([hasher = state->hasher, &job] {
-            hasher->run();
-            job.tasks.done();
-        });
+        for (const auto lane : { flac::HashJob::Lane::Sha256, flac::HashJob::Lane::Md5 })
+        {
+            job.tasks.add();
+            job.context.services().submit([hasher = state->hasher, &job, lane] {
+                hasher->run(lane);
+                job.tasks.done();
+            });
+        }
     }
     struct CloseHasher
     {

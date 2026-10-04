@@ -168,7 +168,7 @@ struct DecoderCallbacks
     }
 };
 
-Result<std::unique_ptr<Decoder>> Decoder::open(IChunkedStream& in)
+Result<std::unique_ptr<Decoder>> Decoder::open(IChunkedStream& in, bool check_md5)
 {
     std::unique_ptr<Decoder> dec(new Decoder());
     dec->impl_ = std::make_unique<Impl>();
@@ -177,7 +177,7 @@ Result<std::unique_ptr<Decoder>> Decoder::open(IChunkedStream& in)
     impl.d = FLAC__stream_decoder_new();
     if (!impl.d)
         return fail(Status::Internal, "cannot create a FLAC decoder");
-    FLAC__stream_decoder_set_md5_checking(impl.d, true);
+    FLAC__stream_decoder_set_md5_checking(impl.d, check_md5);
     const auto st = FLAC__stream_decoder_init_stream(impl.d, DecoderCallbacks::read, nullptr, nullptr, nullptr, nullptr, DecoderCallbacks::write, DecoderCallbacks::metadata, DecoderCallbacks::error, &impl);
     if (st != FLAC__STREAM_DECODER_INIT_STATUS_OK)
         return fail(Status::Internal, "cannot initialise the FLAC decoder");

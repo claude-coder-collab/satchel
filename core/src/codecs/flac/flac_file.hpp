@@ -8,6 +8,7 @@
 #include "crypto/hash.hpp"
 #include "io/stream.hpp"
 
+#include <array>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -63,6 +64,9 @@ class SourceHasher
 public:
     SourceHasher(const PcmLayout& layout, bool per_channel);
     void update(std::span<const std::uint8_t> chunk);
+    // The two halves of update(); they touch disjoint state, so two threads may run one each.
+    void update_sha256(std::span<const std::uint8_t> chunk);
+    void update_md5(std::span<const std::uint8_t> chunk);
     Hashes finish();
 
 private:
@@ -78,18 +82,21 @@ private:
     std::vector<std::vector<std::uint8_t>> channel_scratch_;
 };
 
-// Runs a SourceHasher on its own thread; chunks are queued in order.
+// Runs a SourceHasher on two threads (SHA-256 and MD5 lanes); chunks are queued in order and
+// shared by both lanes.
 class HashJob
 {
 public:
     static constexpr std::size_t max_queued = 16;
+    enum class Lane : std::uint8_t { Sha256,
+        Md5 };
 
     HashJob(const PcmLayout& layout, bool per_channel);
-    // Blocks while max_queued chunks are waiting.
+    // Blocks while a lane has max_queued chunks waiting.
     void push(std::shared_ptr<const std::vector<std::uint8_t>> chunk);
     void close();
-    // Body of the hasher thread.
-    void run();
+    // Body of one hasher thread; both lanes must run.
+    void run(Lane lane);
     Hashes wait();
 
 private:
@@ -97,8 +104,11 @@ private:
     std::mutex mutex_;
     std::condition_variable cv_;
     std::deque<std::shared_ptr<const std::vector<std::uint8_t>>> queue_;
+    std::uint64_t first_ = 0;
+    std::uint64_t pushed_ = 0;
+    std::array<std::uint64_t, 2> next_{};
     bool closed_ = false;
-    bool done_ = false;
+    int lanes_done_ = 0;
     std::optional<Hashes> result_;
 };
 
