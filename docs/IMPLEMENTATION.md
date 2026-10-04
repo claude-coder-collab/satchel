@@ -22,6 +22,10 @@ first public release.
 | EOCD comment magic | `STCH` (0x53544348) | Big-endian in the binary record |
 | FLAC APPLICATION ID | `Stch` | Must be registered with Xiph |
 | Copyright holder | Venn Audio Ltd. | SPDX: `AGPL-3.0-only OR LicenseRef-Commercial` |
+| App icon | `packaging/icons/*` | Drawn by `tools/make_icons.py` (PNG, ICO, ICNS; no dependencies) |
+| macOS bundle ID | `com.vennaudio.satchel` | `ZP_BUNDLE_ID` in `cmake/Packaging.cmake` |
+| WiX upgrade code | `C228FD8D-4C42-4523-90CC-05246E0FF58B` | Must never change once an MSI ships |
+| Debian maintainer | `Venn Audio Ltd. <packages@example.invalid>` | `ZP_PACKAGE_CONTACT` |
 
 ## 2. Repository layout
 
@@ -33,6 +37,9 @@ core/src/io/zip/         planner, builder, reader, extractor, editor, metadata, 
 core/src/codecs/         codec registry, store, deflate
 core/src/pipeline/       context, thread pools, memory budget
 tests/unit, tests/integration, tests/support, tests/capi
+cmake/Packaging.cmake    install layout, platform resources, CPack
+packaging/               icons, .desktop, Info.plist, Windows resources, WiX patch, signing hook
+tools/                   gen_cdef.py, make_icons.py, serve_web.py
 docs/spec/               specifications (inputs)
 ```
 
@@ -478,11 +485,39 @@ defaults and "Copy as CLI command".
 **Not done yet (desktop):**
 - Quick Look extension, Windows preview handler, Finder/Explorer context menus, Linux file-manager
   integration.
-- File association.
+- File association on Windows (macOS declares zip as an Alternate viewer in `Info.plist`; Linux
+  declares `application/zip` in the `.desktop` file).
 - Sparkle/WinSparkle updates.
 - Translations (`tr()` is used throughout; no `.ts` files yet).
-- Packaging (AppImage/.deb, signed .dmg, MSI).
+- Universal (arm64 + x86_64) macOS build; the dmg is arm64 only.
 - The per-release manual pass.
+
+### 4.15 Packaging and releases (main spec 12.3)
+
+`cmake/Packaging.cmake` (included from the root) defines the install layout and CPack:
+
+| Platform | Install layout | Package |
+|---|---|---|
+| Linux | `bin/satchel`, `bin/satchel-gui`, `share/applications/satchel.desktop`, hicolor icons 256/512 | CPack `DEB` (`satchel_<ver>_amd64.deb`, `SHLIBDEPS` against system Qt) and `TGZ`; AppImage by `linuxdeploy` + `linuxdeploy-plugin-qt` from the installed tree |
+| macOS | `Satchel.app` (executable `Satchel`, `Info.plist` from `packaging/macos/Info.plist.in`, `satchel.icns`); CLI at `Satchel.app/Contents/Helpers/satchel` (the bundle's `MacOS/Satchel` would clash with `satchel` on a case-insensitive disk) | CPack `DragNDrop` (UDZO dmg with an Applications link) |
+| Windows | `bin/satchel.exe`, `bin/satchel-gui.exe` (icon + version resource from `packaging/windows/satchel.rc.in`), Qt DLLs | CPack `WIX` (WiX 5 via `CPACK_WIX_VERSION 4`): Start-menu shortcut "Satchel", `bin` appended to the system `PATH` (`packaging/windows/wix_patch.xml`) |
+
+- Qt is deployed at install time with `qt_generate_deploy_app_script` (macdeployqt/windeployqt);
+  option `ZP_DEPLOY_QT`, on by default for macOS and Windows, off for Linux (the `.deb` uses the
+  distribution's Qt; the AppImage bundles it).
+- `packaging/sign.cmake` is CPack's pre-build script: it signs the staged files when
+  `SATCHEL_MACOS_SIGN_IDENTITY` (codesign, hardened runtime, timestamp) or `SATCHEL_WINDOWS_CERT` +
+  `SATCHEL_WINDOWS_CERT_PASSWORD` (signtool, SHA-256, RFC 3161 timestamp) are set, else does nothing.
+- `.github/workflows/release.yml` runs on `v*` tags, on demand, and on pull requests touching
+  packaging. The version is the tag without `v` (else the CMake project version) and goes into
+  `ZP_VERSION`. Jobs: Linux (deb, tar.gz, AppImage; installs the deb and starts the AppImage under
+  Xvfb), macOS (Qt 6.8.3 from `install-qt-action`, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
+  stapled when Apple credentials exist; checks the bundle links nothing outside itself and the
+  system), Windows (MSI; installs it silently and runs `satchel --version`), web (zip of the browser
+  app). `publish` writes `SHA256SUMS` and, for tags, creates a draft GitHub release.
+- Secrets (all optional; unsigned packages are built without them): `MACOS_CERTIFICATE` (base64
+  .p12), `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`,
+  `APPLE_APP_PASSWORD`, `WINDOWS_CERTIFICATE` (base64 .pfx), `WINDOWS_CERTIFICATE_PASSWORD`.
 
 ### 4.14 C API
 
@@ -501,7 +536,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Done: all six containers, multichannel and multi-mono, tags, readme, editor regeneration |
 | 5. PHP and Python bindings | Done (wheels/packages with the bundled library come with releases) |
-| 6. CLI, then GUI | CLI done; GUI core done (both modes, browser, Inspector, plan review, extract, verify, edit); OS integration, updates and packaging pending |
+| 6. CLI, then GUI | CLI done; GUI core done (both modes, browser, Inspector, plan review, extract, verify, edit); packaging and release workflow done (unsigned until certificates exist); OS integration and updates pending |
 
 ### Needs hardware, accounts or people (cannot be done in CI)
 

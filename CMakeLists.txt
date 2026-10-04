@@ -21,6 +21,7 @@ endif()
 
 include(cmake/ProjectOptions.cmake)
 include(cmake/Dependencies.cmake)
+include(cmake/Packaging.cmake)
 
 if(ZP_BUILD_TESTS)
     enable_testing()
@@ -43,6 +44,14 @@ endif()
 
 if(NOT EMSCRIPTEN)
     add_subdirectory(desktop/gui)
+    if(TARGET satchel_cli)
+        if(APPLE AND TARGET satchel_gui)
+            install(TARGETS satchel_cli RUNTIME DESTINATION Satchel.app/Contents/Helpers)
+        else()
+            install(TARGETS satchel_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+        endif()
+    endif()
+    zp_configure_cpack()
 endif()
 
 if(ZP_BUILD_FUZZERS)

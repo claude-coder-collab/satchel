@@ -1,0 +1,231 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - packaging/**
+      - cmake/Packaging.cmake
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: "6.8.3"
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(sed -nE 's/^project\(satchel VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-14 g++-14 qt6-base-dev libgl1-mesa-dev dpkg-dev file xvfb
+      - name: Build
+        run: |
+          cmake --preset gcc -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build/gcc --config Release
+      - name: Debian package and tarball
+        run: cd build/gcc && cpack -C Release
+      - name: AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          QMAKE: /usr/lib/qt6/bin/qmake
+          LDAI_OUTPUT: Satchel-${{ needs.version.outputs.version }}-x86_64.AppImage
+        run: |
+          base=https://github.com/linuxdeploy
+          curl -fsSLo linuxdeploy "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          curl -fsSLo linuxdeploy-plugin-qt "$base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          chmod +x linuxdeploy linuxdeploy-plugin-qt
+          DESTDIR="$PWD/AppDir" cmake --install build/gcc --config Release
+          ./linuxdeploy --appdir AppDir --plugin qt --output appimage \
+            --desktop-file AppDir/usr/share/applications/satchel.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/satchel.png
+          mv "$LDAI_OUTPUT" build/gcc/
+      - name: Smoke test
+        run: |
+          sudo apt-get install -y ./build/gcc/satchel_*.deb
+          satchel --version
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run timeout 5 build/gcc/Satchel-*.AppImage || [[ $? == 124 ]]
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-linux
+          path: |
+            build/gcc/*.deb
+            build/gcc/*.tar.gz
+            build/gcc/*.AppImage
+
+  macos:
+    needs: version
+    runs-on: macos-15
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+      - name: Install tools
+        run: brew install ninja
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security list-keychain -d user -s "$keychain"
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "SATCHEL_MACOS_SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
+      - name: Build
+        run: |
+          cmake --preset clang -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3
+          cmake --build build/clang --config Release
+      - name: Disk image
+        run: cd build/clang && cpack -C Release
+      - name: Notarize
+        if: env.MACOS_CERTIFICATE != '' && env.APPLE_ID != ''
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for dmg in build/clang/*.dmg; do
+            xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+            xcrun stapler staple "$dmg"
+          done
+      - name: Smoke test
+        run: |
+          hdiutil attach build/clang/*.dmg -mountpoint /tmp/satchel-dmg
+          /tmp/satchel-dmg/Satchel.app/Contents/Helpers/satchel --version
+          outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System' || true)
+          if [[ -n "$outside" ]]; then echo "Links outside the bundle: $outside"; exit 1; fi
+          hdiutil detach /tmp/satchel-dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-macos
+          path: build/clang/*.dmg
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Install WiX
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.UI.wixext/5.0.2
+      - name: Import signing certificate
+        if: env.WINDOWS_CERTIFICATE != ''
+        shell: bash
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$WINDOWS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.pfx"
+          echo "SATCHEL_WINDOWS_CERT=$RUNNER_TEMP/cert.pfx" >> "$GITHUB_ENV"
+          echo "SATCHEL_WINDOWS_CERT_PASSWORD=$WINDOWS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build
+        shell: bash
+        run: |
+          cmake --preset msvc -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION"
+          cmake --build build/msvc --config Release
+      - name: Installer
+        shell: bash
+        run: |
+          cd build/msvc && cpack -C Release
+          if [[ -n "${SATCHEL_WINDOWS_CERT:-}" ]]; then
+            signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f "$SATCHEL_WINDOWS_CERT" /p "$SATCHEL_WINDOWS_CERT_PASSWORD" *.msi
+          fi
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem build/msvc/*.msi | Select-Object -First 1
+          Start-Process msiexec -ArgumentList "/i `"$($msi.FullName)`" /qn /l*v install.log" -Wait
+          & "$env:ProgramFiles\Satchel\bin\satchel.exe" --version
+          if ($LASTEXITCODE -ne 0) { Get-Content install.log -Tail 50; exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\Qt6Widgets.dll")) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-windows
+          path: build/msvc/*.msi
+
+  web:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.10
+          actions-cache-folder: emsdk-cache
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build
+        run: |
+          emcmake cmake --preset wasm -DZP_BUILD_TESTS=OFF -DZP_VERSION="${{ needs.version.outputs.version }}"
+          cmake --build build/wasm --config Release --target satchel_web
+          cd build/wasm/web && zip -qr "$GITHUB_WORKSPACE/Satchel-${{ needs.version.outputs.version }}-web.zip" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-web
+          path: Satchel-*-web.zip
+
+  publish:
+    needs: [version, linux, macos, windows, web]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: dist
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: dist
+      - name: Draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --draft --generate-notes --title "Satchel ${{ needs.version.outputs.version }}"

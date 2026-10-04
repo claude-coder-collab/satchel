@@ -7,6 +7,7 @@
 
 #include <QCloseEvent>
 #include <QDesktopServices>
+#include <QDir>
 #include <QDragEnterEvent>
 #include <QFileInfo>
 #include <QHBoxLayout>
