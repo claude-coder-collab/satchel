@@ -2,4 +2,24 @@
     <CPackWiXFragment Id="CM_CP_bin.satchel.exe">
         <Environment Id="SatchelPath" Name="PATH" Value="[INSTALL_ROOT]bin" Permanent="no" Part="last" Action="set" System="yes" />
     </CPackWiXFragment>
+    <CPackWiXFragment Id="CM_CP_bin.satchel_gui.exe">
+        <RegistryValue Root="HKLM" Key="Software\Classes\Satchel.zip" Value="Zip archive" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Satchel.zip\DefaultIcon" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot;,0" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Satchel.zip\shell\open\command" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot; --full &quot;%1&quot;" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Satchel.zip\shell\satchel.extract" Name="MUIVerb" Value="Extract with Satchel" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Satchel.zip\shell\satchel.extract" Name="Icon" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot;,0" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Satchel.zip\shell\satchel.extract\command" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot; --extract &quot;%1&quot;" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.zip\OpenWithProgids" Name="Satchel.zip" Value="" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\SystemFileAssociations\.zip\shell\satchel.extract" Name="MUIVerb" Value="Extract with Satchel" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\SystemFileAssociations\.zip\shell\satchel.extract" Name="Icon" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot;,0" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\SystemFileAssociations\.zip\shell\satchel.extract\command" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot; --extract &quot;%1&quot;" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\*\shell\satchel.compress" Name="MUIVerb" Value="Compress with Satchel" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\*\shell\satchel.compress" Name="Icon" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot;,0" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\*\shell\satchel.compress\command" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot; --compress &quot;%1&quot;" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\satchel.compress" Name="MUIVerb" Value="Compress with Satchel" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\satchel.compress" Name="Icon" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot;,0" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\satchel.compress\command" Value="&quot;[INSTALL_ROOT]bin\satchel-gui.exe&quot; --compress &quot;%1&quot;" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\satchel-gui.exe" Name="FriendlyAppName" Value="Satchel" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\satchel-gui.exe\SupportedTypes" Name=".zip" Value="" Type="string" />
+    </CPackWiXFragment>
 </CPackWiXPatch>

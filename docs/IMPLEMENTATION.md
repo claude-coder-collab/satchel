@@ -613,6 +613,20 @@ several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds
   and verifies with `codesign --verify --deep --strict`. The release smoke test checks both.
 - The project's warning flags apply to C and C++ only (`$<COMPILE_LANGUAGE:C,CXX>`), so Swift
   targets can link `zp::core`.
+- File-manager actions call the GUI with a verb: `satchel-gui --compress PATHS` (one archive of
+  everything), `--extract ZIPS` (each zip; other items ignored), `--full ZIP` (open in the browser).
+  Without a verb the Simple mode drop rule applies (`satchel_gui::drop_action(items, Intent)`,
+  `action_items`).
+- Linux: Dolphin service menus `share/kio/servicemenus/satchel-{compress,extract}.desktop`
+  (compress for all files and folders; extract and "Open in Satchel" for `application/zip`), and a
+  nautilus-python extension `share/nautilus-python/extensions/satchel.py` (the `.deb` suggests
+  `python3-nautilus`); its `menu_entries(paths)` logic is unit-tested without Nautilus.
+- Windows (WiX patch, registry under HKLM\Software\Classes): ProgID `Satchel.zip` (icon, open =
+  `--full "%1"`, verb "Extract with Satchel") offered through `.zip\OpenWithProgids` (never made
+  the default), "Extract with Satchel" on `SystemFileAssociations\.zip`, "Compress with Satchel" on
+  `*` and `Directory`, and `Applications\satchel-gui.exe`. These are static verbs: on Windows 11 they
+  appear under "Show more options", and a multi-selection starts one process per item. An
+  `IExplorerCommand` handler with a sparse MSIX package (spec) is still pending.
 
 ## 5. Status
 

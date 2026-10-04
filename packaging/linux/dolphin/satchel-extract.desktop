@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Service
+MimeType=application/zip;
+Actions=extract;browse
+X-KDE-Priority=TopLevel
+
+[Desktop Action extract]
+Name=Extract with Satchel
+Icon=satchel
+Exec=satchel-gui --extract %F
+
+[Desktop Action browse]
+Name=Open in Satchel
+Icon=satchel
+Exec=satchel-gui --full %f

@@ -33,11 +33,29 @@ bool is_zip(const std::filesystem::path& p)
     return lower(p.extension().string()) == ".zip";
 }
 
-DropAction drop_action(const std::vector<std::filesystem::path>& dropped)
+DropAction drop_action(const std::vector<std::filesystem::path>& dropped, Intent intent)
 {
     if (dropped.empty())
         return DropAction::None;
+    switch (intent)
+    {
+        case Intent::Compress:
+            return DropAction::CompressAll;
+        case Intent::Extract:
+            return std::ranges::any_of(dropped, [](const auto& p) { return is_zip(p); }) ? DropAction::ExtractEach : DropAction::None;
+        case Intent::Auto:
+            break;
+    }
     return std::ranges::all_of(dropped, [](const auto& p) { return is_zip(p); }) ? DropAction::ExtractEach : DropAction::CompressAll;
+}
+
+std::vector<std::filesystem::path> action_items(const std::vector<std::filesystem::path>& dropped, DropAction action)
+{
+    if (action != DropAction::ExtractEach)
+        return action == DropAction::None ? std::vector<std::filesystem::path>{} : dropped;
+    std::vector<std::filesystem::path> zips;
+    std::ranges::copy_if(dropped, std::back_inserter(zips), [](const auto& p) { return is_zip(p); });
+    return zips;
 }
 
 std::filesystem::path unique_path(const std::filesystem::path& wanted, const ExistsFn& exists, bool folder)

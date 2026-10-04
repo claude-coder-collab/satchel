@@ -18,6 +18,16 @@ TEST_CASE("Simple mode drop rule", "[gui]")
     CHECK(drop_action({ "folder" }) == DropAction::CompressAll);
 }
 
+TEST_CASE("file-manager actions force a verb", "[gui]")
+{
+    CHECK(drop_action({ "a.zip" }, Intent::Compress) == DropAction::CompressAll);
+    CHECK(drop_action({ "a.zip", "take.wav" }, Intent::Extract) == DropAction::ExtractEach);
+    CHECK(drop_action({ "take.wav" }, Intent::Extract) == DropAction::None);
+    CHECK(action_items({ "a.zip", "take.wav", "b.zip" }, DropAction::ExtractEach) == std::vector<fs::path>{ "a.zip", "b.zip" });
+    CHECK(action_items({ "a.zip", "take.wav" }, DropAction::CompressAll).size() == 2);
+    CHECK(action_items({ "a.zip" }, DropAction::None).empty());
+}
+
 TEST_CASE("output naming never overwrites", "[gui]")
 {
     std::set<fs::path> existing{ "/r/Recordings.zip", "/r/Recordings 2.zip", "/r/take.zip", "/r/session" };

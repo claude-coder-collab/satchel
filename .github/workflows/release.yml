@@ -186,6 +186,8 @@ jobs:
           & "$env:ProgramFiles\Satchel\bin\satchel.exe" --version
           if ($LASTEXITCODE -ne 0) { Get-Content install.log -Tail 50; exit 1 }
           if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\Qt6Widgets.dll")) { exit 1 }
+          if (-not (Test-Path "HKLM:\Software\Classes\Satchel.zip\shell\open\command")) { exit 1 }
+          if (-not (Test-Path "HKLM:\Software\Classes\Directory\shell\satchel.compress\command")) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: package-windows

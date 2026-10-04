@@ -140,7 +140,7 @@ void SimpleWindow::dropEvent(QDropEvent* e)
     handle(paths);
 }
 
-void SimpleWindow::handle(const QStringList& paths)
+void SimpleWindow::handle(const QStringList& paths, satchel_gui::Intent intent)
 {
     if (paths.isEmpty())
         return;
@@ -148,14 +148,18 @@ void SimpleWindow::handle(const QStringList& paths)
     std::vector<std::filesystem::path> items;
     for (const auto& p : paths)
         items.push_back(fs_path(p));
-    switch (satchel_gui::drop_action(items))
+    const auto action = satchel_gui::drop_action(items, intent);
+    QStringList selected;
+    for (const auto& p : satchel_gui::action_items(items, action))
+        selected << q_path(p);
+    switch (action)
     {
         case satchel_gui::DropAction::ExtractEach:
-            for (const auto& p : paths)
+            for (const auto& p : selected)
                 start_extract(p);
             break;
         case satchel_gui::DropAction::CompressAll:
-            start_compress(paths);
+            start_compress(selected);
             break;
         case satchel_gui::DropAction::None:
             break;
