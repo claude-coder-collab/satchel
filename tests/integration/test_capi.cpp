@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Copyright (c) 2026 Venn Audio Ltd.
+#include "pcm_fixtures.hpp"
 #include "test_support.hpp"
 #include "zp/zp.h"
 
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstring>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -197,4 +199,94 @@ TEST_CASE("C API rejects bad arguments without crashing", "[capi]")
     CHECK(zp_reader_open(c.ctx, s) == nullptr);
     zp_stream_free(s);
     CHECK(std::string(zp_version()).size() > 0);
+}
+
+TEST_CASE("C API callback input and sink, and JSON descriptions", "[capi]")
+{
+    Ctx c;
+    const std::string alpha = "alpha alpha alpha";
+    const std::vector<std::uint8_t> wav = zp::test::make_wav({});
+    struct Source
+    {
+        std::vector<std::vector<std::uint8_t>> data;
+    } source{ { std::vector<std::uint8_t>(alpha.begin(), alpha.end()), wav } };
+    const zp_input_item_t items[] = {
+        { "dir", ZP_KIND_DIRECTORY, 0, 1700000000, 0755 },
+        { "dir/a.txt", ZP_KIND_FILE, alpha.size(), 1700000000, 0644 },
+        { "dir/take.wav", ZP_KIND_FILE, wav.size(), 1700000000, 0644 },
+    };
+    const auto read = [](void* user, size_t item, uint64_t offset, uint8_t* buf, size_t len) -> int64_t {
+        auto& d = static_cast<Source*>(user)->data[item - 1];
+        const auto n = std::min<std::uint64_t>(len, d.size() - offset);
+        std::memcpy(buf, d.data() + offset, static_cast<std::size_t>(n));
+        return static_cast<int64_t>(n);
+    };
+    zp_input_t* in = zp_input_from_callbacks(items, 3, read, &source);
+    REQUIRE(in);
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, nullptr);
+    REQUIRE(plan);
+    char* json = zp_plan_describe(plan);
+    REQUIRE(json);
+    const std::string described(json);
+    zp_free(json);
+    CHECK(described.find("\"output_name\":\"dir/take.flac\"") != std::string::npos);
+    CHECK(described.find("\"restored_name\":\"dir/take.wav\"") != std::string::npos);
+    CHECK(described.find("\"executable\":true") != std::string::npos);
+
+    zp_stream_t* out = zp_stream_memory();
+    REQUIRE(zp_build(plan, out, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
+    const auto zip = memory_bytes(out);
+    zp_stream_t* rin = zp_stream_memory_from(zip.data(), zip.size());
+    zp_reader_t* reader = zp_reader_open(c.ctx, rin);
+    REQUIRE(reader);
+    json = zp_reader_describe(reader);
+    const std::string listing(json);
+    zp_free(json);
+    CHECK(listing.find("\"restores_to\":\"take.wav\"") != std::string::npos);
+
+    struct Sink
+    {
+        std::map<std::int64_t, std::pair<std::string, std::vector<std::uint8_t>>> open;
+        std::map<std::string, std::vector<std::uint8_t>> done;
+        std::int64_t next = 0;
+    } sink;
+    zp_sink_callbacks_t cb{};
+    cb.user = &sink;
+    cb.exists = [](void* u, const char* p) -> int { return static_cast<Sink*>(u)->done.contains(p) ? 1 : 0; };
+    cb.make_directory = [](void*, const char*) -> int { return 0; };
+    cb.open_file = [](void* u, const char* p, int) -> int64_t {
+        auto& s = *static_cast<Sink*>(u);
+        s.open[s.next] = { p, {} };
+        return s.next++;
+    };
+    cb.write = [](void* u, int64_t f, const uint8_t* b, size_t n) -> int {
+        auto& v = static_cast<Sink*>(u)->open[f].second;
+        v.insert(v.end(), b, b + n);
+        return 0;
+    };
+    cb.commit = [](void* u, int64_t f, int64_t, uint32_t, int) -> int {
+        auto& s = *static_cast<Sink*>(u);
+        s.done[s.open[f].first] = std::move(s.open[f].second);
+        s.open.erase(f);
+        return 0;
+    };
+    cb.discard = [](void* u, int64_t f) { static_cast<Sink*>(u)->open.erase(f); };
+    zp_sink_t* zsink = zp_sink_from_callbacks(&cb);
+    REQUIRE(zsink);
+    zp_xplan_t* x = zp_extract_plan(reader, nullptr, 0, zsink, nullptr);
+    REQUIRE(x);
+    REQUIRE(zp_extract(x, nullptr, nullptr) == ZP_OK);
+    json = zp_xplan_describe(x);
+    CHECK(std::string(json).find("\"restore\":true") != std::string::npos);
+    zp_free(json);
+    CHECK(sink.done["dir/take.wav"] == wav);
+    CHECK(sink.done["dir/a.txt"] == std::vector<std::uint8_t>(alpha.begin(), alpha.end()));
+
+    zp_xplan_free(x);
+    zp_sink_free(zsink);
+    zp_reader_free(reader);
+    zp_stream_free(rin);
+    zp_stream_free(out);
+    zp_plan_free(plan);
+    zp_input_free(in);
 }

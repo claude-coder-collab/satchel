@@ -133,6 +133,14 @@ ZP_API int zp_last_status(void);
 ZP_API const char* zp_status_name(int status);
 ZP_API const char* zp_version(void);
 
+/* JSON descriptions (UTF-8, NUL-terminated) for bindings that prefer one call over many struct
+ * accessors. Free the returned string with zp_free. Fields mirror the corresponding structs. */
+ZP_API char* zp_plan_describe(const zp_plan_t* plan);
+ZP_API char* zp_build_result_describe(const zp_build_result_t* result);
+ZP_API char* zp_reader_describe(const zp_reader_t* reader);
+ZP_API char* zp_xplan_describe(const zp_xplan_t* xplan);
+ZP_API void zp_free(void* ptr);
+
 /* ---- context: owns the thread pool and memory budget ----------------------------------- */
 
 ZP_API zp_context_t* zp_context_create(int threads, uint64_t memory_budget); /* 0 = defaults */
@@ -163,6 +171,8 @@ typedef struct zp_stream_callbacks
     int64_t (*size)(void* user);
 } zp_stream_callbacks_t;
 
+/* Under WebAssembly every callback of this file runs on the main runtime thread (the thread that
+ * called the job), so it may use objects that live there (File, OPFS handles). */
 ZP_API zp_stream_t* zp_stream_from_callbacks(const zp_stream_callbacks_t* callbacks);
 ZP_API void zp_stream_free(zp_stream_t* stream);
 
@@ -173,6 +183,21 @@ ZP_API zp_input_t* zp_input_from_paths(const char* const* paths, size_t count);
 ZP_API zp_input_t* zp_input_memory(void);
 ZP_API int zp_input_memory_add_file(zp_input_t* input, const char* archive_path, const uint8_t* data, size_t len, int64_t mtime, uint32_t unix_mode);
 ZP_API int zp_input_memory_add_directory(zp_input_t* input, const char* archive_path, int64_t mtime, uint32_t unix_mode);
+typedef struct zp_input_item
+{
+    const char* archive_path; /* relative path inside the archive ('/' separators) */
+    int kind; /* ZP_KIND_FILE or ZP_KIND_DIRECTORY */
+    uint64_t size;
+    int64_t mtime;
+    uint32_t unix_mode;
+} zp_input_item_t;
+
+/* Reads len bytes of item `item` at `offset` into buf; returns bytes read or -1. */
+typedef int64_t (*zp_read_fn)(void* user, size_t item, uint64_t offset, uint8_t* buf, size_t len);
+
+/* Items described by the caller, read through a callback (browser File objects, network...).
+ * The items are copied. */
+ZP_API zp_input_t* zp_input_from_callbacks(const zp_input_item_t* items, size_t count, zp_read_fn read, void* user);
 ZP_API void zp_input_free(zp_input_t* input);
 
 /* ---- planning -------------------------------------------------------------------------- */
@@ -307,6 +332,25 @@ ZP_API void zp_reader_free(zp_reader_t* reader);
 ZP_API zp_sink_t* zp_sink_filesystem(const char* destination);
 /* Discards output: extraction then only verifies CRCs (and hashes for restored audio). */
 ZP_API zp_sink_t* zp_sink_null(void);
+typedef struct zp_sink_callbacks
+{
+    void* user;
+    /* 1 if something exists at path, else 0. */
+    int (*exists)(void* user, const char* path);
+    /* 0 on success. */
+    int (*make_directory)(void* user, const char* path);
+    /* Starts a file; returns a handle >= 0, or -1. replace = 0 must fail if the path exists. */
+    int64_t (*open_file)(void* user, const char* path, int replace);
+    /* 0 on success. */
+    int (*write)(void* user, int64_t file, const uint8_t* buf, size_t len);
+    /* Completes a file; 0 on success. has_mode = 0 when no Unix permissions are known. */
+    int (*commit)(void* user, int64_t file, int64_t mtime, uint32_t unix_mode, int has_mode);
+    /* Drops an unfinished file (failed or cancelled). */
+    void (*discard)(void* user, int64_t file);
+} zp_sink_callbacks_t;
+
+/* Extraction destination implemented by the caller (browser directory handles, downloads). */
+ZP_API zp_sink_t* zp_sink_from_callbacks(const zp_sink_callbacks_t* callbacks);
 ZP_API void zp_sink_free(zp_sink_t* sink);
 
 typedef struct zp_extract_options

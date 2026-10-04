@@ -80,6 +80,11 @@ const char* zp_last_error(void);
 int zp_last_status(void);
 const char* zp_status_name(int status);
 const char* zp_version(void);
+char* zp_plan_describe(const zp_plan_t* plan);
+char* zp_build_result_describe(const zp_build_result_t* result);
+char* zp_reader_describe(const zp_reader_t* reader);
+char* zp_xplan_describe(const zp_xplan_t* xplan);
+void zp_free(void* ptr);
 zp_context_t* zp_context_create(int threads, uint64_t memory_budget);
 void zp_context_free(zp_context_t* ctx);
 zp_stream_t* zp_stream_open_file(const char* path);
@@ -102,6 +107,16 @@ zp_input_t* zp_input_from_paths(const char* const* paths, size_t count);
 zp_input_t* zp_input_memory(void);
 int zp_input_memory_add_file(zp_input_t* input, const char* archive_path, const uint8_t* data, size_t len, int64_t mtime, uint32_t unix_mode);
 int zp_input_memory_add_directory(zp_input_t* input, const char* archive_path, int64_t mtime, uint32_t unix_mode);
+typedef struct zp_input_item
+{
+    const char* archive_path;
+    int kind;
+    uint64_t size;
+    int64_t mtime;
+    uint32_t unix_mode;
+} zp_input_item_t;
+typedef int64_t (*zp_read_fn)(void* user, size_t item, uint64_t offset, uint8_t* buf, size_t len);
+zp_input_t* zp_input_from_callbacks(const zp_input_item_t* items, size_t count, zp_read_fn read, void* user);
 void zp_input_free(zp_input_t* input);
 typedef struct zp_plan_options
 {
@@ -208,6 +223,17 @@ int zp_reader_zip64(const zp_reader_t* reader);
 void zp_reader_free(zp_reader_t* reader);
 zp_sink_t* zp_sink_filesystem(const char* destination);
 zp_sink_t* zp_sink_null(void);
+typedef struct zp_sink_callbacks
+{
+    void* user;
+    int (*exists)(void* user, const char* path);
+    int (*make_directory)(void* user, const char* path);
+    int64_t (*open_file)(void* user, const char* path, int replace);
+    int (*write)(void* user, int64_t file, const uint8_t* buf, size_t len);
+    int (*commit)(void* user, int64_t file, int64_t mtime, uint32_t unix_mode, int has_mode);
+    void (*discard)(void* user, int64_t file);
+} zp_sink_callbacks_t;
+zp_sink_t* zp_sink_from_callbacks(const zp_sink_callbacks_t* callbacks);
 void zp_sink_free(zp_sink_t* sink);
 typedef struct zp_extract_options
 {

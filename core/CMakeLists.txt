@@ -2,6 +2,8 @@ configure_file(src/common/product.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/generated/p
 
 add_library(zp_core STATIC
     src/common/bytes.cpp
+    src/common/json_writer.cpp
+    src/common/main_thread.cpp
     src/common/status.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/generated/product.cpp
     src/capi/zp.cpp
