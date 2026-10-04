@@ -111,7 +111,7 @@ jobs:
           echo "SATCHEL_MACOS_SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
       - name: Build
         run: |
-          cmake --preset clang -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 -DZP_BUNDLE_UPDATER=ON
+          cmake --preset clang -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 -DZP_BUNDLE_UPDATER=ON "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
           cmake --build build/clang --config Release
       - name: Disk image
         run: cd build/clang && cpack -C Release
@@ -132,7 +132,10 @@ jobs:
           codesign --verify --deep --strict /tmp/satchel-dmg/Satchel.app
           codesign -d --entitlements - /tmp/satchel-dmg/Satchel.app/Contents/PlugIns/SatchelPreview.appex | grep -q app-sandbox
           test -d /tmp/satchel-dmg/Satchel.app/Contents/Frameworks/Sparkle.framework
-          outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System' || true)
+          for bin in MacOS/Satchel Helpers/satchel PlugIns/SatchelPreview.appex/Contents/MacOS/SatchelPreview; do
+            lipo -archs "/tmp/satchel-dmg/Satchel.app/Contents/$bin" | grep -q "x86_64 arm64"
+          done
+          outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System|:$' || true)
           if [[ -n "$outside" ]]; then echo "Links outside the bundle: $outside"; exit 1; fi
           hdiutil detach /tmp/satchel-dmg
       - uses: actions/upload-artifact@v4
@@ -191,6 +194,8 @@ jobs:
           if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\WinSparkle.dll")) { exit 1 }
           if (-not (Test-Path "HKLM:\Software\Classes\Directory\shell\satchel.compress\command")) { exit 1 }
           if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\satchel_shell.dll")) { exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\msvcp140.dll")) { exit 1 }
+          if (Test-Path "$env:ProgramFiles\Satchel\bin\vc_redist.x64.exe") { exit 1 }
           if (-not (Test-Path "HKLM:\Software\Classes\CLSID\{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}\InprocServer32")) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
@@ -236,8 +241,8 @@ jobs:
           - os: macos-15
             preset: clang
             library: build/clang/core/Release/libsatchel.dylib
-            tag: macosx_14_0_arm64
-            extra: -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+            tag: macosx_14_0_universal2
+            extra: -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
           - os: windows-latest
             preset: msvc
             library: build/msvc/core/Release/satchel.dll
