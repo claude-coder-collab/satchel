@@ -198,6 +198,7 @@ typedef struct zp_entry_info
     uint8_t flac_group_id[16];
     uint16_t flac_channel_index;
     uint16_t flac_channel_count;
+    const char* flac_original_name;
 } zp_entry_info_t;
 zp_reader_t* zp_reader_open(zp_context_t* ctx, zp_stream_t* input);
 size_t zp_reader_entry_count(const zp_reader_t* reader);
@@ -247,6 +248,8 @@ int zp_extract(zp_xplan_t* xplan, zp_progress_fn progress, void* user);
 size_t zp_xplan_outcome_count(const zp_xplan_t* xplan);
 int zp_xplan_get_outcome(const zp_xplan_t* xplan, size_t i, zp_extract_outcome_t* out);
 void zp_xplan_free(zp_xplan_t* xplan);
+int zp_restore_flac(zp_stream_t* input, zp_stream_t* output);
+int zp_flac_original_name(zp_stream_t* input, char* buf, size_t len);
 zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input);
 int zp_editor_add(zp_editor_t* editor, zp_input_t* input);
 int zp_editor_remove(zp_editor_t* editor, size_t i);

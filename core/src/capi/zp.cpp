@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "zp/zp.h"
 
+#include "codecs/flac/restore.hpp"
 #include "common/product.hpp"
 #include "io/file_system.hpp"
 #include "io/input_source.hpp"
@@ -66,6 +67,7 @@ struct zp_reader
     Context* context = nullptr;
     std::unique_ptr<ArchiveReader> reader;
     std::string app_version;
+    mutable std::vector<std::string> original_names;
 };
 
 struct zp_sink
@@ -657,10 +659,13 @@ size_t zp_reader_entry_count(const zp_reader_t* reader)
 int zp_reader_get_entry(const zp_reader_t* reader, size_t i, zp_entry_info_t* out)
 {
     ZP_REQUIRE(reader && out && i < reader->reader->entries().size(), ZP_INVALID_ARGUMENT);
-    reader->reader->flac_header(i);
+    const auto header = reader->reader->flac_header(i);
+    reader->original_names.resize(reader->reader->entries().size());
+    reader->original_names[i] = header && header->project ? header->project->original_name : std::string{};
     const auto& e = reader->reader->entries()[i];
     *out = {};
     out->name = e.name.c_str();
+    out->flac_original_name = reader->original_names[i].c_str();
     out->kind = kind_code(e.kind);
     out->method = e.raw_method;
     out->supported = e.method != EntryMethod::Unsupported ? 1 : 0;
@@ -859,6 +864,68 @@ int zp_xplan_get_outcome(const zp_xplan_t* xplan, size_t i, zp_extract_outcome_t
 void zp_xplan_free(zp_xplan_t* xplan)
 {
     delete xplan;
+}
+
+int zp_restore_flac(zp_stream_t* input, zp_stream_t* output)
+{
+    ZP_REQUIRE(input && output && input->stream->seekable(), ZP_INVALID_ARGUMENT);
+    return guarded(
+        [&]() -> int {
+            auto& in = *input->stream;
+            if (auto r = in.seek(0); !r)
+                return set_error(r.error());
+            auto header = flac::read_header(in);
+            if (!header)
+                return set_error(header.error());
+            if (header->project && header->project->layout == flac::Layout::MultiMonoMember)
+                return set_error(Status::IncompleteGroup, "a multi-mono member cannot be restored on its own; extract the whole group from its archive");
+            const auto opener = [&](std::size_t) -> Result<std::unique_ptr<IChunkedStream>> {
+                if (auto r = in.seek(0); !r)
+                    return std::unexpected(r.error());
+                struct Borrowed final : IChunkedStream
+                {
+                    IChunkedStream& s;
+                    explicit Borrowed(IChunkedStream& inner) :
+                        s(inner)
+                    {
+                    }
+                    Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override { return s.read(buf, len); }
+                    [[nodiscard]] std::uint64_t tell() const override { return s.tell(); }
+                };
+                return std::unique_ptr<IChunkedStream>(std::make_unique<Borrowed>(in));
+            };
+            const auto sink = [&](std::span<const std::uint8_t> bytes) -> VoidResult { return output->stream->write_all(bytes); };
+            if (auto r = flac::restore({ *header }, opener, sink); !r)
+                return set_error(r.error());
+            return ZP_OK;
+        },
+        ZP_INTERNAL
+    );
+}
+
+int zp_flac_original_name(zp_stream_t* input, char* buf, size_t len)
+{
+    ZP_REQUIRE(input && buf && len > 0 && input->stream->seekable(), ZP_INVALID_ARGUMENT);
+    return guarded(
+        [&]() -> int {
+            buf[0] = '\0';
+            auto& in = *input->stream;
+            if (auto r = in.seek(0); !r)
+                return set_error(r.error());
+            auto header = flac::read_header(in);
+            if (!header)
+                return set_error(header.error());
+            if (header->project)
+            {
+                const auto& name = header->project->original_name;
+                const auto n = std::min(len - 1, name.size());
+                std::memcpy(buf, name.data(), n);
+                buf[n] = '\0';
+            }
+            return ZP_OK;
+        },
+        ZP_INTERNAL
+    );
 }
 
 zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input)

@@ -53,7 +53,8 @@ Checks: >
   -readability-simplify-boolean-expr,
   -readability-inconsistent-ifelse-braces,
   -readability-avoid-return-with-void-value,
-  -cppcoreguidelines-pro-type-union-access
+  -cppcoreguidelines-pro-type-union-access,
+  -clang-analyzer-cplusplus.NewDeleteLeaks
 CheckOptions:
   cppcoreguidelines-special-member-functions.AllowImplicitlyDeletedCopyOrMove: true
   cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true

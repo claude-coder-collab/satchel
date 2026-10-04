@@ -292,6 +292,7 @@ typedef struct zp_entry_info
     uint8_t flac_group_id[16];
     uint16_t flac_channel_index;
     uint16_t flac_channel_count;
+    const char* flac_original_name; /* restorable FLAC: file name of the original, else "" */
 } zp_entry_info_t;
 
 /* The reader keeps using `input`; free the reader before the stream. */
@@ -354,6 +355,13 @@ ZP_API int zp_extract(zp_xplan_t* xplan, zp_progress_fn progress, void* user);
 ZP_API size_t zp_xplan_outcome_count(const zp_xplan_t* xplan);
 ZP_API int zp_xplan_get_outcome(const zp_xplan_t* xplan, size_t i, zp_extract_outcome_t* out);
 ZP_API void zp_xplan_free(zp_xplan_t* xplan);
+
+/* Rebuilds the original file from a standalone FLAC file: one made by this library (checked
+ * against its SHA-256) or by `flac --keep-foreign-metadata` (checked against its MD5). `input`
+ * must be seekable. On failure nothing should be kept from `output`. */
+ZP_API int zp_restore_flac(zp_stream_t* input, zp_stream_t* output);
+/* The original file name stored in a FLAC file made by this library (empty if none). */
+ZP_API int zp_flac_original_name(zp_stream_t* input, char* buf, size_t len);
 
 /* ---- editing --------------------------------------------------------------------------- */
 
