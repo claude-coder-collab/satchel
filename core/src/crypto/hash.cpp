@@ -381,6 +381,12 @@ bool cpu_has_sha256()
 
 #elif defined(__x86_64__) || defined(_M_X64)
 
+// NOLINTBEGIN(portability-simd-intrinsics)
+struct M128
+{
+    __m128i v;
+};
+
 ZP_SHA256_TARGET void sha256_hardware(std::array<std::uint32_t, 8>& state, const std::uint8_t* p, std::size_t count)
 {
     const __m128i mask = _mm_set_epi64x(0x0c0d0e0f08090a0bLL, 0x0405060700010203LL);
@@ -394,22 +400,22 @@ ZP_SHA256_TARGET void sha256_hardware(std::array<std::uint32_t, 8>& state, const
     {
         const auto abef = state0;
         const auto cdgh = state1;
-        std::array<__m128i, 4> w{};
+        std::array<M128, 4> w{};
         for (std::size_t i = 0; i < 4; ++i)
-            w[i] = _mm_shuffle_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(p + 16 * i)), mask);
+            w[i].v = _mm_shuffle_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(p + 16 * i)), mask);
         for (std::size_t g = 0; g < 16; ++g)
         {
-            auto msg = _mm_add_epi32(w[g % 4], _mm_loadu_si128(reinterpret_cast<const __m128i*>(sha_k.data() + 4 * g)));
+            auto msg = _mm_add_epi32(w[g % 4].v, _mm_loadu_si128(reinterpret_cast<const __m128i*>(sha_k.data() + 4 * g)));
             state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
             if (g >= 3 && g < 15)
             {
-                const auto t = _mm_alignr_epi8(w[g % 4], w[(g + 3) % 4], 4);
-                w[(g + 1) % 4] = _mm_sha256msg2_epu32(_mm_add_epi32(w[(g + 1) % 4], t), w[g % 4]);
+                const auto t = _mm_alignr_epi8(w[g % 4].v, w[(g + 3) % 4].v, 4);
+                w[(g + 1) % 4].v = _mm_sha256msg2_epu32(_mm_add_epi32(w[(g + 1) % 4].v, t), w[g % 4].v);
             }
             msg = _mm_shuffle_epi32(msg, 0x0E);
             state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
             if (g >= 1 && g < 13)
-                w[(g + 3) % 4] = _mm_sha256msg1_epu32(w[(g + 3) % 4], w[g % 4]);
+                w[(g + 3) % 4].v = _mm_sha256msg1_epu32(w[(g + 3) % 4].v, w[g % 4].v);
         }
         state0 = _mm_add_epi32(state0, abef);
         state1 = _mm_add_epi32(state1, cdgh);
@@ -421,6 +427,7 @@ ZP_SHA256_TARGET void sha256_hardware(std::array<std::uint32_t, 8>& state, const
     _mm_storeu_si128(reinterpret_cast<__m128i*>(state.data()), state0);
     _mm_storeu_si128(reinterpret_cast<__m128i*>(state.data() + 4), state1);
 }
+// NOLINTEND(portability-simd-intrinsics)
 
 bool cpu_has_sha256()
 {
@@ -437,7 +444,10 @@ bool cpu_has_sha256()
     __cpuidex(r.data(), 7, 0);
     const auto ebx7 = static_cast<unsigned>(r[1]);
     #else
-    unsigned a = 0, b = 0, c = 0, d = 0;
+    unsigned a = 0;
+    unsigned b = 0;
+    unsigned c = 0;
+    unsigned d = 0;
     if (__get_cpuid_max(0, nullptr) < 7 || !__get_cpuid(1, &a, &b, &c, &d))
         return false;
     const auto ecx1 = c;
