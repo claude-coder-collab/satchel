@@ -169,3 +169,14 @@ def test_php_produces_the_same_archive(ctx: satchel.Context, tmp_path: Path) -> 
     out = tmp_path / "php.zip"
     subprocess.run(["php", "-d", "ffi.enable=1", str(PHP_REFERENCE), str(out)], check=True)
     assert out.read_bytes() == build_reference(ctx)
+
+
+def test_preview(ctx: satchel.Context, tmp_path: Path) -> None:
+    archive = tmp_path / "p.zip"
+    ctx.plan_memory({"a.txt": b"hello " * 100}).build(archive)
+    summary = satchel.preview(archive)
+    assert summary["kind"] == "zip"
+    assert summary["entries"][0]["name"] == "a.txt"
+    assert "<h1>p.zip</h1>" in satchel.preview(archive, html=True)
+    with pytest.raises(satchel.SatchelError):
+        satchel.preview(Path(__file__))

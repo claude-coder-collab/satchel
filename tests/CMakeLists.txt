@@ -37,6 +37,7 @@ add_executable(zp_tests
     integration/test_flac.cpp
     integration/test_interop.cpp
     integration/test_large.cpp
+    integration/test_preview.cpp
 )
 target_include_directories(zp_tests PRIVATE support)
 target_link_libraries(zp_tests PRIVATE zp::core zp_capi_c_check Catch2::Catch2WithMain)

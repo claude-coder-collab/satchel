@@ -412,6 +412,20 @@ ZP_API int zp_restore_flac(zp_stream_t* input, zp_stream_t* output);
 /* The original file name stored in a FLAC file made by this library (empty if none). */
 ZP_API int zp_flac_original_name(zp_stream_t* input, char* buf, size_t len);
 
+/* ---- previews -------------------------------------------------------------------------- */
+
+enum {
+    ZP_PREVIEW_JSON = 0,
+    ZP_PREVIEW_HTML = 1
+};
+
+/* Summary of a zip archive or a FLAC file for file-manager previewers: entries (at most 500),
+ * sizes, savings, "created by" and the restorable audio count for a zip; format, original name and
+ * container, tags and chunks for a FLAC file. Reads metadata only (the central directory and FLAC
+ * headers), never audio. `input` must be seekable; `file_name` is only displayed. Returns JSON or
+ * a self-contained HTML page; free it with zp_free. NULL if the input is neither. */
+ZP_API char* zp_preview(zp_stream_t* input, const char* file_name, int format);
+
 /* ---- editing --------------------------------------------------------------------------- */
 
 /* The editor keeps using `input`; free the editor before the stream. Entry indices refer to

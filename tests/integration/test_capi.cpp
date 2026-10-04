@@ -197,6 +197,9 @@ TEST_CASE("C API rejects bad arguments without crashing", "[capi]")
     const std::uint8_t junk[16]{};
     zp_stream_t* s = zp_stream_memory_from(junk, sizeof junk);
     CHECK(zp_reader_open(c.ctx, s) == nullptr);
+    CHECK(zp_preview(s, "junk", ZP_PREVIEW_JSON) == nullptr);
+    CHECK(zp_preview(s, "junk", 7) == nullptr);
+    CHECK(zp_preview(nullptr, "junk", ZP_PREVIEW_HTML) == nullptr);
     zp_stream_free(s);
     CHECK(std::string(zp_version()).size() > 0);
 }
@@ -248,6 +251,10 @@ TEST_CASE("C API callback input and sink, and JSON descriptions", "[capi]")
     const std::string flac_json(details);
     zp_free(details);
     CHECK(flac_json.find("\"container\":\"WAV\"") != std::string::npos);
+    char* preview = zp_preview(rin, "a.zip", ZP_PREVIEW_HTML);
+    REQUIRE(preview);
+    CHECK(std::string(preview).find("<h1>a.zip</h1>") != std::string::npos);
+    zp_free(preview);
     CHECK(flac_json.find("\"layout\":\"standard\"") != std::string::npos);
     CHECK(flac_json.find("\"id\":\"fmt \"") != std::string::npos);
     CHECK(flac_json.find("\"ENCODER\"") != std::string::npos);

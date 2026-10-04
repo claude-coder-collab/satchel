@@ -30,6 +30,7 @@ add_library(zp_core STATIC
     src/io/zip/planner.cpp
     src/io/zip/readme.cpp
     src/io/zip/reader.cpp
+    src/io/preview.cpp
     src/io/zip/zip_writer.cpp
     src/pipeline/context.cpp
 )
