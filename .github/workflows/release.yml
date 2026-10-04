@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - packaging/**
+      - desktop/macos/**
       - cmake/Packaging.cmake
       - tools/build_wheel.py
       - bindings/js/package.json.in
@@ -128,6 +129,8 @@ jobs:
         run: |
           hdiutil attach build/clang/*.dmg -mountpoint /tmp/satchel-dmg
           /tmp/satchel-dmg/Satchel.app/Contents/Helpers/satchel --version
+          codesign --verify --deep --strict /tmp/satchel-dmg/Satchel.app
+          codesign -d --entitlements - /tmp/satchel-dmg/Satchel.app/Contents/PlugIns/SatchelPreview.appex | grep -q app-sandbox
           outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System' || true)
           if [[ -n "$outside" ]]; then echo "Links outside the bundle: $outside"; exit 1; fi
           hdiutil detach /tmp/satchel-dmg
