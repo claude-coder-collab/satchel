@@ -190,6 +190,8 @@ jobs:
           if (-not (Test-Path "HKLM:\Software\Classes\Satchel.zip\shell\open\command")) { exit 1 }
           if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\WinSparkle.dll")) { exit 1 }
           if (-not (Test-Path "HKLM:\Software\Classes\Directory\shell\satchel.compress\command")) { exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\satchel_shell.dll")) { exit 1 }
+          if (-not (Test-Path "HKLM:\Software\Classes\CLSID\{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}\InprocServer32")) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: package-windows

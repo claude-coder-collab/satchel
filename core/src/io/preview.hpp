@@ -87,6 +87,13 @@ std::string preview_json(const Preview& preview);
 // A self-contained HTML page (inline CSS, light and dark).
 std::string preview_html(const Preview& preview);
 
+// Plain-text pieces for native previewers (Windows preview handler).
+std::string preview_size_text(std::uint64_t bytes);
+// "3 files · 1.2 MB → 800.0 KB (33% smaller) · 2 audio files restorable · created with …"
+std::string preview_summary_text(const Preview& preview);
+// Property/value rows describing a FLAC file: audio format, original file, layout, then tags.
+std::vector<std::pair<std::string, std::string>> preview_flac_rows(const Preview::Flac& flac);
+
 // Details of a FLAC header for display: stream format, project block fields, original container
 // and chunks, tags.
 Preview::Flac describe_flac(const flac::Header& header);

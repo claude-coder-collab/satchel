@@ -656,8 +656,23 @@ several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds
   `--full "%1"`, verb "Extract with Satchel") offered through `.zip\OpenWithProgids` (never made
   the default), "Extract with Satchel" on `SystemFileAssociations\.zip`, "Compress with Satchel" on
   `*` and `Directory`, and `Applications\satchel-gui.exe`. These are static verbs: on Windows 11 they
-  appear under "Show more options", and a multi-selection starts one process per item. An
-  `IExplorerCommand` handler with a sparse MSIX package (spec) is still pending.
+  appear under "Show more options". Each verb also names an `ExplorerCommandHandler`, so Explorer
+  uses our `IExplorerCommand` (one process for the whole selection; Extract hidden unless a `.zip`
+  is selected) and the `command` key is only a fallback. Top-level Windows 11 entries need package
+  identity (sparse MSIX), which is still pending.
+- Windows shell extension (`desktop/windows`, `satchel_shell.dll`, in-process COM server,
+  apartment-threaded, statically linking `zp_core`): CLSID `{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}`
+  is the preview handler (`IPreviewHandler`, `IInitializeWithStream`, `IObjectWithSite`,
+  `IOleWindow`) registered for `.zip` and `.flac` (`ShellEx\{8895b1c6-…}`, `PreviewHandlers`,
+  `AppID` = the 64-bit prevhost surrogate). It reads through the `IStream` with seeks (the
+  archive is never loaded whole), builds a `Preview`, and shows `preview_summary_text` above a
+  report ListView (zip: name, size, packed, method, restores to; FLAC: `preview_flac_rows`).
+  `{71C262A4-D20B-4503-9034-1243F449AFC8}` / `{5F750275-DF17-4595-BA33-3771E2C5A0D3}` are the
+  Compress / Extract `IExplorerCommand`s; they start `satchel-gui.exe` from the DLL's folder with
+  a command line built by `command_line.hpp` (quoting per `CommandLineToArgvW`, tested on every
+  platform). `satchel_shell_tests` (Windows CI) drives the objects directly: previews of a built
+  zip and a FLAC file into a hidden window, refusal of other files, command state and titles over
+  real `IShellItemArray`s, and that every object is released.
 
 ## 5. Status
 
