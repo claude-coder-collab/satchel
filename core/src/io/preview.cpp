@@ -165,9 +165,9 @@ void html_flac(std::string& out, const Preview::Flac& f)
     }
     if (!f.chunks.empty())
     {
-        out += "<h2>Original chunks</h2><table><tr><th>ID</th><th class=\"num\">Size</th></tr>";
+        out += "<h2>Original chunks</h2><table><tr><th>ID</th><th class='num'>Size</th></tr>";
         for (const auto& c : f.chunks)
-            out += std::format("<tr><td>{}{}</td><td class=\"num\">{}</td></tr>", html_escape(c.id), c.audio ? " (audio)" : "", c.audio ? "" : human_size(c.size));
+            out += std::format("<tr><td>{}{}</td><td class='num'>{}</td></tr>", html_escape(c.id), c.audio ? " (audio)" : "", c.audio ? "" : human_size(c.size));
         out += "</table>";
     }
 }
@@ -335,7 +335,7 @@ std::string preview_json(const Preview& p)
 
 std::string preview_html(const Preview& p)
 {
-    std::string out = "<!doctype html><html><head><meta charset=\"utf-8\"><title>";
+    std::string out = "<!doctype html><html><head><meta charset='utf-8'><title>";
     out += html_escape(p.file_name);
     out += "</title>";
     out += style();
@@ -343,29 +343,29 @@ std::string preview_html(const Preview& p)
     out += std::format("<h1>{}</h1>", html_escape(p.file_name));
     if (p.kind == Preview::Kind::Flac && p.flac)
     {
-        out += p.flac->layout.empty() ? "<p class=\"summary\">FLAC audio</p>" : "<p class=\"summary\">FLAC audio · <span class=\"badge\">restores to the original file</span></p>";
+        out += p.flac->layout.empty() ? "<p class='summary'>FLAC audio</p>" : "<p class='summary'>FLAC audio · <span class='badge'>restores to the original file</span></p>";
         html_flac(out, *p.flac);
         out += "</body></html>";
         return out;
     }
     std::string summary = std::format("{} file{} · {} → {} ({})", p.file_count, p.file_count == 1 ? "" : "s", human_size(p.total_size), human_size(p.packed_size), percent_smaller(p.total_size, p.packed_size));
     if (p.restorable_audio > 0)
-        summary += std::format(" · <span class=\"badge\">{}{} audio file{} restorable</span>", p.restorable_audio_partial ? "at least " : "", p.restorable_audio, p.restorable_audio == 1 ? "" : "s");
+        summary += std::format(" · <span class='badge'>{}{} audio file{} restorable</span>", p.restorable_audio_partial ? "at least " : "", p.restorable_audio, p.restorable_audio == 1 ? "" : "s");
     if (p.created_by)
         summary += " · created with " + html_escape(*p.created_by);
-    out += std::format("<p class=\"summary\">{}</p>", summary);
-    out += "<table><tr><th>Name</th><th class=\"num\">Size</th><th class=\"num\">Packed</th><th>Method</th></tr>";
+    out += std::format("<p class='summary'>{}</p>", summary);
+    out += "<table><tr><th>Name</th><th class='num'>Size</th><th class='num'>Packed</th><th>Method</th></tr>";
     for (const auto& e : p.entries)
     {
         const auto name = html_escape(e.name) + (e.restores_to.empty() ? "" : " → " + html_escape(e.restores_to));
         if (e.directory)
-            out += std::format("<tr><td class=\"name\">{}</td><td></td><td></td><td></td></tr>", name);
+            out += std::format("<tr><td class='name'>{}</td><td></td><td></td><td></td></tr>", name);
         else
-            out += std::format("<tr><td class=\"name\">{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td>{}</td></tr>", name, human_size(e.size), human_size(e.packed), html_escape(e.method));
+            out += std::format("<tr><td class='name'>{}</td><td class='num'>{}</td><td class='num'>{}</td><td>{}</td></tr>", name, human_size(e.size), human_size(e.packed), html_escape(e.method));
     }
     out += "</table>";
     if (p.truncated)
-        out += std::format("<p class=\"more\">… and {} more entries</p>", p.entry_count - p.entries.size());
+        out += std::format("<p class='more'>… and {} more entries</p>", p.entry_count - p.entries.size());
     out += "</body></html>";
     return out;
 }
