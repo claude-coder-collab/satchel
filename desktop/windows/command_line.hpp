@@ -39,7 +39,7 @@ inline bool is_zip(const std::wstring& path)
     if (path.size() < 4)
         return false;
     std::wstring ext = path.substr(path.size() - 4);
-    std::ranges::transform(ext, ext.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+    std::ranges::transform(ext, ext.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(static_cast<std::wint_t>(c))); });
     return ext == L".zip";
 }
 

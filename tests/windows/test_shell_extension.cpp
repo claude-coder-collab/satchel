@@ -134,7 +134,9 @@ TEST_CASE("Explorer commands show for the right selections", "[shell]")
         IShellItemArray* items = nullptr;
         REQUIRE(SUCCEEDED(SHCreateShellItemArrayFromShellItem(item, IID_PPV_ARGS(&items))));
         item->Release();
-        CHECK(item_paths(items) == std::vector<std::wstring>{ file.wstring() });
+        const auto paths = item_paths(items);
+        REQUIRE(paths.size() == 1);
+        CHECK(std::filesystem::equivalent(paths.front(), file));
         IExplorerCommand* command = nullptr;
         REQUIRE(SUCCEEDED(create_object(clsid, IID_PPV_ARGS(&command))));
         EXPCMDSTATE state = ECS_DISABLED;
