@@ -169,6 +169,25 @@ def test_edit_and_restore(tmp_path: Path, session: Path) -> None:
     assert run("restore", str(member), "-o", str(tmp_path / "m.wav")).returncode == 1
 
 
+def test_preview(tmp_path: Path, session: Path) -> None:
+    archive = tmp_path / "p.zip"
+    assert run("create", str(archive), str(session)).returncode == 0
+    r = run("preview", str(archive))
+    assert r.returncode == 0, r.stderr
+    summary = json.loads(r.stdout)
+    assert summary["kind"] == "zip"
+    assert summary["restorable_audio"] == 2
+    html = run("preview", "--html", str(archive)).stdout.decode()
+    assert html.startswith("<!doctype html>")
+    assert "2 audio files restorable" in html
+
+    flac_dir = tmp_path / "flac"
+    assert run("extract", str(archive), "-d", str(flac_dir), "--keep-flac").returncode == 0
+    flac = json.loads(run("preview", str(flac_dir / "session" / "take1.flac")).stdout)
+    assert flac["flac"]["original_name"] == "take1.wav"
+    assert run("preview", str(session / "notes.txt")).returncode == 1
+
+
 def test_usage_errors(tmp_path: Path) -> None:
     assert run().returncode == 2
     assert run("create").returncode == 2

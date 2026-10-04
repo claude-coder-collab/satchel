@@ -337,4 +337,14 @@ int run_edit(const GlobalOptions& g, const std::string& archive, const std::vect
     return exit_ok;
 }
 
+int run_preview(const std::string& file, bool html)
+{
+    zpp::Stream in(zpp::not_null(zp_stream_open_file(file.c_str())));
+    const auto name = std::filesystem::path(file).filename().string();
+    char* text = zpp::not_null(zp_preview(in.get(), name.c_str(), html ? ZP_PREVIEW_HTML : ZP_PREVIEW_JSON));
+    std::cout << text << '\n';
+    zp_free(text);
+    return exit_ok;
+}
+
 }

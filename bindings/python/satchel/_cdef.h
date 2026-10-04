@@ -277,6 +277,11 @@ int zp_xplan_get_outcome(const zp_xplan_t* xplan, size_t i, zp_extract_outcome_t
 void zp_xplan_free(zp_xplan_t* xplan);
 int zp_restore_flac(zp_stream_t* input, zp_stream_t* output);
 int zp_flac_original_name(zp_stream_t* input, char* buf, size_t len);
+enum {
+    ZP_PREVIEW_JSON = 0,
+    ZP_PREVIEW_HTML = 1
+};
+char* zp_preview(zp_stream_t* input, const char* file_name, int format);
 zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input);
 int zp_editor_add(zp_editor_t* editor, zp_input_t* input);
 int zp_editor_remove(zp_editor_t* editor, size_t i);

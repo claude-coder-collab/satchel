@@ -116,6 +116,12 @@ int main(int argc, char** argv)
     restore->add_option("-o,--output", restore_output, "Output file (default: the original name next to the FLAC)");
     add_globals(restore);
 
+    std::string preview_file;
+    bool preview_html = false;
+    auto* preview = app.add_subcommand("preview", "Summarise a zip or FLAC file from its metadata (JSON, or HTML with --html)");
+    preview->add_option("file", preview_file, "Zip or FLAC file")->required();
+    preview->add_flag("--html", preview_html, "Print a self-contained HTML page instead of JSON");
+
     try
     {
         app.parse(argc, argv);
@@ -137,6 +143,8 @@ int main(int argc, char** argv)
             return run_verify(g, archive);
         if (*edit)
             return run_edit(g, archive, adds, removes, edit_renames, replaces, output);
+        if (*preview)
+            return run_preview(preview_file, preview_html);
         if (*restore)
             return run_restore(g, flac_file, restore_output);
     } catch (const zpp::Error& e)

@@ -9,6 +9,7 @@
 #include "crypto/hash.hpp"
 #include "io/file_system.hpp"
 #include "io/input_source.hpp"
+#include "io/preview.hpp"
 #include "io/zip/builder.hpp"
 #include "io/zip/editor.hpp"
 #include "io/zip/extractor.hpp"
@@ -1398,6 +1399,23 @@ int zp_flac_original_name(zp_stream_t* input, char* buf, size_t len)
             return ZP_OK;
         },
         ZP_INTERNAL
+    );
+}
+
+char* zp_preview(zp_stream_t* input, const char* file_name, int format)
+{
+    ZP_REQUIRE(input && input->stream->seekable() && (format == ZP_PREVIEW_JSON || format == ZP_PREVIEW_HTML), nullptr);
+    return guarded(
+        [&]() -> char* {
+            auto preview = make_preview(*input->stream, file_name ? file_name : "");
+            if (!preview)
+            {
+                set_error(preview.error());
+                return nullptr;
+            }
+            return dup_string(format == ZP_PREVIEW_HTML ? preview_html(*preview) : preview_json(*preview));
+        },
+        nullptr
     );
 }
 

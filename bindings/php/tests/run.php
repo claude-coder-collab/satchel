@@ -7,6 +7,7 @@ require __DIR__ . '/../src/Satchel.php';
 require __DIR__ . '/wav.php';
 
 use Satchel\Context;
+use Satchel\Preview;
 use Satchel\SatchelException;
 
 $failures = 0;
@@ -75,6 +76,16 @@ try {
     check(false, 'missing archive throws');
 } catch (SatchelException $e) {
     check($e->statusName === 'IO_ERROR', 'IO_ERROR for a missing archive');
+}
+
+$summary = Preview::of("$dir/out.zip");
+check($summary['kind'] === 'zip', 'preview of a zip');
+check(str_contains(Preview::of("$dir/out.zip", true), '<h1>out.zip</h1>'), 'HTML preview');
+try {
+    Preview::of(__FILE__);
+    check(false, 'preview of a non-archive throws');
+} catch (SatchelException $e) {
+    check(true, 'preview of a non-archive throws');
 }
 
 exec('rm -rf ' . escapeshellarg($dir));

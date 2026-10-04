@@ -444,6 +444,7 @@ which the GUI will reuse.
 | `create ARCHIVE PATH...` | Plan and build. `ARCHIVE` `-` writes a streamed zip to stdout. `--no-flac`, `--deflate-level`, `--flac-level`, `--rename NAME=NEW`, `--skip NAME`, `--store-unconverted NAME`, `--resolutions FILE.json`, `--dry-run`, `--readme-template FILE`, `--temp-dir DIR` |
 | `extract ARCHIVE [ENTRY...]` | `-d DIR` (default `.`), `--keep-flac`, `--include-readme`, `--overwrite ask\|skip\|replace` |
 | `list ARCHIVE` | Table or JSON: name, sizes, method (store/deflate/flac/flac-mono), restores-to, channel, mtime, creator |
+| `preview FILE [--html]` | `zp_preview` summary of a zip or FLAC file as JSON or HTML (exit 1 if neither) |
 | `verify ARCHIVE` | Extraction to the null sink: CRC-32 plus full restore and SHA-256 for FLAC; nothing is written |
 | `edit ARCHIVE` | `--add PATH`, `--remove NAME`, `--rename NAME=NEW`, `--replace NAME=PATH`, `-o OUT` (default: replace in place atomically) |
 | `restore FILE.flac` | Rebuild the original from a standalone FLAC (ours or `flac --keep-foreign-metadata`), `-o OUT` |
@@ -522,7 +523,7 @@ defaults and "Copy as CLI command".
 file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
 `zp_plan_executable`, `zp_plan_total_bytes`, build result accessors, extraction issue/item/outcome
 accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status_name`,
-`zp_version`. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
+`zp_version`, `zp_preview`. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
 
 ### 4.15 Packaging and releases (main spec 12.3)
 
@@ -579,6 +580,22 @@ FLAC still beats deflate on audio (deflate stores this audio: it saves under 2%)
 
 Known limits: a single FLAC entry restores on one thread (decode-bound, about 240 MiB/s natively);
 several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds.
+
+### 4.17 Previews and OS integration (desktop UI spec, "OS integration")
+
+- `core/src/io/preview.{hpp,cpp}`: `make_preview(stream, file_name, {max_entries = 500,
+  max_probed = 2000})` builds a `Preview` from metadata only. A stream starting with `fLaC` is a
+  FLAC file (format, duration, original name and container, layout, multi-mono channel, original
+  chunks, tags); anything else must open as a zip (created-by version from our comment, entry and
+  file counts, total and packed size, the first 500 entries with method "Stored"/"Deflate"/"FLAC"/
+  "Method n" and "restores to", restorable audio count with a multi-mono group counted once). FLAC
+  headers of at most 2000 `.flac` entries are read; beyond that the count is a lower bound
+  (`restorable_audio_partial`, shown as "at least").
+- `preview_json` and `preview_html` render it; the HTML is self-contained (inline CSS, light and dark
+  via `prefers-color-scheme`, all text escaped).
+- Exposed as `zp_preview(stream, file_name, ZP_PREVIEW_JSON | ZP_PREVIEW_HTML)`, the CLI
+  `satchel preview FILE [--html]`, Python `satchel.preview(path, html=False)` and PHP
+  `Satchel\Preview::of($path, $html = false)`. The platform previewers call it.
 
 ## 5. Status
 

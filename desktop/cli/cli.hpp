@@ -81,5 +81,6 @@ int run_list(const GlobalOptions& g, const std::string& archive);
 int run_verify(const GlobalOptions& g, const std::string& archive);
 int run_edit(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& adds, const std::vector<std::string>& removes, const std::vector<std::string>& renames, const std::vector<std::string>& replaces, const std::string& output);
 int run_restore(const GlobalOptions& g, const std::string& file, const std::string& output);
+int run_preview(const std::string& file, bool html);
 
 }

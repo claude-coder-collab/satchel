@@ -7,6 +7,7 @@ The binding mirrors the two-phase C API: plan (names, conflicts, warnings), reso
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +29,7 @@ __all__ = [
     "Resolution",
     "SatchelError",
     "Warning",
+    "preview",
     "version",
 ]
 
@@ -76,6 +78,17 @@ def _path(p: str | os.PathLike[str]) -> bytes:
 
 def version() -> str:
     return _str(lib.zp_version())
+
+
+def preview(path: str | os.PathLike[str], *, html: bool = False) -> dict | str:
+    """Summary of a zip archive or FLAC file from its metadata: a dict, or an HTML page if `html`."""
+    stream = ffi.gc(_not_null(lib.zp_stream_open_file(_path(path))), lib.zp_stream_free)
+    text = _not_null(lib.zp_preview(stream, os.path.basename(os.fspath(path)).encode("utf-8"), 1 if html else 0))
+    try:
+        result = ffi.string(text).decode("utf-8")
+    finally:
+        lib.zp_free(text)
+    return result if html else json.loads(result)
 
 
 class _ProgressHandle:

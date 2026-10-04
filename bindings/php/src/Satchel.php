@@ -111,6 +111,30 @@ final class Lib
 }
 
 /** Owns the worker threads and memory budget shared by every job. */
+/** Summary of a zip archive or FLAC file from its metadata (no audio decoding). */
+final class Preview
+{
+    /** @return array<string, mixed>|string decoded JSON, or an HTML page when $html */
+    public static function of(string $path, bool $html = false): array|string
+    {
+        $ffi = Lib::get();
+        $stream = Lib::notNull($ffi->zp_stream_open_file($path));
+        try {
+            $text = $ffi->zp_preview($stream, basename($path), $html ? 1 : 0);
+            if ($text === null || (!is_string($text) && FFI::isNull($text))) {
+                throw Lib::error();
+            }
+            $result = Lib::str($text);
+            if (!is_string($text)) {
+                $ffi->zp_free($text);
+            }
+        } finally {
+            $ffi->zp_stream_free($stream);
+        }
+        return $html ? $result : json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+    }
+}
+
 final class Context
 {
     public readonly CData $ptr;
