@@ -564,7 +564,8 @@ char* zp_reader_flac_describe(zp_reader_t* reader, size_t i)
             if (header->project)
             {
                 const auto& p = *header->project;
-                const char* layout = p.layout == flac::Layout::Standard ? "standard" : p.layout == flac::Layout::MultiMonoMember ? "multi_mono" : "private";
+                const char* layout = p.layout == flac::Layout::Standard ? "standard" : p.layout == flac::Layout::MultiMonoMember ? "multi_mono"
+                                                                                                                                 : "private";
                 j.field("layout", layout).field("original_name", p.original_name).field("sha256", to_hex(p.sha256));
                 j.field("channel_index", static_cast<std::uint64_t>(p.channel_index)).field("channel_count", static_cast<std::uint64_t>(p.channel_count));
                 j.field("restorable_with_flac_tool", p.layout == flac::Layout::Standard);
@@ -578,11 +579,12 @@ char* zp_reader_flac_describe(zp_reader_t* reader, size_t i)
             {
                 const auto& first = records.front().bytes;
                 const auto starts = [&](std::string_view id) { return first.size() >= id.size() && std::equal(id.begin(), id.end(), first.begin()); };
-                const char* container = starts("RF64") || starts("BW64") ? "RF64" : starts("RIFF") ? "WAV" : starts("FORM") && first.size() >= 12 && first[8] == 'A' && first[11] == 'C' ? "AIFF-C"
-                    : starts("FORM")                                                     ? "AIFF"
-                    : starts("caff")                                                     ? "CAF"
-                    : starts("riff")                                                     ? "Wave64"
-                                                                                         : "unknown";
+                const char* container = starts("RF64") || starts("BW64") ? "RF64" : starts("RIFF") ? "WAV"
+                    : starts("FORM") && first.size() >= 12 && first[8] == 'A' && first[11] == 'C'  ? "AIFF-C"
+                    : starts("FORM")                                                               ? "AIFF"
+                    : starts("caff")                                                               ? "CAF"
+                    : starts("riff")                                                               ? "Wave64"
+                                                                                                   : "unknown";
                 j.field("container", container);
                 j.key("chunks").begin_array();
                 bool after_audio = false;
@@ -610,7 +612,8 @@ char* zp_reader_flac_describe(zp_reader_t* reader, size_t i)
             j.end_array().end_object();
             return dup_string(j.str());
         },
-        nullptr);
+        nullptr
+    );
 }
 
 char* zp_xplan_describe(const zp_xplan_t* xplan)
