@@ -513,9 +513,17 @@ defaults and "Copy as CLI command".
 - File association on Windows (macOS declares zip as an Alternate viewer in `Info.plist`; Linux
   declares `application/zip` in the `.desktop` file).
 - Sparkle/WinSparkle updates.
-- Translations (`tr()` is used throughout; no `.ts` files yet).
+- Translations beyond English. A few display strings come from the Qt-free logic library
+  (`savings_text`, multi-mono group labels) and are not translatable yet.
 - Universal (arm64 + x86_64) macOS build; the dmg is arm64 only.
 - The per-release manual pass.
+
+**Translations.** `desktop/gui/translations/satchel_en.ts` holds every `tr()` string (English
+source; generated with `-no-obsolete -locations none` so it only changes when strings do; refresh
+with `cmake --build <dir> --target satchel_lupdate`). `lrelease` output is embedded in
+`satchel_gui_app` under `:/i18n` (`ZP_HAS_TRANSLATIONS` when Qt Linguist tools are found; optional).
+At startup the app installs Qt's own `qtbase_<locale>` and `:/i18n/satchel_<locale>` translators
+for the system locale. Adding a language = adding `satchel_<lang>.ts` to `ts_files`.
 
 ### 4.14 C API
 

@@ -13,6 +13,7 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTranslator>
 
 #include <format>
 
@@ -126,12 +127,21 @@ private slots:
         QVERIFY(!perform_mac_service(app, "unknownMessage", { input }));
 #else
         QSKIP("macOS only");
-#endif
-    }
 
-private:
-    QTemporaryDir dir_;
-};
+        void translations_are_embedded()
+        {
+    #ifdef ZP_HAS_TRANSLATIONS
+            QVERIFY(QFile::exists(":/i18n/satchel_en.qm"));
+            QTranslator translator;
+            QVERIFY(translator.load(QLocale(QLocale::English), "satchel", "_", ":/i18n"));
+    #else
+            QSKIP("built without Qt Linguist tools");
+    #endif
+        }
 
-QTEST_MAIN(AppTest)
-#include "test_app.moc"
+    private:
+        QTemporaryDir dir_;
+    };
+
+    QTEST_MAIN(AppTest)
+    #include "test_app.moc"
