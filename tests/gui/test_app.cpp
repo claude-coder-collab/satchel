@@ -18,11 +18,11 @@
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 constexpr qint64 limit_ms = 15000;
 #elif defined(__has_feature)
-#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+    #if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
 constexpr qint64 limit_ms = 15000;
-#else
+    #else
 constexpr qint64 limit_ms = 3000;
-#endif
+    #endif
 #else
 constexpr qint64 limit_ms = 3000;
 #endif
