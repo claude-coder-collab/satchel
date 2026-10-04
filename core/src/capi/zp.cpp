@@ -93,9 +93,11 @@ namespace
 {
 
 thread_local std::string last_error;
+thread_local int last_status = 0;
 
 int set_error(Status s, std::string_view message)
 {
+    last_status = static_cast<int>(s);
     last_error = message.empty() ? std::string(status_name(s)) : std::string(message);
     return static_cast<int>(s);
 }
@@ -224,6 +226,11 @@ extern "C" {
 const char* zp_last_error(void)
 {
     return last_error.c_str();
+}
+
+int zp_last_status(void)
+{
+    return last_status;
 }
 
 const char* zp_status_name(int status)

@@ -37,3 +37,21 @@ target_link_libraries(zp_core
     PUBLIC zp::project_options Threads::Threads
     PRIVATE MINIZIP::minizip zlib-ng::zlibstatic utf8proc FLAC::FLAC)
 target_compile_definitions(zp_core PUBLIC UTF8PROC_STATIC)
+
+if(MSVC)
+    target_compile_definitions(zp_core PRIVATE ZP_SHARED_BUILD)
+endif()
+
+# Shared library for the PHP and Python bindings: the C API only.
+if(NOT EMSCRIPTEN)
+    add_library(zp_shared SHARED src/capi/shared_entry.c)
+    set_target_properties(zp_shared PROPERTIES OUTPUT_NAME satchel C_VISIBILITY_PRESET hidden VERSION ${PROJECT_VERSION} SOVERSION 0)
+    target_include_directories(zp_shared PUBLIC include)
+    target_link_libraries(zp_shared PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,zp_core>")
+    if(APPLE)
+        target_link_options(zp_shared PRIVATE "-Wl,-exported_symbol,_zp_*")
+    elseif(UNIX)
+        file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/satchel.map "{ global: zp_*; local: *; };\n")
+        target_link_options(zp_shared PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/satchel.map")
+    endif()
+endif()

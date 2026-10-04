@@ -1,0 +1,13 @@
+{
+    "name": "venn-audio/satchel",
+    "description": "PHP FFI binding for Satchel: lossless media packaging as standard zip archives",
+    "type": "library",
+    "license": "AGPL-3.0-only",
+    "require": {
+        "php": ">=8.1",
+        "ext-ffi": "*"
+    },
+    "autoload": {
+        "files": ["src/Satchel.php"]
+    }
+}
