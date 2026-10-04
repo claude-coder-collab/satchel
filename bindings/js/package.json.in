@@ -1,0 +1,17 @@
+{
+  "name": "@vennaudio/satchel",
+  "version": "@ZP_VERSION@",
+  "description": "@PROJECT_DESCRIPTION@ (WebAssembly)",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./satchel.mjs": "./satchel.mjs",
+    "./satchel.wasm": "./satchel.wasm"
+  },
+  "files": ["index.mjs", "satchel.mjs", "satchel.wasm", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "repository": { "type": "git", "url": "git+https://github.com/claude-coder-collab/satchel.git", "directory": "bindings/js" },
+  "keywords": ["zip", "flac", "wav", "archive", "webassembly"]
+}

@@ -15,7 +15,7 @@ import pytest
 
 import satchel
 
-ROOT = Path(__file__).resolve().parents[3]
+PHP_REFERENCE = Path(__file__).resolve().parent.parent.parent / "php" / "tests" / "reference.php"
 
 
 def make_wav(frames: int = 20000, channels: int = 2, rate: int = 48000) -> bytes:
@@ -164,9 +164,8 @@ def test_reference_archive_is_reproducible(ctx: satchel.Context) -> None:
     assert build_reference(ctx) == build_reference(satchel.Context(threads=7))
 
 
-@pytest.mark.skipif(shutil.which("php") is None, reason="php not installed")
+@pytest.mark.skipif(shutil.which("php") is None or not PHP_REFERENCE.exists(), reason="php or the PHP binding not available")
 def test_php_produces_the_same_archive(ctx: satchel.Context, tmp_path: Path) -> None:
     out = tmp_path / "php.zip"
-    script = ROOT / "bindings" / "php" / "tests" / "reference.php"
-    subprocess.run(["php", "-d", "ffi.enable=1", str(script), str(out)], check=True)
+    subprocess.run(["php", "-d", "ffi.enable=1", str(PHP_REFERENCE), str(out)], check=True)
     assert out.read_bytes() == build_reference(ctx)

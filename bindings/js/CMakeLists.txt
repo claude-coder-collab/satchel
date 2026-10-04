@@ -44,3 +44,14 @@ add_custom_target(satchel_web ALL
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/apps/web
     DEPENDS satchel_wasm
     VERBATIM)
+
+# npm package: the binding as index.mjs next to the Emscripten module.
+set(ZP_NPM_DIR ${CMAKE_BINARY_DIR}/npm)
+configure_file(package.json.in ${ZP_NPM_DIR}/package.json @ONLY)
+add_custom_target(satchel_npm
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:satchel_wasm> $<TARGET_FILE_DIR:satchel_wasm>/satchel.wasm ${ZP_NPM_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/src/satchel.mjs ${ZP_NPM_DIR}/index.mjs
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/README.md ${ZP_NPM_DIR}/README.md
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/LICENSE ${ZP_NPM_DIR}/LICENSE
+    DEPENDS satchel_wasm
+    VERBATIM)
