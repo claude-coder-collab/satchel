@@ -9,6 +9,11 @@ set(ZP_WIX_UPGRADE_GUID "C228FD8D-4C42-4523-90CC-05246E0FF58B")
 set(ZP_PACKAGE_CONTACT "Venn Audio Ltd. <packages@example.invalid>" CACHE STRING "Debian maintainer (placeholder)")
 set(ZP_ICON_DIR "${PROJECT_SOURCE_DIR}/packaging/icons")
 set(ZP_ICON_ICO "${ZP_ICON_DIR}/satchel.ico")
+set(ZP_UPDATE_FEED_URL_MACOS "https://claude-coder-collab.github.io/satchel/appcast-macos.xml" CACHE STRING "Sparkle feed (placeholder)")
+set(ZP_UPDATE_FEED_URL_WINDOWS "https://claude-coder-collab.github.io/satchel/appcast-windows.xml" CACHE STRING "WinSparkle feed (placeholder)")
+set(ZP_UPDATE_PUBLIC_KEY "Q0RkfO0SbAmepgAaM3ogueEJAZ+bGAqXjl+FdIh9UFU=" CACHE STRING "EdDSA public key of update signatures (placeholder; its private key was discarded)")
+option(ZP_BUNDLE_UPDATER "Download Sparkle (macOS) or WinSparkle (Windows) and install it with the app" OFF)
+
 if(CMAKE_OSX_DEPLOYMENT_TARGET)
     set(ZP_MACOS_MINIMUM_ENTRY "<key>LSMinimumSystemVersion</key><string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>")
 endif()
@@ -40,6 +45,27 @@ function(zp_configure_bundle target)
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_COPYRIGHT "Copyright (c) 2026 ${ZP_VENDOR}")
+endfunction()
+
+# Installs the update framework next to the app (packages only; the app runs without it).
+function(zp_install_updater)
+    if(NOT ZP_BUNDLE_UPDATER)
+        return()
+    endif()
+    include(FetchContent)
+    if(APPLE)
+        FetchContent_Declare(sparkle
+            URL https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz
+            URL_HASH SHA256=c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c)
+        FetchContent_MakeAvailable(sparkle)
+        install(CODE "execute_process(COMMAND ditto \"${sparkle_SOURCE_DIR}/Sparkle.framework\" \"\${CMAKE_INSTALL_PREFIX}/Satchel.app/Contents/Frameworks/Sparkle.framework\" COMMAND_ERROR_IS_FATAL ANY)")
+    elseif(WIN32)
+        FetchContent_Declare(winsparkle
+            URL https://github.com/vslavik/winsparkle/releases/download/v0.9.4/WinSparkle-0.9.4.zip
+            URL_HASH SHA256=6037df37fc263bd1650a1c4949681a9d40ffe991d01f35892a406cb5d103c976)
+        FetchContent_MakeAvailable(winsparkle)
+        install(FILES "${winsparkle_SOURCE_DIR}/x64/Release/WinSparkle.dll" DESTINATION ${CMAKE_INSTALL_BINDIR})
+    endif()
 endfunction()
 
 function(zp_install_linux_desktop_files)

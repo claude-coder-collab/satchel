@@ -111,7 +111,7 @@ jobs:
           echo "SATCHEL_MACOS_SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
       - name: Build
         run: |
-          cmake --preset clang -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3
+          cmake --preset clang -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 -DZP_BUNDLE_UPDATER=ON
           cmake --build build/clang --config Release
       - name: Disk image
         run: cd build/clang && cpack -C Release
@@ -131,6 +131,7 @@ jobs:
           /tmp/satchel-dmg/Satchel.app/Contents/Helpers/satchel --version
           codesign --verify --deep --strict /tmp/satchel-dmg/Satchel.app
           codesign -d --entitlements - /tmp/satchel-dmg/Satchel.app/Contents/PlugIns/SatchelPreview.appex | grep -q app-sandbox
+          test -d /tmp/satchel-dmg/Satchel.app/Contents/Frameworks/Sparkle.framework
           outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System' || true)
           if [[ -n "$outside" ]]; then echo "Links outside the bundle: $outside"; exit 1; fi
           hdiutil detach /tmp/satchel-dmg
@@ -169,7 +170,7 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          cmake --preset msvc -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION"
+          cmake --preset msvc -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DZP_BUNDLE_UPDATER=ON
           cmake --build build/msvc --config Release
       - name: Installer
         shell: bash
@@ -187,6 +188,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Get-Content install.log -Tail 50; exit 1 }
           if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\Qt6Widgets.dll")) { exit 1 }
           if (-not (Test-Path "HKLM:\Software\Classes\Satchel.zip\shell\open\command")) { exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\WinSparkle.dll")) { exit 1 }
           if (-not (Test-Path "HKLM:\Software\Classes\Directory\shell\satchel.compress\command")) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
@@ -307,8 +309,46 @@ jobs:
             Satchel-*-web.zip
             vennaudio-satchel-*.tgz
 
+  appcast:
+    needs: [version, macos, windows]
+    runs-on: macos-15
+    env:
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.SPARKLE_PRIVATE_KEY != ''
+      - uses: actions/download-artifact@v4
+        if: env.SPARKLE_PRIVATE_KEY != ''
+        with:
+          pattern: package-{macos,windows}
+          merge-multiple: true
+          path: dist
+      - name: Sign and write appcasts
+        if: env.SPARKLE_PRIVATE_KEY != ''
+        run: |
+          curl -fsSLo sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz
+          echo "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c  sparkle.tar.xz" | shasum -a 256 -c
+          mkdir sparkle && tar -xf sparkle.tar.xz -C sparkle
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION"
+          mkdir appcast
+          for pkg in dist/*.dmg dist/*.msi; do
+            name=$(basename "$pkg")
+            platform=macos; minimum="--minimum-system-version 13.3"
+            if [[ "$name" == *.msi ]]; then platform=windows; minimum=""; fi
+            sig=$(sparkle/bin/sign_update --ed-key-file "$RUNNER_TEMP/sparkle.key" "$pkg")
+            python3 tools/make_appcast.py --version "$VERSION" --url "$base/$name" --sign-output "$sig" --platform $platform $minimum --out appcast/appcast-$platform.xml
+          done
+          rm "$RUNNER_TEMP/sparkle.key"
+      - uses: actions/upload-artifact@v4
+        if: env.SPARKLE_PRIVATE_KEY != ''
+        with:
+          name: package-appcast
+          path: appcast/*.xml
+
   publish:
-    needs: [version, linux, macos, windows, wheel-linux, wheel, web]
+    needs: [version, linux, macos, windows, wheel-linux, wheel, web, appcast]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

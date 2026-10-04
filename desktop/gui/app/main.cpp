@@ -84,6 +84,7 @@ int main(int argc, char** argv)
     FileOpenFilter filter(app);
     qapp.installEventFilter(&filter);
     install_mac_services(app);
+    app.start_updates();
 
     if (parser.isSet(smoke))
     {
