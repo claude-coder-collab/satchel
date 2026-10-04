@@ -40,3 +40,7 @@ endif()
 if(ZP_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
+
+if(NOT EMSCRIPTEN)
+    add_subdirectory(desktop/gui)
+endif()

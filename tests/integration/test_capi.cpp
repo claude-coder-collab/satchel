@@ -243,6 +243,15 @@ TEST_CASE("C API callback input and sink, and JSON descriptions", "[capi]")
     const std::string listing(json);
     zp_free(json);
     CHECK(listing.find("\"restores_to\":\"take.wav\"") != std::string::npos);
+    char* details = zp_reader_flac_describe(reader, 2);
+    REQUIRE(details);
+    const std::string flac_json(details);
+    zp_free(details);
+    CHECK(flac_json.find("\"container\":\"WAV\"") != std::string::npos);
+    CHECK(flac_json.find("\"layout\":\"standard\"") != std::string::npos);
+    CHECK(flac_json.find("\"id\":\"fmt \"") != std::string::npos);
+    CHECK(flac_json.find("\"ENCODER\"") != std::string::npos);
+    CHECK(zp_reader_flac_describe(reader, 1) == nullptr);
 
     struct Sink
     {
