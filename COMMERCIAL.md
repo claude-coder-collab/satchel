@@ -19,7 +19,9 @@ dynamically.
 
 ## Contributing
 
-External contributions can only be accepted with a signed Contributor License Agreement that lets
-Venn Audio Ltd. offer the contribution under both licenses.
+External contributions can only be accepted with a signed [Contributor License Agreement](CLA.md)
+that lets Venn Audio Ltd. offer the contribution under both licenses. A CLA bot
+(`.github/workflows/cla.yml`) asks for the signature on each pull request; see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 Contact Venn Audio Ltd. for commercial licensing.

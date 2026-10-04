@@ -697,6 +697,14 @@ several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds
 - Signing certificates, Apple notarization, sparse MSIX package identity.
 - Xiph registration of the FLAC application ID; product name, icon and de-archiver URL.
 
+### Contributions (main spec 13)
+
+`CLA.md` (draft individual CLA: copyright license including relicensing, patent license,
+representations; marked for legal review), `CONTRIBUTING.md`, and `.github/workflows/cla.yml`
+(CLA Assistant Lite v2.6.1 on `pull_request_target` and comments; signatures in
+`signatures/version1/cla.json` on the orphan branch `cla-signatures`; the maintainer account and
+bots are allow-listed).
+
 ## 6. Testing
 
 - `ctest` (or `zp_tests`) runs everything; tags: `[path] [planner] [reader] [zip_writer] [zip64]
