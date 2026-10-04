@@ -127,21 +127,23 @@ private slots:
         QVERIFY(!perform_mac_service(app, "unknownMessage", { input }));
 #else
         QSKIP("macOS only");
+#endif
+    }
 
-        void translations_are_embedded()
-        {
-    #ifdef ZP_HAS_TRANSLATIONS
-            QVERIFY(QFile::exists(":/i18n/satchel_en.qm"));
-            QTranslator translator;
-            QVERIFY(translator.load(QLocale(QLocale::English), "satchel", "_", ":/i18n"));
-    #else
-            QSKIP("built without Qt Linguist tools");
-    #endif
-        }
+    void translations_are_embedded()
+    {
+#ifdef ZP_HAS_TRANSLATIONS
+        QVERIFY(QFile::exists(":/i18n/satchel_en.qm"));
+        QTranslator translator;
+        QVERIFY(translator.load(QLocale(QLocale::English), "satchel", "_", ":/i18n"));
+#else
+        QSKIP("built without Qt Linguist tools");
+#endif
+    }
 
-    private:
-        QTemporaryDir dir_;
-    };
+private:
+    QTemporaryDir dir_;
+};
 
-    QTEST_MAIN(AppTest)
-    #include "test_app.moc"
+QTEST_MAIN(AppTest)
+#include "test_app.moc"
