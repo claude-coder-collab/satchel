@@ -22,7 +22,9 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <memory>
+#include <mutex>
 #include <new>
 #include <optional>
 #include <string>
@@ -205,9 +207,10 @@ private:
 class CallbackItemStream final : public IChunkedStream
 {
 public:
-    CallbackItemStream(zp_read_fn read_fn, void* user, std::size_t item, std::uint64_t item_size) :
+    CallbackItemStream(zp_read_fn read_fn, void* user, std::shared_ptr<std::mutex> mutex, std::size_t item, std::uint64_t item_size) :
         read_(read_fn),
         user_(user),
+        mutex_(std::move(mutex)),
         item_(item),
         size_(item_size)
     {
@@ -219,7 +222,10 @@ public:
         if (want == 0)
             return 0;
         std::int64_t n = -1;
-        run_on_main_thread([&] { n = read_(user_, item_, pos_, buf, want); });
+        {
+            std::scoped_lock lock(*mutex_);
+            run_on_main_thread([&] { n = read_(user_, item_, pos_, buf, want); });
+        }
         if (n < 0 || std::cmp_greater(n, want))
             return fail(Status::IoError, "read callback failed");
         pos_ += static_cast<std::uint64_t>(n);
@@ -238,6 +244,7 @@ public:
 private:
     zp_read_fn read_;
     void* user_;
+    std::shared_ptr<std::mutex> mutex_;
     std::size_t item_;
     std::uint64_t size_;
     std::uint64_t pos_ = 0;
@@ -263,7 +270,7 @@ public:
             {
                 const auto size = item.size;
                 item.opener = [this, i, size]() -> Result<std::unique_ptr<IChunkedStream>> {
-                    return std::make_unique<CallbackItemStream>(read_, user_, i, size);
+                    return std::make_unique<CallbackItemStream>(read_, user_, mutex_, i, size);
                 };
             }
             items_.push_back(std::move(item));
@@ -275,14 +282,16 @@ public:
 private:
     zp_read_fn read_;
     void* user_;
+    std::shared_ptr<std::mutex> mutex_ = std::make_shared<std::mutex>();
     std::vector<InputItem> items_;
 };
 
 class CallbackOutputFile final : public OutputFile
 {
 public:
-    CallbackOutputFile(const zp_sink_callbacks_t& cb, std::int64_t handle) :
+    CallbackOutputFile(const zp_sink_callbacks_t& cb, std::shared_ptr<std::mutex> mutex, std::int64_t handle) :
         cb_(cb),
+        mutex_(std::move(mutex)),
         handle_(handle)
     {
     }
@@ -293,13 +302,13 @@ public:
     ~CallbackOutputFile() override
     {
         if (!done_ && cb_.discard)
-            run_on_main_thread([&] { cb_.discard(cb_.user, handle_); });
+            call([&] { cb_.discard(cb_.user, handle_); });
     }
 
     VoidResult write(std::span<const std::uint8_t> data) override
     {
         int rc = -1;
-        run_on_main_thread([&] { rc = cb_.write(cb_.user, handle_, data.data(), data.size()); });
+        call([&] { rc = cb_.write(cb_.user, handle_, data.data(), data.size()); });
         if (rc != 0)
             return fail(Status::IoError, "write callback failed");
         return {};
@@ -308,7 +317,7 @@ public:
     VoidResult commit(std::int64_t mtime, std::optional<std::uint32_t> unix_mode) override
     {
         int rc = -1;
-        run_on_main_thread([&] { rc = cb_.commit ? cb_.commit(cb_.user, handle_, mtime, unix_mode.value_or(0), unix_mode ? 1 : 0) : 0; });
+        call([&] { rc = cb_.commit ? cb_.commit(cb_.user, handle_, mtime, unix_mode.value_or(0), unix_mode ? 1 : 0) : 0; });
         done_ = true;
         if (rc != 0)
             return fail(Status::IoError, "commit callback failed");
@@ -316,7 +325,14 @@ public:
     }
 
 private:
+    void call(const std::function<void()>& fn)
+    {
+        std::scoped_lock lock(*mutex_);
+        run_on_main_thread(fn);
+    }
+
     zp_sink_callbacks_t cb_;
+    std::shared_ptr<std::mutex> mutex_;
     std::int64_t handle_;
     bool done_ = false;
 };
@@ -333,14 +349,14 @@ public:
     {
         int rc = 0;
         if (cb_.exists)
-            run_on_main_thread([&] { rc = cb_.exists(cb_.user, path.c_str()); });
+            call([&] { rc = cb_.exists(cb_.user, path.c_str()); });
         return rc != 0;
     }
     VoidResult make_directory(const std::string& path) override
     {
         int rc = 0;
         if (cb_.make_directory)
-            run_on_main_thread([&] { rc = cb_.make_directory(cb_.user, path.c_str()); });
+            call([&] { rc = cb_.make_directory(cb_.user, path.c_str()); });
         if (rc != 0)
             return fail(Status::IoError, "cannot create folder '" + path + "'");
         return {};
@@ -349,14 +365,21 @@ public:
     Result<std::unique_ptr<OutputFile>> create_file(const std::string& path, bool replace) override
     {
         std::int64_t handle = -1;
-        run_on_main_thread([&] { handle = cb_.open_file(cb_.user, path.c_str(), replace ? 1 : 0); });
+        call([&] { handle = cb_.open_file(cb_.user, path.c_str(), replace ? 1 : 0); });
         if (handle < 0)
             return fail(Status::IoError, "cannot create '" + path + "'");
-        return std::make_unique<CallbackOutputFile>(cb_, handle);
+        return std::make_unique<CallbackOutputFile>(cb_, mutex_, handle);
     }
 
 private:
+    void call(const std::function<void()>& fn)
+    {
+        std::scoped_lock lock(*mutex_);
+        run_on_main_thread(fn);
+    }
+
     zp_sink_callbacks_t cb_;
+    std::shared_ptr<std::mutex> mutex_ = std::make_shared<std::mutex>();
 };
 
 class CallbackProgress final : public ProgressSink
