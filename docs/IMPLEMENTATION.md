@@ -426,7 +426,7 @@ development.
   `py3-none-<tag>` (cffi ABI mode needs no per-Python build). The library is built with
   `ZP_PORTABLE_RUNTIME=ON` (static libstdc++/libgcc on Linux, static CRT on MSVC). Linux wheels
   are built in `manylinux_2_28` and checked/retagged by `auditwheel repair`; macOS wheels target
-  14.0 (`macosx_14_0_arm64`); Windows `win_amd64`. Each wheel is installed in a fresh venv and
+  14.0, universal (`macosx_14_0_universal2`); Windows `win_amd64`. Each wheel is installed in a fresh venv and
   the binding tests run against it (Python 3.10 and 3.13 on Linux).
 - npm: target `satchel_npm` (WASM build) assembles `build/wasm/npm`: `package.json` from
   `bindings/js/package.json.in`, the binding as `index.mjs`, the Emscripten `satchel.mjs` +
@@ -516,7 +516,6 @@ defaults and "Copy as CLI command".
   declares `application/zip` in the `.desktop` file).
 - Translations beyond English. A few display strings come from the Qt-free logic library
   (`savings_text`, multi-mono group labels) and are not translatable yet.
-- Universal (arm64 + x86_64) macOS build; the dmg is arm64 only.
 - The per-release manual pass.
 
 **Translations.** `desktop/gui/translations/satchel_en.ts` holds every `tr()` string (English
@@ -569,7 +568,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 - `.github/workflows/release.yml` runs on `v*` tags, on demand, and on pull requests touching
   packaging. The version is the tag without `v` (else the CMake project version) and goes into
   `ZP_VERSION`. Jobs: Linux (deb, tar.gz, AppImage; installs the deb and starts the AppImage under
-  Xvfb), macOS (Qt 6.8.3 from `install-qt-action`, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
+  Xvfb), macOS (Qt 6.8.3 from `install-qt-action`, universal arm64 + x86_64, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
   stapled when Apple credentials exist; checks the bundle links nothing outside itself and the
   system), Windows (MSI; installs it silently and runs `satchel --version`), web (zip of the browser
   app, npm tarball), Python wheels (Linux, macOS, Windows). `publish` writes `SHA256SUMS` and, for tags, creates a draft GitHub release.
@@ -621,13 +620,15 @@ several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds
 - Exposed as `zp_preview(stream, file_name, ZP_PREVIEW_JSON | ZP_PREVIEW_HTML)`, the CLI
   `satchel preview FILE [--html]`, Python `satchel.preview(path, html=False)` and PHP
   `Satchel\Preview::of($path, $html = false)`. The platform previewers call it.
-- macOS Quick Look (`desktop/macos`, option `ZP_BUILD_QUICKLOOK`, built with the GUI on macOS):
-  `SatchelPreview.appex`, a data-based preview extension in Swift (`QLPreviewProvider`,
+- macOS Quick Look (`desktop/macos`, option `ZP_BUILD_QUICKLOOK`, built on macOS):
+  `SatchelPreview.appex`, a data-based preview extension (`QLPreviewProvider`,
   `QLIsDataBasedPreview`) for `public.zip-archive` and `org.xiph.flac`. It calls `zp_preview` through
-  a generated module map (`SatchelC`) over `zp.h`, links `zp_core` statically, and returns the HTML
-  (UTF-8, 760×560). No thread pool or context is created. Bundle ID `<ZP_BUNDLE_ID>.preview`;
+  `zp.h`, links `zp_core` statically, and returns the HTML (UTF-8, 760×560). Deviation: it is written
+  in Objective-C, not Swift, because CMake cannot build Swift for several architectures with Ninja
+  and the spec requires a universal (arm64 + x86_64) extension. `satchel_quicklook_tests` builds a
+  zip through the C API and checks the provider's HTML and its error for other files. No thread pool or context is created. Bundle ID `<ZP_BUNDLE_ID>.preview`;
   entitlements: app sandbox + user-selected read-only. It is ad-hoc signed with the entitlements at
-  build time (the `.d` file swiftc leaves in the bundle is removed first) and copied into
+  build time and copied into
   `Satchel.app/Contents/PlugIns` (`satchel_embed_quicklook`), and installed there.
 - Checked on macOS 27: once registered (`pluginkit -a`), Quick Look shows our preview for `.zip`
   instead of the system's (the spec's precedence question). `qlmanage -p -o DIR` crashes in
@@ -636,8 +637,8 @@ several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds
 - `packaging/sign.cmake` signs macOS bundles inside-out (dylibs, frameworks, helpers, then each
   `.appex` with its entitlements, then the app, never `--deep`), ad-hoc when no identity is set,
   and verifies with `codesign --verify --deep --strict`. The release smoke test checks both.
-- The project's warning flags apply to C and C++ only (`$<COMPILE_LANGUAGE:C,CXX>`), so Swift
-  targets can link `zp::core`.
+- The project's warning flags apply to C and C++ only (`$<COMPILE_LANGUAGE:C,CXX>`), so
+  Objective-C targets can link `zp::core` without them.
 - File-manager actions call the GUI with a verb: `satchel-gui --compress PATHS` (one archive of
   everything), `--extract ZIPS` (each zip; other items ignored), `--full ZIP` (open in the browser).
   Without a verb the Simple mode drop rule applies (`satchel_gui::drop_action(items, Intent)`,

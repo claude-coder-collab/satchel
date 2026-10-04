@@ -42,7 +42,7 @@
         <key>NSExtensionPointIdentifier</key>
         <string>com.apple.quicklook.preview</string>
         <key>NSExtensionPrincipalClass</key>
-        <string>SatchelPreview.PreviewProvider</string>
+        <string>PreviewProvider</string>
     </dict>
 </dict>
 </plist>
