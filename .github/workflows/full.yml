@@ -44,3 +44,28 @@ jobs:
           pip install pytest playwright
           python -m playwright install --with-deps chromium firefox webkit
           SATCHEL_WEB_DIR=build/wasm/web SATCHEL_BROWSERS=chromium,firefox,webkit python -m pytest -q tests/web
+
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build zip
+      - name: Build
+        run: |
+          cmake --preset fuzz -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23
+          cmake --build build/fuzz --config Debug
+      - name: Seed corpora
+        run: |
+          mkdir -p corpus/archive corpus/pcm
+          python3 tests/fuzz/make_seeds.py corpus
+      - name: Fuzz
+        run: |
+          build/fuzz/tests/fuzz/Debug/fuzz_archive -max_total_time=900 -rss_limit_mb=4096 -timeout=30 corpus/archive
+          build/fuzz/tests/fuzz/Debug/fuzz_pcm -max_total_time=900 -rss_limit_mb=4096 -timeout=30 -max_len=200000 corpus/pcm
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: crash-*
