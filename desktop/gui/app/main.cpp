@@ -9,7 +9,10 @@
 #include <QCommandLineParser>
 #include <QElapsedTimer>
 #include <QFileOpenEvent>
+#include <QLibraryInfo>
+#include <QLocale>
 #include <QTimer>
+#include <QTranslator>
 
 #include <filesystem>
 #include <print>
@@ -56,6 +59,13 @@ int main(int argc, char** argv)
     QApplication::setOrganizationName("Venn Audio");
     QApplication::setOrganizationDomain("venn-audio.invalid");
     QApplication::setApplicationVersion(QString::fromUtf8(zp_version()));
+
+    QTranslator qt_translator;
+    if (qt_translator.load(QLocale(), "qtbase", "_", QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+        QApplication::installTranslator(&qt_translator);
+    QTranslator translator;
+    if (translator.load(QLocale(), "satchel", "_", ":/i18n"))
+        QApplication::installTranslator(&translator);
 
     QCommandLineParser parser;
     parser.setApplicationDescription("Satchel — lossless media packaging as standard zip archives");
