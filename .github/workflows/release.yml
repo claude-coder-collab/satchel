@@ -135,7 +135,7 @@ jobs:
           for bin in MacOS/Satchel Helpers/satchel PlugIns/SatchelPreview.appex/Contents/MacOS/SatchelPreview; do
             lipo -archs "/tmp/satchel-dmg/Satchel.app/Contents/$bin" | grep -q "x86_64 arm64"
           done
-          outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System' || true)
+          outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System|:$' || true)
           if [[ -n "$outside" ]]; then echo "Links outside the bundle: $outside"; exit 1; fi
           hdiutil detach /tmp/satchel-dmg
       - uses: actions/upload-artifact@v4
