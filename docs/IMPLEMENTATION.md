@@ -434,7 +434,57 @@ which the GUI will reuse.
 - Tests: `tests/cli/test_cli.py` (pytest; `SATCHEL_CLI` points to the binary). It runs on Linux and
   Windows in CI.
 
-### 4.13 C API
+### 4.13 Desktop app (desktop UI spec)
+
+`desktop/gui` (Qt 6 Widgets ≥ 6.4, found with `find_package`, built when available).
+
+**Logic** (`desktop/gui/logic`, no Qt, Catch2-tested): Simple-mode drop rule, output naming with
+" 2"/" 3" suffixes (at the end for folders), multi-mono row grouping, ratio, timecode formatting
+(HH:MM:SS:FF from the iXML rate incl. 29.97/59.94 drop frame, else HH:MM:SS.mmm), Settings
+defaults and "Copy as CLI command".
+
+**App** (`desktop/gui/app`, library `satchel_gui_app` plus `Satchel` executable):
+- `App` owns one `JobQueue` (a single background thread running jobs in order: compress,
+  extract, verify, edit) shared by both modes, the Settings (QSettings) and both windows. The
+  last mode is remembered.
+- Simple mode (`SimpleWindow`): drop or files on the command line/Dock icon. Zips are extracted
+  to `<name>/` next to them; anything else is compressed to `<item>.zip` or `<parent>.zip` next to
+  the items, never overwriting. Collisions open a compact sheet with suffixed names. The window
+  shows idle, running (progress, throughput, ETA, Cancel) and result card (savings, warnings,
+  Reveal, Retry, Open in Full mode). A desktop notification is sent when unfocused.
+- Full mode (`MainWindow`):
+  - Toolbar with the spec's shortcuts.
+  - Archive browser: `ArchiveModel` over the central directory, flat or folder tree, multi-mono
+    groups as one expandable row, Verified column, hideable columns. `ArchiveFilter` provides
+    search, a method filter and restorable-only. Rows stay in archive order until a column is
+    clicked: sorting 100k rows up front cost about 1.3 s.
+  - Inspector (HTML) uses `zp_reader_flac_describe` for audio, original, production metadata,
+    tracks and the chunk list.
+  - Status-bar summary and a Jobs dock (cancel, reveal).
+  - Every build goes through `PlanReviewDialog`: entries with method and reason, totals, conflict
+    controls (Rename / Skip / Store unconverted), warnings, collapsed options, Copy as CLI command.
+  - Extraction: `ExtractDialog` options, then a pre-flight showing issues and existing files.
+  - Verify writes nothing and fills the Verified column.
+  - Edits (add, delete, rename — renaming a group renames every member) are editor jobs that
+    rewrite the archive in place. Double-click opens an entry through a temporary extraction;
+    dragging out extracts to a temporary folder first.
+- `--smoke-test ARCHIVE` prints the time to list an archive. 100,000 entries list in about
+  0.45–0.6 s on the development Mac.
+- Tests: `satchel_gui_logic_tests` (Catch2) and `satchel_gui_tests` (Qt Test, offscreen): both
+  modes launch, a 100k-entry archive opens (< 3 s allowed on CI), and Simple mode compresses and
+  extracts a drop end to end.
+- C API addition: `zp_reader_flac_describe`.
+
+**Not done yet (desktop):**
+- Quick Look extension, Windows preview handler, Finder/Explorer context menus, Linux file-manager
+  integration.
+- File association.
+- Sparkle/WinSparkle updates.
+- Translations (`tr()` is used throughout; no `.ts` files yet).
+- Packaging (AppImage/.deb, signed .dmg, MSI).
+- The per-release manual pass.
+
+### 4.14 C API
 
 `core/include/zp/zp.h`. Additions beyond the design doc's list: stream constructors (file, atomic
 file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
@@ -451,7 +501,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Done: all six containers, multichannel and multi-mono, tags, readme, editor regeneration |
 | 5. PHP and Python bindings | Done (wheels/packages with the bundled library come with releases) |
-| 6. CLI, then GUI | CLI done; GUI not started |
+| 6. CLI, then GUI | CLI done; GUI core done (both modes, browser, Inspector, plan review, extract, verify, edit); OS integration, updates and packaging pending |
 
 ### Needs hardware, accounts or people (cannot be done in CI)
 

@@ -1,0 +1,2 @@
+InheritParentConfig: true
+Checks: '-cppcoreguidelines-prefer-member-initializer,-readability-suspicious-call-argument'

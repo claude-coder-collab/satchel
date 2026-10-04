@@ -139,6 +139,10 @@ ZP_API char* zp_plan_describe(const zp_plan_t* plan);
 ZP_API char* zp_build_result_describe(const zp_build_result_t* result);
 ZP_API char* zp_reader_describe(const zp_reader_t* reader);
 ZP_API char* zp_xplan_describe(const zp_xplan_t* xplan);
+/* Details of a FLAC entry read from its metadata only (no audio decoding): stream format, layout,
+ * original name and container, SHA-256, Vorbis comments and the original file's chunk list.
+ * NULL (status ZP_INVALID_ARGUMENT) if the entry is not a readable FLAC file. */
+ZP_API char* zp_reader_flac_describe(zp_reader_t* reader, size_t i);
 ZP_API void zp_free(void* ptr);
 
 /* ---- context: owns the thread pool and memory budget ----------------------------------- */

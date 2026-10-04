@@ -84,6 +84,7 @@ char* zp_plan_describe(const zp_plan_t* plan);
 char* zp_build_result_describe(const zp_build_result_t* result);
 char* zp_reader_describe(const zp_reader_t* reader);
 char* zp_xplan_describe(const zp_xplan_t* xplan);
+char* zp_reader_flac_describe(zp_reader_t* reader, size_t i);
 void zp_free(void* ptr);
 zp_context_t* zp_context_create(int threads, uint64_t memory_budget);
 void zp_context_free(zp_context_t* ctx);

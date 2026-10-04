@@ -6,6 +6,7 @@
 #include "common/json_writer.hpp"
 #include "common/main_thread.hpp"
 #include "common/product.hpp"
+#include "crypto/hash.hpp"
 #include "io/file_system.hpp"
 #include "io/input_source.hpp"
 #include "io/zip/builder.hpp"
@@ -535,6 +536,78 @@ char* zp_reader_describe(const zp_reader_t* reader)
                 if (e.flac_group)
                     j.field("channel_index", static_cast<std::uint64_t>(e.flac_group->channel_index)).field("channel_count", static_cast<std::uint64_t>(e.flac_group->channel_count));
                 j.end_object();
+            }
+            j.end_array().end_object();
+            return dup_string(j.str());
+        },
+        nullptr
+    );
+}
+
+char* zp_reader_flac_describe(zp_reader_t* reader, size_t i)
+{
+    ZP_REQUIRE(reader && i < reader->reader->entries().size(), nullptr);
+    return guarded(
+        [&]() -> char* {
+            const auto header = reader->reader->flac_header(i);
+            if (!header)
+            {
+                set_error(Status::InvalidArgument, "not a readable FLAC entry");
+                return nullptr;
+            }
+            const auto& si = header->stream_info;
+            JsonWriter j;
+            j.begin_object().field("sample_rate", static_cast<std::uint64_t>(si.sample_rate)).field("bits_per_sample", static_cast<std::uint64_t>(si.bits_per_sample));
+            j.field("channels", static_cast<std::uint64_t>(si.channels)).field("total_samples", si.total_samples);
+            j.field("md5", to_hex(si.md5));
+            std::vector<flac::ForeignRecord> records = header->foreign;
+            if (header->project)
+            {
+                const auto& p = *header->project;
+                const char* layout = p.layout == flac::Layout::Standard ? "standard" : p.layout == flac::Layout::MultiMonoMember ? "multi_mono"
+                                                                                                                                 : "private";
+                j.field("layout", layout).field("original_name", p.original_name).field("sha256", to_hex(p.sha256));
+                j.field("channel_index", static_cast<std::uint64_t>(p.channel_index)).field("channel_count", static_cast<std::uint64_t>(p.channel_count));
+                j.field("restorable_with_flac_tool", p.layout == flac::Layout::Standard);
+                if (p.layout != flac::Layout::Standard)
+                {
+                    if (auto unpacked = flac::unpack_private(p.private_data))
+                        records = std::move(*unpacked);
+                }
+            }
+            if (!records.empty())
+            {
+                const auto& first = records.front().bytes;
+                const auto starts = [&](std::string_view id) { return first.size() >= id.size() && std::equal(id.begin(), id.end(), first.begin()); };
+                const char* container = starts("RF64") || starts("BW64") ? "RF64" : starts("RIFF") ? "WAV"
+                    : starts("FORM") && first.size() >= 12 && first[8] == 'A' && first[11] == 'C'  ? "AIFF-C"
+                    : starts("FORM")                                                               ? "AIFF"
+                    : starts("caff")                                                               ? "CAF"
+                    : starts("riff")                                                               ? "Wave64"
+                                                                                                   : "unknown";
+                j.field("container", container);
+                j.key("chunks").begin_array();
+                bool after_audio = false;
+                for (std::size_t r = 1; r < records.size(); ++r)
+                {
+                    const auto& b = records[r].bytes;
+                    const bool w64 = std::string_view(container) == "Wave64";
+                    std::string id = b.size() >= 4 ? std::string(reinterpret_cast<const char*>(b.data()), 4) : std::string{};
+                    const bool audio = id == "data" || id == "SSND";
+                    j.begin_object().field("id", id).field("size", static_cast<std::uint64_t>(b.size())).field("after_audio", after_audio).field("audio", audio);
+                    static constexpr std::array<std::string_view, 16> known{ "fmt ", "data", "bext", "iXML", "LIST", "cue ", "ds64", "junk", "JUNK", "COMM", "SSND", "NAME", "AUTH", "ANNO", "desc", "FVER" };
+                    j.field("known", std::ranges::find(known, std::string_view(id)) != known.end() || w64);
+                    j.end_object();
+                    if (audio)
+                        after_audio = true;
+                }
+                j.end_array();
+            }
+            j.key("tags").begin_array();
+            if (header->comments)
+            {
+                for (const auto& [k, v] : header->comments->fields)
+                    j.begin_array().value(k).value(v).end_array();
             }
             j.end_array().end_object();
             return dup_string(j.str());
