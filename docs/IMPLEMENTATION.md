@@ -617,6 +617,12 @@ several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds
   everything), `--extract ZIPS` (each zip; other items ignored), `--full ZIP` (open in the browser).
   Without a verb the Simple mode drop rule applies (`satchel_gui::drop_action(items, Intent)`,
   `action_items`).
+- macOS Finder: Services "Compress with Satchel" (`public.item`) and "Extract with Satchel"
+  (`public.zip-archive`) in `Info.plist` `NSServices` (`NSRequiredContext` empty, so they are
+  offered as Finder Quick Actions). `desktop/gui/app/mac_services.mm` (Objective-C++, ARC) registers
+  the provider with `[NSApp setServicesProvider:]` at startup and forwards the pasteboard's file
+  URLs to `App::open_paths` with the Compress/Extract intent on the Qt thread.
+  `perform_mac_service()` drives the same selectors from tests; other platforms get a stub.
 - Linux: Dolphin service menus `share/kio/servicemenus/satchel-{compress,extract}.desktop`
   (compress for all files and folders; extract and "Open in Satchel" for `application/zip`), and a
   nautilus-python extension `share/nautilus-python/extensions/satchel.py` (the `.deb` suggests

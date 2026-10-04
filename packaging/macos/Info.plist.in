@@ -31,6 +31,43 @@
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>NSServices</key>
+    <array>
+        <dict>
+            <key>NSMenuItem</key>
+            <dict>
+                <key>default</key>
+                <string>Compress with Satchel</string>
+            </dict>
+            <key>NSMessage</key>
+            <string>compressFiles</string>
+            <key>NSPortName</key>
+            <string>Satchel</string>
+            <key>NSRequiredContext</key>
+            <dict/>
+            <key>NSSendFileTypes</key>
+            <array>
+                <string>public.item</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSMenuItem</key>
+            <dict>
+                <key>default</key>
+                <string>Extract with Satchel</string>
+            </dict>
+            <key>NSMessage</key>
+            <string>extractFiles</string>
+            <key>NSPortName</key>
+            <string>Satchel</string>
+            <key>NSRequiredContext</key>
+            <dict/>
+            <key>NSSendFileTypes</key>
+            <array>
+                <string>public.zip-archive</string>
+            </array>
+        </dict>
+    </array>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
