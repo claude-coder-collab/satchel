@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Satchel
+GenericName=Archive Manager
+Comment=Create and open zip archives, with lossless audio compression
+Exec=satchel-gui %F
+Icon=satchel
+Terminal=false
+Categories=Utility;Archiving;Compression;Qt;
+MimeType=application/zip;
+Keywords=zip;archive;compress;extract;flac;wav;

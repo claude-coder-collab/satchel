@@ -1,0 +1,90 @@
+# Install layout, platform resources and CPack configuration for the desktop apps.
+# Placeholder identity values are listed in docs/IMPLEMENTATION.md, section 1.
+
+include(GNUInstallDirs)
+
+set(ZP_VENDOR "Venn Audio Ltd.")
+set(ZP_BUNDLE_ID "com.vennaudio.satchel" CACHE STRING "macOS bundle identifier (placeholder)")
+set(ZP_WIX_UPGRADE_GUID "C228FD8D-4C42-4523-90CC-05246E0FF58B")
+set(ZP_PACKAGE_CONTACT "Venn Audio Ltd. <packages@example.invalid>" CACHE STRING "Debian maintainer (placeholder)")
+set(ZP_ICON_DIR "${PROJECT_SOURCE_DIR}/packaging/icons")
+set(ZP_ICON_ICO "${ZP_ICON_DIR}/satchel.ico")
+if(CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(ZP_MACOS_MINIMUM_ENTRY "<key>LSMinimumSystemVersion</key><string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>")
+endif()
+
+# Adds the icon and version resource to a Windows executable.
+function(zp_add_windows_resources target description)
+    if(NOT WIN32)
+        return()
+    endif()
+    set(ZP_RC_DESCRIPTION "${description}")
+    set(rc "${CMAKE_CURRENT_BINARY_DIR}/${target}.rc")
+    configure_file("${PROJECT_SOURCE_DIR}/packaging/windows/satchel.rc.in" "${rc}" @ONLY)
+    target_sources(${target} PRIVATE "${rc}")
+endfunction()
+
+# Turns a Qt executable into the Satchel.app bundle on macOS.
+function(zp_configure_bundle target)
+    if(NOT APPLE)
+        return()
+    endif()
+    set(icns "${ZP_ICON_DIR}/satchel.icns")
+    target_sources(${target} PRIVATE "${icns}")
+    set_source_files_properties("${icns}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    set_target_properties(${target} PROPERTIES
+        MACOSX_BUNDLE ON
+        MACOSX_BUNDLE_INFO_PLIST "${PROJECT_SOURCE_DIR}/packaging/macos/Info.plist.in"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "${ZP_BUNDLE_ID}"
+        MACOSX_BUNDLE_ICON_FILE satchel.icns
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_COPYRIGHT "Copyright (c) 2026 ${ZP_VENDOR}")
+endfunction()
+
+function(zp_install_linux_desktop_files)
+    if(APPLE OR WIN32)
+        return()
+    endif()
+    install(FILES "${PROJECT_SOURCE_DIR}/packaging/linux/satchel.desktop" DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+    install(FILES "${ZP_ICON_DIR}/satchel.png" DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps")
+    install(FILES "${ZP_ICON_DIR}/satchel-512.png" DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/512x512/apps" RENAME satchel.png)
+endfunction()
+
+macro(zp_configure_cpack)
+    configure_file("${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_BINARY_DIR}/LICENSE.txt" COPYONLY)
+
+    set(CPACK_PACKAGE_NAME "satchel")
+    set(CPACK_PACKAGE_VENDOR "${ZP_VENDOR}")
+    set(CPACK_PACKAGE_VERSION "${ZP_VERSION}")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+    set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/claude-coder-collab/satchel")
+    set(CPACK_PACKAGE_CONTACT "${ZP_PACKAGE_CONTACT}")
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "Satchel")
+    set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_BINARY_DIR}/LICENSE.txt")
+    set(CPACK_STRIP_FILES ON)
+    set(CPACK_PRE_BUILD_SCRIPTS "${PROJECT_SOURCE_DIR}/packaging/sign.cmake")
+    set(CPACK_PACKAGE_FILE_NAME "Satchel-${ZP_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+
+    if(APPLE)
+        set(CPACK_GENERATOR "DragNDrop")
+        set(CPACK_DMG_VOLUME_NAME "Satchel ${ZP_VERSION}")
+        set(CPACK_DMG_FORMAT "UDZO")
+    elseif(WIN32)
+        set(CPACK_GENERATOR "WIX")
+        set(CPACK_WIX_VERSION 4)
+        set(CPACK_WIX_UPGRADE_GUID "${ZP_WIX_UPGRADE_GUID}")
+        set(CPACK_WIX_PRODUCT_ICON "${ZP_ICON_ICO}")
+        set(CPACK_WIX_PROGRAM_MENU_FOLDER "Satchel")
+        set(CPACK_WIX_ARCHITECTURE "x64")
+        set(CPACK_WIX_PATCH_FILE "${PROJECT_SOURCE_DIR}/packaging/windows/wix_patch.xml")
+        set(CPACK_PACKAGE_EXECUTABLES "satchel-gui;Satchel")
+    else()
+        set(CPACK_GENERATOR "DEB;TGZ")
+        set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+        set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+        set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+        set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Lossless media packaging as standard zip archives.\n Creates ordinary zip files; WAV, AIFF, CAF, RF64 and Wave64 audio is stored as\n FLAC and restored bit-exactly on extraction.")
+    endif()
+    include(CPack)
+endmacro()

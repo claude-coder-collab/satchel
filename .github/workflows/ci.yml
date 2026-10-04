@@ -101,6 +101,8 @@ jobs:
           pytest -q
       - name: PHP
         run: php -d ffi.enable=1 bindings/php/tests/run.php
+      - name: Tools
+        run: python -m pytest -q tests/tools
 
   wasm:
     runs-on: ubuntu-24.04
