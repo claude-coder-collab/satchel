@@ -1,21 +1,34 @@
-# CPack pre-build script: signs the staged binaries when signing credentials are present in the
-# environment, and does nothing otherwise.
+# CPack pre-build script: signs the staged binaries. macOS bundles are always signed inside-out
+# (ad-hoc without an identity) so the Quick Look extension keeps its sandbox entitlements; Windows
+# binaries only when a certificate is given.
 #   macOS:   SATCHEL_MACOS_SIGN_IDENTITY (a Developer ID Application identity in the keychain)
 #   Windows: SATCHEL_WINDOWS_CERT (path to a .pfx) and SATCHEL_WINDOWS_CERT_PASSWORD
 
 set(staging "${CPACK_TEMPORARY_INSTALL_DIRECTORY}")
 
-if(APPLE AND DEFINED ENV{SATCHEL_MACOS_SIGN_IDENTITY})
+if(APPLE)
+    if(DEFINED ENV{SATCHEL_MACOS_SIGN_IDENTITY})
+        set(identity "$ENV{SATCHEL_MACOS_SIGN_IDENTITY}")
+        set(flags --force --timestamp --options runtime)
+    else()
+        set(identity "-")
+        set(flags --force)
+    endif()
     file(GLOB_RECURSE apps LIST_DIRECTORIES true "${staging}/*.app")
     list(FILTER apps INCLUDE REGEX "\\.app$")
     foreach(app IN LISTS apps)
-        file(GLOB helpers "${app}/Contents/Helpers/*")
-        foreach(helper IN LISTS helpers)
-            execute_process(COMMAND codesign --force --timestamp --options runtime --sign "$ENV{SATCHEL_MACOS_SIGN_IDENTITY}" "${helper}" COMMAND_ERROR_IS_FATAL ANY)
+        file(GLOB_RECURSE nested "${app}/Contents/Frameworks/*.dylib" "${app}/Contents/PlugIns/*.dylib" "${app}/Contents/Helpers/*")
+        file(GLOB frameworks LIST_DIRECTORIES true "${app}/Contents/Frameworks/*.framework")
+        foreach(item IN LISTS nested frameworks)
+            execute_process(COMMAND codesign ${flags} --sign "${identity}" "${item}" COMMAND_ERROR_IS_FATAL ANY)
         endforeach()
-        execute_process(COMMAND codesign --force --deep --timestamp --options runtime --sign "$ENV{SATCHEL_MACOS_SIGN_IDENTITY}" "${app}" COMMAND_ERROR_IS_FATAL ANY)
+        file(GLOB extensions LIST_DIRECTORIES true "${app}/Contents/PlugIns/*.appex")
+        foreach(appex IN LISTS extensions)
+            execute_process(COMMAND codesign ${flags} --entitlements "${CPACK_ZP_APPEX_ENTITLEMENTS}" --sign "${identity}" "${appex}" COMMAND_ERROR_IS_FATAL ANY)
+        endforeach()
+        execute_process(COMMAND codesign ${flags} --sign "${identity}" "${app}" COMMAND_ERROR_IS_FATAL ANY)
         execute_process(COMMAND codesign --verify --strict --deep "${app}" COMMAND_ERROR_IS_FATAL ANY)
-        message(STATUS "Signed ${app}")
+        message(STATUS "Signed ${app} (${identity})")
     endforeach()
 endif()
 

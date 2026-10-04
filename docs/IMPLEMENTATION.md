@@ -596,6 +596,23 @@ several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds
 - Exposed as `zp_preview(stream, file_name, ZP_PREVIEW_JSON | ZP_PREVIEW_HTML)`, the CLI
   `satchel preview FILE [--html]`, Python `satchel.preview(path, html=False)` and PHP
   `Satchel\Preview::of($path, $html = false)`. The platform previewers call it.
+- macOS Quick Look (`desktop/macos`, option `ZP_BUILD_QUICKLOOK`, built with the GUI on macOS):
+  `SatchelPreview.appex`, a data-based preview extension in Swift (`QLPreviewProvider`,
+  `QLIsDataBasedPreview`) for `public.zip-archive` and `org.xiph.flac`. It calls `zp_preview` through
+  a generated module map (`SatchelC`) over `zp.h`, links `zp_core` statically, and returns the HTML
+  (UTF-8, 760×560). No thread pool or context is created. Bundle ID `<ZP_BUNDLE_ID>.preview`;
+  entitlements: app sandbox + user-selected read-only. It is ad-hoc signed with the entitlements at
+  build time (the `.d` file swiftc leaves in the bundle is removed first) and copied into
+  `Satchel.app/Contents/PlugIns` (`satchel_embed_quicklook`), and installed there.
+- Checked on macOS 27: once registered (`pluginkit -a`), Quick Look shows our preview for `.zip`
+  instead of the system's (the spec's precedence question). `qlmanage -p -o DIR` crashes in
+  qlmanage itself for data-based extension replies (NSDictionary nil key), so automated tests call
+  the core instead; the extension was checked visually.
+- `packaging/sign.cmake` signs macOS bundles inside-out (dylibs, frameworks, helpers, then each
+  `.appex` with its entitlements, then the app, never `--deep`), ad-hoc when no identity is set,
+  and verifies with `codesign --verify --deep --strict`. The release smoke test checks both.
+- The project's warning flags apply to C and C++ only (`$<COMPILE_LANGUAGE:C,CXX>`), so Swift
+  targets can link `zp::core`.
 
 ## 5. Status
 

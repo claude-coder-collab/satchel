@@ -64,6 +64,7 @@ macro(zp_configure_cpack)
     set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_BINARY_DIR}/LICENSE.txt")
     set(CPACK_STRIP_FILES ON)
     set(CPACK_PRE_BUILD_SCRIPTS "${PROJECT_SOURCE_DIR}/packaging/sign.cmake")
+    set(CPACK_ZP_APPEX_ENTITLEMENTS "${PROJECT_SOURCE_DIR}/desktop/macos/quicklook/entitlements.plist")
     set(CPACK_PACKAGE_FILE_NAME "Satchel-${ZP_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 
     if(APPLE)

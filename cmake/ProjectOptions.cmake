@@ -20,14 +20,16 @@ if(MSVC)
         target_compile_options(zp_project_options INTERFACE /WX)
     endif()
 else()
-    target_compile_options(zp_project_options INTERFACE
-        -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow
-        $<$<COMPILE_LANGUAGE:CXX>:-Wold-style-cast -Wnon-virtual-dtor -Woverloaded-virtual>
-        -Wcast-align -Wdouble-promotion
+    set(zp_warnings
+        -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -Wcast-align -Wdouble-promotion
+        -Wformat=2 -Wimplicit-fallthrough -Wundef
         "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wnull-dereference;-Wno-missing-designated-field-initializers>"
-        "$<$<CXX_COMPILER_ID:GNU>:-Wno-missing-field-initializers>" -Wformat=2 -Wimplicit-fallthrough -Wundef)
+        "$<$<CXX_COMPILER_ID:GNU>:-Wno-missing-field-initializers>")
+    target_compile_options(zp_project_options INTERFACE
+        "$<$<COMPILE_LANGUAGE:C,CXX>:${zp_warnings}>"
+        $<$<COMPILE_LANGUAGE:CXX>:-Wold-style-cast -Wnon-virtual-dtor -Woverloaded-virtual>)
     if(ZP_WARNINGS_AS_ERRORS)
-        target_compile_options(zp_project_options INTERFACE -Werror)
+        target_compile_options(zp_project_options INTERFACE $<$<COMPILE_LANGUAGE:C,CXX>:-Werror>)
     endif()
 endif()
 
