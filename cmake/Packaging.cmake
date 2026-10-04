@@ -64,7 +64,7 @@ function(zp_install_updater)
             URL https://github.com/vslavik/winsparkle/releases/download/v0.9.4/WinSparkle-0.9.4.zip
             URL_HASH SHA256=6037df37fc263bd1650a1c4949681a9d40ffe991d01f35892a406cb5d103c976)
         FetchContent_MakeAvailable(winsparkle)
-        install(FILES "${winsparkle_SOURCE_DIR}/x64/Release/WinSparkle.dll" DESTINATION ${CMAKE_INSTALL_BINDIR})
+        install(FILES "${winsparkle_SOURCE_DIR}/WinSparkle-0.9.4/x64/Release/WinSparkle.dll" DESTINATION ${CMAKE_INSTALL_BINDIR})
     endif()
 endfunction()
 
