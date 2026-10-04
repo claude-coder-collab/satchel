@@ -26,6 +26,14 @@ if(ZP_BUILD_GUI AND Qt6_FOUND)
         app/simple_window.cpp
         app/main_window.cpp
     )
+    if(APPLE)
+        enable_language(OBJCXX)
+        target_sources(satchel_gui_app PRIVATE app/mac_services.mm)
+        set_source_files_properties(app/mac_services.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+        target_link_libraries(satchel_gui_app PUBLIC "-framework AppKit")
+    else()
+        target_sources(satchel_gui_app PRIVATE app/mac_services_stub.cpp)
+    endif()
     target_include_directories(satchel_gui_app PUBLIC app ${PROJECT_SOURCE_DIR}/desktop/common)
     target_link_libraries(satchel_gui_app PUBLIC satchel_gui_logic zp::core Qt6::Widgets)
 

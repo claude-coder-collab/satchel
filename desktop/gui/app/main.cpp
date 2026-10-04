@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "app.hpp"
+#include "mac_services.hpp"
 #include "main_window.hpp"
 #include "settings_store.hpp"
 
@@ -72,6 +73,7 @@ int main(int argc, char** argv)
     App app;
     FileOpenFilter filter(app);
     qapp.installEventFilter(&filter);
+    install_mac_services(app);
 
     if (parser.isSet(smoke))
     {

@@ -3,6 +3,7 @@
 // Automated UI smoke tests (desktop UI spec, "Testing"): both modes launch, a 100,000-entry
 // archive opens within the target, and a Simple-mode drop compresses end to end.
 #include "app.hpp"
+#include "mac_services.hpp"
 #include "main_window.hpp"
 #include "simple_window.hpp"
 
@@ -104,6 +105,28 @@ private slots:
         // "notes.txt" exists as a file, so the folder gets a suffix instead of clashing.
         QCOMPARE(extracted.output, dir_.filePath("notes.txt 2"));
         QVERIFY(QFile::exists(dir_.filePath("notes.txt 2/notes.txt")));
+    }
+
+    void finder_service_compresses_files()
+    {
+#ifdef Q_OS_MACOS
+        const auto input = dir_.filePath("service.txt");
+        {
+            QFile f(input);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray("service ").repeated(500));
+        }
+        App app;
+        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        QVERIFY(perform_mac_service(app, "compressFiles", { input }));
+        QVERIFY(finished.wait(20000));
+        const auto outcome = finished.takeFirst().at(2).value<JobOutcome>();
+        QCOMPARE(outcome.status, ZP_OK);
+        QCOMPARE(outcome.output, dir_.filePath("service.txt.zip"));
+        QVERIFY(!perform_mac_service(app, "unknownMessage", { input }));
+#else
+        QSKIP("macOS only");
+#endif
     }
 
 private:
