@@ -35,7 +35,7 @@ CLI = find_cli()
 
 
 def run(*args: str, cwd: Path | None = None, input: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run([str(CLI), *args], cwd=cwd, input=input, capture_output=True, timeout=120)
+    return subprocess.run([str(CLI), *args], cwd=cwd, input=input if input is not None else b"", capture_output=True, timeout=120)
 
 
 def make_wav(frames: int = 20000, channels: int = 2) -> bytes:

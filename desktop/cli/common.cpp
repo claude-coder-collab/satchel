@@ -8,6 +8,7 @@
 
 #ifdef _WIN32
     #include <io.h>
+    #include <windows.h>
     #define ZP_ISATTY _isatty
     #define ZP_FILENO _fileno
 #else
@@ -21,14 +22,31 @@ namespace satchel_cli
 
 std::atomic<bool> interrupted{ false };
 
+namespace
+{
+
+bool is_terminal(FILE* f)
+{
+#ifdef _WIN32
+    // _isatty also reports NUL and other character devices; only a console counts.
+    auto* handle = reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(f)));
+    DWORD mode = 0;
+    return handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode) != 0;
+#else
+    return ZP_ISATTY(ZP_FILENO(f)) != 0;
+#endif
+}
+
+}
+
 bool stdin_is_tty()
 {
-    return ZP_ISATTY(ZP_FILENO(stdin)) != 0;
+    return is_terminal(stdin);
 }
 
 bool stderr_is_tty()
 {
-    return ZP_ISATTY(ZP_FILENO(stderr)) != 0;
+    return is_terminal(stderr);
 }
 
 bool confirm(const std::string& question)
