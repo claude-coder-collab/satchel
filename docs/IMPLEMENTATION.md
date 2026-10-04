@@ -28,6 +28,8 @@ first public release.
 | Debian maintainer | `Venn Audio Ltd. <packages@example.invalid>` | `ZP_PACKAGE_CONTACT` |
 | PyPI name | `satchel` | `bindings/python/pyproject.toml`; likely taken on PyPI |
 | npm name | `@vennaudio/satchel` | `bindings/js/package.json.in` |
+| Update feeds | `https://claude-coder-collab.github.io/satchel/appcast-{macos,windows}.xml` | `ZP_UPDATE_FEED_URL_MACOS/_WINDOWS`; nothing is published there yet |
+| Update public key | `Q0RkfO0SbAmepgAaM3ogueEJAZ+bGAqXjl+FdIh9UFU=` | `ZP_UPDATE_PUBLIC_KEY` (EdDSA); its private key was discarded, so replace it with a real key pair (`generate_keys`) and store the private key as the `SPARKLE_PRIVATE_KEY` secret |
 
 ## 2. Repository layout
 
@@ -512,7 +514,6 @@ defaults and "Copy as CLI command".
   integration.
 - File association on Windows (macOS declares zip as an Alternate viewer in `Info.plist`; Linux
   declares `application/zip` in the `.desktop` file).
-- Sparkle/WinSparkle updates.
 - Translations beyond English. A few display strings come from the Qt-free logic library
   (`savings_text`, multi-mono group labels) and are not translatable yet.
 - Universal (arm64 + x86_64) macOS build; the dmg is arm64 only.
@@ -524,6 +525,22 @@ with `cmake --build <dir> --target satchel_lupdate`). `lrelease` output is embed
 `satchel_gui_app` under `:/i18n` (`ZP_HAS_TRANSLATIONS` when Qt Linguist tools are found; optional).
 At startup the app installs Qt's own `qtbase_<locale>` and `:/i18n/satchel_<locale>` translators
 for the system locale. Adding a language = adding `satchel_<lang>.ts` to `ts_files`.
+
+**Updates.** `desktop/gui/app/updater.hpp`: `Updater::create(automatic)` returns Sparkle 2 on macOS
+(`updater_mac.mm` loads `Contents/Frameworks/Sparkle.framework` with `NSBundle` and drives
+`SPUStandardUpdaterController` through a locally declared protocol, so nothing links Sparkle) and
+WinSparkle on Windows (`updater_win.cpp`: `LoadLibraryEx("WinSparkle.dll")` from the app folder,
+feed URL and EdDSA key set before `win_sparkle_init`); otherwise, or when the library is missing
+(development builds, Linux), a no-op updater whose `available()` is false. `App::start_updates()`
+runs from `main` only, so tests never start it. The "Check automatically" setting is applied on
+every save; Full mode gets "Help › Check for Updates…" (the application menu on macOS) when an
+updater is available. Sparkle reads `SUFeedURL` and `SUPublicEDKey` from `Info.plist`.
+`ZP_BUNDLE_UPDATER=ON` (release builds) fetches Sparkle 2.10.0 / WinSparkle 0.9.4 (SHA-256 pinned)
+and installs them with the app; `sign.cmake` signs Sparkle's XPC services, Autoupdate and
+Updater.app before the framework. `tools/make_appcast.py` writes one-item appcasts (tested); the
+release `appcast` job signs the dmg and MSI with Sparkle's `sign_update` and attaches
+`appcast-macos.xml` / `appcast-windows.xml` only when the `SPARKLE_PRIVATE_KEY` secret exists.
+Publishing the appcasts to the feed URLs is a manual release step for now.
 
 ### 4.14 C API
 

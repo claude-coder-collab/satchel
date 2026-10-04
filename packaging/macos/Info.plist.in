@@ -31,6 +31,10 @@
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>SUFeedURL</key>
+    <string>${ZP_UPDATE_FEED_URL_MACOS}</string>
+    <key>SUPublicEDKey</key>
+    <string>${ZP_UPDATE_PUBLIC_KEY}</string>
     <key>NSServices</key>
     <array>
         <dict>

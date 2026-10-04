@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "app.hpp"
 
+#include "updater.hpp"
+
 #include "main_window.hpp"
 #include "settings_store.hpp"
 #include "simple_window.hpp"
@@ -24,6 +26,14 @@ App::~App()
 void App::save()
 {
     save_settings(settings_);
+    if (updater_)
+        updater_->set_automatic(settings_.check_updates);
+}
+
+void App::start_updates()
+{
+    if (!updater_)
+        updater_ = Updater::create(settings_.check_updates);
 }
 
 void App::show_simple()

@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "main_window.hpp"
 
+#include "updater.hpp"
+
 #include "app.hpp"
 #include "dialogs.hpp"
 #include "settings_store.hpp"
@@ -162,6 +164,13 @@ void MainWindow::build_ui()
     view_menu->addAction(tree_action_);
     auto* switch_mode = view_menu->addAction(tr("Switch to Simple Mode"));
     connect(switch_mode, &QAction::triggered, this, [this] { app_.toggle_mode(); });
+    if (app_.updater() && app_.updater()->available())
+    {
+        auto* help_menu = menuBar()->addMenu(tr("&Help"));
+        auto* check = help_menu->addAction(tr("Check for Updates…"));
+        check->setMenuRole(QAction::ApplicationSpecificRole);
+        connect(check, &QAction::triggered, this, [this] { app_.updater()->check_now(); });
+    }
 
     model_ = new ArchiveModel(this);
     filter_ = new ArchiveFilter(this);

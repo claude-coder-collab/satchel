@@ -8,8 +8,11 @@
 #include <QObject>
 #include <QStringList>
 
+#include <memory>
+
 class MainWindow;
 class SimpleWindow;
+class Updater;
 
 // Owns the job queue, settings and both windows; both modes share one queue.
 class App : public QObject
@@ -23,6 +26,9 @@ public:
     JobQueue& jobs() { return jobs_; }
     satchel_gui::Settings& settings() { return settings_; }
     void save();
+    // Starts Sparkle/WinSparkle (once, from main; tests never start it).
+    void start_updates();
+    Updater* updater() { return updater_.get(); }
 
     void show_simple();
     void show_full(const QString& archive = {});
@@ -40,4 +46,5 @@ private:
     satchel_gui::Settings settings_;
     SimpleWindow* simple_ = nullptr;
     MainWindow* full_ = nullptr;
+    std::unique_ptr<Updater> updater_;
 };
