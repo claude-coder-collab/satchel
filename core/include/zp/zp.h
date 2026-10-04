@@ -200,7 +200,7 @@ typedef struct zp_input_item
 typedef int64_t (*zp_read_fn)(void* user, size_t item, uint64_t offset, uint8_t* buf, size_t len);
 
 /* Items described by the caller, read through a callback (browser File objects, network...).
- * The items are copied. */
+ * The items are copied. The callback may run on a library thread, never concurrently with itself. */
 ZP_API zp_input_t* zp_input_from_callbacks(const zp_input_item_t* items, size_t count, zp_read_fn read, void* user);
 ZP_API void zp_input_free(zp_input_t* input);
 
@@ -353,7 +353,8 @@ typedef struct zp_sink_callbacks
     void (*discard)(void* user, int64_t file);
 } zp_sink_callbacks_t;
 
-/* Extraction destination implemented by the caller (browser directory handles, downloads). */
+/* Extraction destination implemented by the caller (browser directory handles, downloads).
+ * Callbacks may run on library threads, but never two at once for the same sink. */
 ZP_API zp_sink_t* zp_sink_from_callbacks(const zp_sink_callbacks_t* callbacks);
 ZP_API void zp_sink_free(zp_sink_t* sink);
 
