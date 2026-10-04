@@ -559,6 +559,10 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | macOS | `Satchel.app` (executable `Satchel`, `Info.plist` from `packaging/macos/Info.plist.in`, `satchel.icns`); CLI at `Satchel.app/Contents/Helpers/satchel` (the bundle's `MacOS/Satchel` would clash with `satchel` on a case-insensitive disk) | CPack `DragNDrop` (UDZO dmg with an Applications link) |
 | Windows | `bin/satchel.exe`, `bin/satchel-gui.exe` (icon + version resource from `packaging/windows/satchel.rc.in`), Qt DLLs | CPack `WIX` (WiX 5 via `CPACK_WIX_VERSION 4`): Start-menu shortcut "Satchel", `bin` appended to the system `PATH` (`packaging/windows/wix_patch.xml`) |
 
+- Windows: the MSVC runtime is installed app-local in `bin` (`InstallRequiredSystemLibraries`,
+  UCRT excluded as it ships with Windows 10+), so the app, CLI and `satchel_shell.dll` (loaded by
+  `prevhost.exe`, whose COM loader searches the DLL's folder) need no redistributable; windeployqt
+  runs with `--no-compiler-runtime`.
 - Qt is deployed at install time with `qt_generate_deploy_app_script` (macdeployqt/windeployqt);
   option `ZP_DEPLOY_QT`, on by default for macOS and Windows, off for Linux (the `.deb` uses the
   distribution's Qt; the AppImage bundles it).

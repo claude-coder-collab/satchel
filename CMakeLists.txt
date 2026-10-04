@@ -58,6 +58,7 @@ if(NOT EMSCRIPTEN)
             install(TARGETS satchel_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
         endif()
     endif()
+    zp_install_msvc_runtime()
     zp_configure_cpack()
 endif()
 

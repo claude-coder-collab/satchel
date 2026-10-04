@@ -80,6 +80,16 @@ function(zp_install_linux_desktop_files)
     install(FILES "${PROJECT_SOURCE_DIR}/packaging/linux/nautilus/satchel.py" DESTINATION "${CMAKE_INSTALL_DATADIR}/nautilus-python/extensions")
 endfunction()
 
+# App-local MSVC runtime (msvcp140, vcruntime140…) next to the executables and the shell DLL.
+function(zp_install_msvc_runtime)
+    if(NOT MSVC)
+        return()
+    endif()
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ${CMAKE_INSTALL_BINDIR})
+    set(CMAKE_INSTALL_UCRT_LIBRARIES OFF)
+    include(InstallRequiredSystemLibraries)
+endfunction()
+
 macro(zp_configure_cpack)
     configure_file("${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_BINARY_DIR}/LICENSE.txt" COPYONLY)
 
