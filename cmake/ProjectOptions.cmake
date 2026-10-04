@@ -3,6 +3,11 @@ option(ZP_ENABLE_SANITIZERS "Build with AddressSanitizer and UndefinedBehaviorSa
 option(ZP_ENABLE_TSAN "Build with ThreadSanitizer" OFF)
 option(ZP_BUILD_TESTS "Build tests" ON)
 option(ZP_BUILD_FUZZERS "Build libFuzzer targets (Clang, with ASan/UBSan)" OFF)
+option(ZP_PORTABLE_RUNTIME "Link the C++ runtime statically into libsatchel (static CRT on MSVC) for redistributable wheels" OFF)
+
+if(ZP_PORTABLE_RUNTIME AND MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 add_library(zp_project_options INTERFACE)
 add_library(zp::project_options ALIAS zp_project_options)

@@ -26,6 +26,8 @@ first public release.
 | macOS bundle ID | `com.vennaudio.satchel` | `ZP_BUNDLE_ID` in `cmake/Packaging.cmake` |
 | WiX upgrade code | `C228FD8D-4C42-4523-90CC-05246E0FF58B` | Must never change once an MSI ships |
 | Debian maintainer | `Venn Audio Ltd. <packages@example.invalid>` | `ZP_PACKAGE_CONTACT` |
+| PyPI name | `satchel` | `bindings/python/pyproject.toml`; likely taken on PyPI |
+| npm name | `@vennaudio/satchel` | `bindings/js/package.json.in` |
 
 ## 2. Repository layout
 
@@ -408,6 +410,19 @@ development.
   return.
 - Tests: `pytest` in `bindings/python`, `php tests/run.php` in `bindings/php`. Python and PHP
   produce byte-identical archives for the same input (checked when PHP is installed).
+- Wheels: `tools/build_wheel.py --library <lib> --platform-tag <tag>` copies the package, the
+  library and `LICENSE` into a temporary tree, builds a pure wheel with pip and retags it
+  `py3-none-<tag>` (cffi ABI mode needs no per-Python build). The library is built with
+  `ZP_PORTABLE_RUNTIME=ON` (static libstdc++/libgcc on Linux, static CRT on MSVC). Linux wheels
+  are built in `manylinux_2_28` and checked/retagged by `auditwheel repair`; macOS wheels target
+  14.0 (`macosx_14_0_arm64`); Windows `win_amd64`. Each wheel is installed in a fresh venv and
+  the binding tests run against it (Python 3.10 and 3.13 on Linux).
+- npm: target `satchel_npm` (WASM build) assembles `build/wasm/npm`: `package.json` from
+  `bindings/js/package.json.in`, the binding as `index.mjs`, the Emscripten `satchel.mjs` +
+  `satchel.wasm`, README and LICENSE. `bindings/js/test/package.mjs` checks an installed tarball
+  (build and extract in Node).
+- Nothing is published to PyPI or npm yet: wheels and the npm tarball are attached to the GitHub
+  release.
 
 ### 4.12 Command-line tool (main spec 12.1)
 
@@ -514,7 +529,7 @@ defaults and "Copy as CLI command".
   Xvfb), macOS (Qt 6.8.3 from `install-qt-action`, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
   stapled when Apple credentials exist; checks the bundle links nothing outside itself and the
   system), Windows (MSI; installs it silently and runs `satchel --version`), web (zip of the browser
-  app). `publish` writes `SHA256SUMS` and, for tags, creates a draft GitHub release.
+  app, npm tarball), Python wheels (Linux, macOS, Windows). `publish` writes `SHA256SUMS` and, for tags, creates a draft GitHub release.
 - Secrets (all optional; unsigned packages are built without them): `MACOS_CERTIFICATE` (base64
   .p12), `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`,
   `APPLE_APP_PASSWORD`, `WINDOWS_CERTIFICATE` (base64 .pfx), `WINDOWS_CERTIFICATE_PASSWORD`.
@@ -535,7 +550,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | 2. WASM build + OPFS spike | WASM build, JS binding, browser app with OPFS done; the iOS/Android multi-GB device spike is pending |
 | 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Done: all six containers, multichannel and multi-mono, tags, readme, editor regeneration |
-| 5. PHP and Python bindings | Done (wheels/packages with the bundled library come with releases) |
+| 5. PHP and Python bindings | Done; wheels with the bundled library and the npm package are built by the release workflow |
 | 6. CLI, then GUI | CLI done; GUI core done (both modes, browser, Inspector, plan review, extract, verify, edit); packaging and release workflow done (unsigned until certificates exist); OS integration and updates pending |
 
 ### Needs hardware, accounts or people (cannot be done in CI)

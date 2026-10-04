@@ -8,6 +8,8 @@ on:
     paths:
       - packaging/**
       - cmake/Packaging.cmake
+      - tools/build_wheel.py
+      - bindings/js/package.json.in
       - .github/workflows/release.yml
 
 permissions:
@@ -186,6 +188,86 @@ jobs:
           name: package-windows
           path: build/msvc/*.msi
 
+  wheel-linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build library
+        run: |
+          export PATH=/opt/python/cp312-cp312/bin:$PATH
+          pip install cmake ninja wheel setuptools
+          cmake --preset gcc -DZP_BUILD_TESTS=OFF -DZP_BUILD_CLI=OFF -DZP_BUILD_GUI=OFF -DZP_PORTABLE_RUNTIME=ON -DZP_VERSION="${{ needs.version.outputs.version }}"
+          cmake --build build/gcc --config Release --target zp_shared
+      - name: Wheel
+        run: |
+          export PATH=/opt/python/cp312-cp312/bin:$PATH
+          python tools/build_wheel.py --library build/gcc/core/Release/libsatchel.so --platform-tag linux_x86_64 --version "${{ needs.version.outputs.version }}" --out raw
+          auditwheel show raw/*.whl
+          auditwheel repair --plat manylinux_2_28_x86_64 -w dist raw/*.whl
+      - name: Test
+        run: |
+          cp -r bindings/python/tests /tmp/tests
+          for py in cp310-cp310 cp313-cp313; do
+            /opt/python/$py/bin/python -m venv /tmp/venv-$py
+            /tmp/venv-$py/bin/pip install -q dist/*.whl pytest
+            (cd /tmp && /tmp/venv-$py/bin/python -m pytest -q tests -k "not php")
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-wheel-linux
+          path: dist/*.whl
+
+  wheel:
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            preset: clang
+            library: build/clang/core/Release/libsatchel.dylib
+            tag: macosx_14_0_arm64
+            extra: -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+          - os: windows-latest
+            preset: msvc
+            library: build/msvc/core/Release/satchel.dll
+            tag: win_amd64
+            extra: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - name: Build library
+        shell: bash
+        run: |
+          cmake --preset ${{ matrix.preset }} -DZP_BUILD_TESTS=OFF -DZP_BUILD_CLI=OFF -DZP_BUILD_GUI=OFF -DZP_PORTABLE_RUNTIME=ON -DZP_VERSION="${{ needs.version.outputs.version }}" ${{ matrix.extra }}
+          cmake --build build/${{ matrix.preset }} --config Release --target zp_shared
+      - name: Wheel
+        shell: bash
+        run: |
+          pip install wheel setuptools
+          python tools/build_wheel.py --library ${{ matrix.library }} --platform-tag ${{ matrix.tag }} --version "${{ needs.version.outputs.version }}" --out dist
+      - name: Test
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          if [[ "$RUNNER_OS" == Windows ]]; then bin="$RUNNER_TEMP/venv/Scripts"; else bin="$RUNNER_TEMP/venv/bin"; fi
+          "$bin/python" -m pip install -q dist/*.whl pytest
+          cp -r bindings/python/tests "$RUNNER_TEMP/tests"
+          cd "$RUNNER_TEMP" && "$bin/python" -m pytest -q tests -k "not php"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-wheel-${{ runner.os }}
+          path: dist/*.whl
+
   web:
     needs: version
     runs-on: ubuntu-24.04
@@ -197,18 +279,31 @@ jobs:
           actions-cache-folder: emsdk-cache
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
       - name: Build
         run: |
           emcmake cmake --preset wasm -DZP_BUILD_TESTS=OFF -DZP_VERSION="${{ needs.version.outputs.version }}"
-          cmake --build build/wasm --config Release --target satchel_web
+          cmake --build build/wasm --config Release --target satchel_web satchel_npm
           cd build/wasm/web && zip -qr "$GITHUB_WORKSPACE/Satchel-${{ needs.version.outputs.version }}-web.zip" .
+      - name: npm package
+        run: |
+          (cd build/wasm/npm && npm pack --pack-destination "$GITHUB_WORKSPACE")
+          mkdir "$RUNNER_TEMP/npm-test" && cd "$RUNNER_TEMP/npm-test"
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE"/vennaudio-satchel-*.tgz
+          cp "$GITHUB_WORKSPACE/bindings/js/test/package.mjs" .
+          node package.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: package-web
-          path: Satchel-*-web.zip
+          path: |
+            Satchel-*-web.zip
+            vennaudio-satchel-*.tgz
 
   publish:
-    needs: [version, linux, macos, windows, web]
+    needs: [version, linux, macos, windows, wheel-linux, wheel, web]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
