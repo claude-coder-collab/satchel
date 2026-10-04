@@ -8,6 +8,7 @@
 
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
@@ -243,6 +244,29 @@ std::vector<std::uint8_t> craft_zip(const std::vector<RawEntry>& entries, const 
 int run(const std::string& command)
 {
     return std::system(command.c_str());
+}
+
+std::optional<std::string> run_capture(const std::string& command)
+{
+#ifdef _WIN32
+    FILE* pipe = _popen(command.c_str(), "r");
+#else
+    FILE* pipe = popen(command.c_str(), "r");
+#endif
+    if (!pipe)
+        return std::nullopt;
+    std::string out;
+    std::array<char, 4096> buf{};
+    while (const auto n = std::fread(buf.data(), 1, buf.size(), pipe))
+        out.append(buf.data(), n);
+#ifdef _WIN32
+    const int status = _pclose(pipe);
+#else
+    const int status = pclose(pipe);
+#endif
+    if (status != 0)
+        return std::nullopt;
+    return out;
 }
 
 }

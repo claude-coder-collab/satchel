@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <algorithm>
 #include <format>
 #include <string>
 #include <vector>
@@ -513,5 +514,42 @@ TEST_CASE("the editor regenerates or removes the readme", "[flac][editor]")
         auto x = test::extract_all(out.data(), { .include_readme = true });
         CHECK(x.files.size() == 1);
         CHECK(x.files.contains("notes.txt"));
+    }
+}
+
+TEST_CASE("64 channels and sample rates up to 768 kHz round-trip", "[flac][integration]")
+{
+    struct Case
+    {
+        std::uint16_t channels;
+        std::uint32_t rate;
+        std::uint16_t bits;
+        std::size_t members;
+    };
+    for (const auto& c : { Case{ 64, 48000, 24, 64 }, Case{ 9, 192000, 24, 9 }, Case{ 16, 96000, 16, 16 }, Case{ 2, 768000, 24, 1 }, Case{ 1, 768000, 32, 1 } })
+    {
+        CAPTURE(c.channels, c.rate, c.bits);
+        test::WavSpec w;
+        w.channels = c.channels;
+        w.rate = c.rate;
+        w.bits = c.bits;
+        w.frames = 6000;
+        w.extensible = c.channels > 2 || c.bits > 16;
+        const auto wav = test::make_wav(w);
+        MemoryInputSource in;
+        in.add_file("x.wav", wav);
+        const auto plan = test::plan_of(in);
+        const auto flac_entries = std::ranges::count_if(plan.entries, [](const auto& e) { return e.codec != PlanCodec::General && e.codec != PlanCodec::Generated; });
+        CHECK(static_cast<std::size_t>(flac_entries) == c.members);
+        const auto built = test::build(plan);
+        REQUIRE(built.result.status == Status::Ok);
+        const auto x = test::extract_all(built.zip);
+        REQUIRE(x.result.status == Status::Ok);
+        CHECK(x.files.at("x.wav").data == wav);
+        const auto raw = test::extract_all(built.zip, { .restore_wav = false });
+        const auto& first = raw.files.at(c.members == 1 ? std::string("x.flac") : std::string("x_ch01.flac")).data;
+        MemoryStream s(first);
+        const auto h = flac::read_header(s).value();
+        CHECK(h.stream_info.sample_rate == c.rate);
     }
 }

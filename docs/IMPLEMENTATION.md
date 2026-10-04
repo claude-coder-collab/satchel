@@ -724,4 +724,12 @@ bots are allow-listed).
   present); a 4 GiB 24-bit stereo RF64 through FLAC restored bit-exactly under a 96 MiB budget; a
   2 GiB deflate entry with 1 and 64 threads under a 48 MiB budget. Inputs are generated on the fly
   (`GeneratedStream`), and restores are checked by SHA-256 through a hashing sink.
+- Channel and rate extremes round-trip bit-exactly: 64 channels (multi-mono), 9 channels at
+  192 kHz, 16 channels, and 768 kHz stereo 24-bit / mono 32-bit (non-subset FLAC).
+- With ffmpeg installed, extracted FLACs (6-channel, and a member of a 10-channel multi-mono set)
+  decode in `ffmpeg` and `ffprobe` shows the channel count and the mirrored tags (bext
+  description, iXML track name, ENCODER). Weekly `interop` job in `full.yml`: unzip, 7-Zip, the
+  `flac` tool and ffmpeg.
+- Browser tests also run on emulated phones: `SATCHEL_DEVICES="iPhone 15:webkit,Pixel 7:chromium"`
+  (Playwright device descriptors; weekly). Real iOS/Android devices remain a manual check.
 - Sanitizers: `clang-asan` and `clang-tsan` presets. clang-tidy: `.clang-tidy` at the root.

@@ -24,7 +24,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 from serve_web import make_server  # noqa: E402
 
 WEB_DIR = Path(os.environ.get("SATCHEL_WEB_DIR", ROOT / "build" / "wasm" / "web"))
-BROWSERS = os.environ.get("SATCHEL_BROWSERS", "chromium").split(",")
+BROWSERS = [b for b in os.environ.get("SATCHEL_BROWSERS", "chromium").split(",") if b]
+# Emulated phones, "Device name:engine" separated by commas, e.g. "iPhone 15:webkit,Pixel 7:chromium".
+DEVICES = [tuple(d.rsplit(":", 1)) for d in os.environ.get("SATCHEL_DEVICES", "").split(",") if d]
+TARGETS = [(engine, None) for engine in BROWSERS] + [(engine, name) for name, engine in DEVICES]
 if not (WEB_DIR / "satchel.wasm").exists():
     pytest.skip("browser app not built; set SATCHEL_WEB_DIR", allow_module_level=True)
 
@@ -52,11 +55,23 @@ def serve(isolate: bool):
     return server, f"http://127.0.0.1:{server.server_address[1]}/"
 
 
-@pytest.fixture(scope="module", params=BROWSERS)
+class Target:
+    """A launched browser plus the context options of an emulated device (if any)."""
+
+    def __init__(self, browser, options: dict) -> None:
+        self.browser = browser
+        self.options = options
+
+    def new_context(self, **kwargs):
+        return self.browser.new_context(**self.options, **kwargs)
+
+
+@pytest.fixture(scope="module", params=TARGETS, ids=lambda t: t[1] or t[0])
 def browser(request):
+    engine, device = request.param
     with playwright.sync_playwright() as p:
-        b = getattr(p, request.param).launch()
-        yield b
+        b = getattr(p, engine).launch()
+        yield Target(b, dict(p.devices[device]) if device else {})
         b.close()
 
 
