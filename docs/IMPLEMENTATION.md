@@ -510,10 +510,8 @@ defaults and "Copy as CLI command".
 - C API addition: `zp_reader_flac_describe`.
 
 **Not done yet (desktop):**
-- Quick Look extension, Windows preview handler, Finder/Explorer context menus, Linux file-manager
-  integration.
-- File association on Windows (macOS declares zip as an Alternate viewer in `Info.plist`; Linux
-  declares `application/zip` in the `.desktop` file).
+- Windows 11 top-level context-menu entries (sparse MSIX package; needs a signing certificate).
+- An optional Linux previewer plugin (Nautilus/Dolphin).
 - Translations beyond English. A few display strings come from the Qt-free logic library
   (`savings_text`, multi-mono group labels) and are not translatable yet.
 - The per-release manual pass.
@@ -688,13 +686,17 @@ several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds
 | 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Done: all six containers, multichannel and multi-mono, tags, readme, editor regeneration |
 | 5. PHP and Python bindings | Done; wheels with the bundled library and the npm package are built by the release workflow |
-| 6. CLI, then GUI | CLI done; GUI core done (both modes, browser, Inspector, plan review, extract, verify, edit); packaging and release workflow done (unsigned until certificates exist); OS integration and updates pending |
+| 6. CLI, then GUI | CLI done; GUI core done (both modes, browser, Inspector, plan review, extract, verify, edit); packaging, release workflow, OS integration (Quick Look, Finder services, Windows preview handler and Explorer commands, Dolphin/Nautilus actions, file association) and updates done; unsigned until certificates exist |
 
 ### Needs hardware, accounts or people (cannot be done in CI)
 
 - iOS Safari / Android Chrome OPFS spike with multi-GB output.
 - Windows Explorer and macOS Archive Utility extraction checks (manual).
 - Signing certificates, Apple notarization, sparse MSIX package identity.
+- An EdDSA key pair for updates (replace `ZP_UPDATE_PUBLIC_KEY`, add the `SPARKLE_PRIVATE_KEY`
+  secret) and hosting of the appcasts.
+- The per-release manual GUI pass (both modes, dark mode, screen reader, keyboard only) and checks
+  of the previewers and context menus in Finder and Explorer.
 - Xiph registration of the FLAC application ID; product name, icon and de-archiver URL.
 
 ## 6. Testing
