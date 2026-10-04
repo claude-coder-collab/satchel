@@ -285,7 +285,7 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
             }
         case Qt::TextAlignmentRole:
             if (index.column() == Size || index.column() == Packed || index.column() == Ratio)
-                return { Qt::AlignRight | Qt::AlignVCenter };
+                return (Qt::AlignRight | Qt::AlignVCenter).toInt();
             return {};
         case Qt::DecorationRole:
             if (index.column() == Name)

@@ -126,7 +126,8 @@ jobs:
         run: |
           hdiutil attach build/clang/*.dmg -mountpoint /tmp/satchel-dmg
           /tmp/satchel-dmg/Satchel.app/Contents/Helpers/satchel --version
-          otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | grep -v -E '@(rpath|executable_path)|/usr/lib|/System' | tail -n +2 | (! grep .)
+          outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System' || true)
+          if [[ -n "$outside" ]]; then echo "Links outside the bundle: $outside"; exit 1; fi
           hdiutil detach /tmp/satchel-dmg
       - uses: actions/upload-artifact@v4
         with:
