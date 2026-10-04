@@ -10,6 +10,7 @@
 #include <QFileOpenEvent>
 #include <QTimer>
 
+#include <filesystem>
 #include <print>
 #include <utility>
 
@@ -61,8 +62,10 @@ int main(int argc, char** argv)
     parser.addVersionOption();
     QCommandLineOption simple("simple", "Start in Simple mode");
     QCommandLineOption full("full", "Start in Full mode");
+    QCommandLineOption compress("compress", "Compress the given files into one archive (file-manager action)");
+    QCommandLineOption extract("extract", "Extract each given zip archive (file-manager action)");
     QCommandLineOption smoke("smoke-test", "Open the archive in Full mode, report the time to list it, and quit", "archive");
-    parser.addOptions({ simple, full, smoke });
+    parser.addOptions({ simple, full, compress, extract, smoke });
     parser.addPositionalArgument("files", "Zip archives to extract, or files to compress (Simple mode rule)");
     parser.process(qapp);
 
@@ -83,8 +86,11 @@ int main(int argc, char** argv)
     }
 
     const auto files = parser.positionalArguments();
-    if (!files.isEmpty())
-        app.open_paths(files);
+    if (files.size() == 1 && parser.isSet(full) && satchel_gui::is_zip(std::filesystem::path(files.front().toStdU16String())))
+        app.show_full(files.front());
+    else if (!files.isEmpty())
+        app.open_paths(files, parser.isSet(compress) ? satchel_gui::Intent::Compress : parser.isSet(extract) ? satchel_gui::Intent::Extract
+                                                                                                             : satchel_gui::Intent::Auto);
     else if (parser.isSet(full) || (!parser.isSet(simple) && app.settings().start_in_last_mode && last_mode() == "full"))
         app.show_full();
     else

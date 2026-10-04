@@ -21,7 +21,7 @@ class SimpleWindow : public QWidget
 
 public:
     explicit SimpleWindow(App& app);
-    void handle(const QStringList& paths);
+    void handle(const QStringList& paths, satchel_gui::Intent intent = satchel_gui::Intent::Auto);
 
 protected:
     void dragEnterEvent(QDragEnterEvent* e) override;

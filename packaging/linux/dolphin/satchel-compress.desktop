@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Service
+MimeType=all/all;inode/directory;
+Actions=compress
+X-KDE-Priority=TopLevel
+
+[Desktop Action compress]
+Name=Compress with Satchel
+Icon=satchel
+Exec=satchel-gui --compress %F

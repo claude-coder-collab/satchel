@@ -23,9 +23,19 @@ enum class DropAction {
     CompressAll,
 };
 
+// What the caller asked for: Auto applies the drop rule; file-manager actions force a verb.
+enum class Intent {
+    Auto,
+    Compress,
+    Extract,
+};
+
 bool is_zip(const std::filesystem::path& p);
-// Only zips -> extract each; anything else (including a mix) -> compress everything.
-DropAction drop_action(const std::vector<std::filesystem::path>& dropped);
+// Auto: only zips -> extract each; anything else (including a mix) -> compress everything.
+// Compress: compress everything. Extract: extract each zip (other items are ignored).
+DropAction drop_action(const std::vector<std::filesystem::path>& dropped, Intent intent = Intent::Auto);
+// The items that action applies to (Extract drops non-zips).
+std::vector<std::filesystem::path> action_items(const std::vector<std::filesystem::path>& dropped, DropAction action);
 
 // ---- Output naming ---------------------------------------------------------------------------
 

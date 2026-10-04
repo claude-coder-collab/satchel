@@ -28,7 +28,7 @@ public:
     void show_full(const QString& archive = {});
     void toggle_mode();
     // Files dropped on the app icon or passed on the command line: Simple-mode rule.
-    void open_paths(const QStringList& paths);
+    void open_paths(const QStringList& paths, satchel_gui::Intent intent = satchel_gui::Intent::Auto);
     // Desktop notification when a job ends while no window is focused.
     void notify(const QString& title, const QString& text);
 

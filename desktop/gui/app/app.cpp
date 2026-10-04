@@ -60,15 +60,15 @@ void App::toggle_mode()
         show_full();
 }
 
-void App::open_paths(const QStringList& paths)
+void App::open_paths(const QStringList& paths, satchel_gui::Intent intent)
 {
-    if (full_ && full_->isVisible() && paths.size() == 1 && satchel_gui::is_zip(std::filesystem::path(paths.front().toStdU16String())))
+    if (intent == satchel_gui::Intent::Auto && full_ && full_->isVisible() && paths.size() == 1 && satchel_gui::is_zip(std::filesystem::path(paths.front().toStdU16String())))
     {
         full_->open_archive(paths.front());
         return;
     }
     show_simple();
-    simple_->handle(paths);
+    simple_->handle(paths, intent);
 }
 
 void App::notify(const QString& title, const QString& text)
