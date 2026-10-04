@@ -522,4 +522,9 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 - Interop with the `flac` tool (when installed): `flac -t` and `flac -d --keep-foreign-metadata` on
   our files, and our restore of files encoded by `flac --keep-foreign-metadata`.
 - Interop tests run Info-ZIP `unzip`/`zip` and 7-Zip when they are installed and skip otherwise.
+- Hidden `[.large]` tests (`zp_tests "[large]"`, weekly in `full.yml`, about 6 minutes, ~10 GB of
+  temporary disk): a 4 GiB + 12345-byte store entry (Zip64, checked with `unzip -t`/`7z t` when
+  present); a 4 GiB 24-bit stereo RF64 through FLAC restored bit-exactly under a 96 MiB budget; a
+  2 GiB deflate entry with 1 and 64 threads under a 48 MiB budget. Inputs are generated on the fly
+  (`GeneratedStream`), and restores are checked by SHA-256 through a hashing sink.
 - Sanitizers: `clang-asan` and `clang-tsan` presets. clang-tidy: `.clang-tidy` at the root.
