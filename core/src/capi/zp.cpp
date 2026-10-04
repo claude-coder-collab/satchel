@@ -204,11 +204,11 @@ private:
 class CallbackItemStream final : public IChunkedStream
 {
 public:
-    CallbackItemStream(zp_read_fn read, void* user, std::size_t item, std::uint64_t size) :
-        read_(read),
+    CallbackItemStream(zp_read_fn read_fn, void* user, std::size_t item, std::uint64_t item_size) :
+        read_(read_fn),
         user_(user),
         item_(item),
-        size_(size)
+        size_(item_size)
     {
     }
 
@@ -245,8 +245,8 @@ private:
 class CallbackInputSource final : public InputSource
 {
 public:
-    CallbackInputSource(const zp_input_item_t* items, std::size_t count, zp_read_fn read, void* user) :
-        read_(read),
+    CallbackInputSource(const zp_input_item_t* items, std::size_t count, zp_read_fn read_fn, void* user) :
+        read_(read_fn),
         user_(user)
     {
         for (std::size_t i = 0; i < count; ++i)
