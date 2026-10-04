@@ -212,7 +212,7 @@ jobs:
           for py in cp310-cp310 cp313-cp313; do
             /opt/python/$py/bin/python -m venv /tmp/venv-$py
             /tmp/venv-$py/bin/pip install -q dist/*.whl pytest
-            (cd /tmp && /tmp/venv-$py/bin/python -m pytest -q tests -k "not php")
+            (cd /tmp && /tmp/venv-$py/bin/python -m pytest -q tests)
           done
       - uses: actions/upload-artifact@v4
         with:
@@ -262,7 +262,7 @@ jobs:
           if [[ "$RUNNER_OS" == Windows ]]; then bin="$RUNNER_TEMP/venv/Scripts"; else bin="$RUNNER_TEMP/venv/bin"; fi
           "$bin/python" -m pip install -q dist/*.whl pytest
           cp -r bindings/python/tests "$RUNNER_TEMP/tests"
-          cd "$RUNNER_TEMP" && "$bin/python" -m pytest -q tests -k "not php"
+          cd "$RUNNER_TEMP" && "$bin/python" -m pytest -q tests
       - uses: actions/upload-artifact@v4
         with:
           name: package-wheel-${{ runner.os }}

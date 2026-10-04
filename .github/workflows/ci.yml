@@ -24,7 +24,7 @@ jobs:
         run: python3 tools/gen_cdef.py --check
       - name: SPDX headers
         run: |
-          missing=$(find core tests bindings tools \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' -o -name '*.in' -o -name '*.py' -o -name '*.php' -o -name '*.mjs' \) -print0 | xargs -0 grep -L 'SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial' || true)
+          missing=$(find core tests bindings tools \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' -o -name '*.in' -o -name '*.py' -o -name '*.php' -o -name '*.mjs' \) ! -name 'package.json.in' -print0 | xargs -0 grep -L 'SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial' || true)
           if [ -n "$missing" ]; then echo "Missing SPDX header:"; echo "$missing"; exit 1; fi
 
   linux:
