@@ -57,3 +57,8 @@ endif()
 if(ZP_BUILD_FUZZERS)
     add_subdirectory(tests/fuzz)
 endif()
+
+option(ZP_BUILD_BENCH "Build the throughput benchmark (zp_bench)" ON)
+if(ZP_BUILD_BENCH AND NOT ZP_BUILD_FUZZERS)
+    add_subdirectory(bench)
+endif()

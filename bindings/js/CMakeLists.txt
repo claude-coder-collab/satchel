@@ -21,7 +21,7 @@ target_link_options(satchel_wasm PRIVATE
     -sALLOW_TABLE_GROWTH=1
     -sINITIAL_MEMORY=64MB
     -sMAXIMUM_MEMORY=${ZP_WASM_MAXIMUM_MEMORY}
-    "-sPTHREAD_POOL_SIZE=(typeof navigator!=='undefined'&&navigator.hardwareConcurrency?Math.min(navigator.hardwareConcurrency,16):4)+3"
+    "-sPTHREAD_POOL_SIZE=(typeof navigator!=='undefined'&&navigator.hardwareConcurrency?Math.min(navigator.hardwareConcurrency,16):4)+4"
     -sPTHREAD_POOL_SIZE_STRICT=0
     -sNO_EXIT_RUNTIME=1
     -sWASMFS=1

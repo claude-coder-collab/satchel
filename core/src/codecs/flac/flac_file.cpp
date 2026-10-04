@@ -96,7 +96,17 @@ SourceHasher::SourceHasher(const PcmLayout& layout, bool per_channel) :
 
 void SourceHasher::update(std::span<const std::uint8_t> chunk)
 {
+    update_sha256(chunk);
+    update_md5(chunk);
+}
+
+void SourceHasher::update_sha256(std::span<const std::uint8_t> chunk)
+{
     sha_.update(chunk);
+}
+
+void SourceHasher::update_md5(std::span<const std::uint8_t> chunk)
+{
     const auto start = position_;
     const auto end = position_ + chunk.size();
     position_ = end;
@@ -162,8 +172,9 @@ HashJob::HashJob(const PcmLayout& layout, bool per_channel) :
 void HashJob::push(std::shared_ptr<const std::vector<std::uint8_t>> chunk)
 {
     std::unique_lock lock(mutex_);
-    cv_.wait(lock, [this] { return queue_.size() < max_queued; });
+    cv_.wait(lock, [this] { return pushed_ - std::min(next_[0], next_[1]) < max_queued; });
     queue_.push_back(std::move(chunk));
+    ++pushed_;
     cv_.notify_all();
 }
 
@@ -174,33 +185,42 @@ void HashJob::close()
     cv_.notify_all();
 }
 
-void HashJob::run()
+void HashJob::run(Lane lane)
 {
+    const auto l = static_cast<std::size_t>(lane);
     while (true)
     {
         std::shared_ptr<const std::vector<std::uint8_t>> chunk;
         {
             std::unique_lock lock(mutex_);
-            cv_.wait(lock, [this] { return closed_ || !queue_.empty(); });
-            if (queue_.empty())
+            cv_.wait(lock, [&] { return closed_ || next_[l] < pushed_; });
+            if (next_[l] == pushed_)
                 break;
-            chunk = std::move(queue_.front());
-            queue_.pop_front();
-            cv_.notify_all();
+            chunk = queue_[static_cast<std::size_t>(next_[l] - first_)];
         }
-        hasher_.update(*chunk);
+        if (lane == Lane::Sha256)
+            hasher_.update_sha256(*chunk);
+        else
+            hasher_.update_md5(*chunk);
+        std::lock_guard lock(mutex_);
+        ++next_[l];
+        while (first_ < std::min(next_[0], next_[1]))
+        {
+            queue_.pop_front();
+            ++first_;
+        }
+        cv_.notify_all();
     }
-    auto result = hasher_.finish();
     std::lock_guard lock(mutex_);
-    result_ = std::move(result);
-    done_ = true;
+    if (++lanes_done_ == 2)
+        result_ = hasher_.finish();
     cv_.notify_all();
 }
 
 Hashes HashJob::wait()
 {
     std::unique_lock lock(mutex_);
-    cv_.wait(lock, [this] { return done_; });
+    cv_.wait(lock, [this] { return lanes_done_ == 2; });
     return result_.value_or(Hashes{});
 }
 

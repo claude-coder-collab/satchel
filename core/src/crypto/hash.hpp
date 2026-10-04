@@ -23,8 +23,13 @@ public:
 
     static Digest of(std::span<const std::uint8_t> data);
 
-    // One 64-byte block (used by the shared buffering helper).
-    void block(const std::uint8_t* p);
+    // `count` consecutive 64-byte blocks (used by the shared buffering helper).
+    void blocks(const std::uint8_t* p, std::size_t count);
+
+    // True when the CPU's SHA-256 instructions are used (ARMv8 SHA2 or x86 SHA-NI).
+    static bool hardware_accelerated() noexcept;
+    // Forces the portable implementation (tests compare both paths). Not thread-safe.
+    static void set_hardware_enabled(bool enabled) noexcept;
 
 private:
     std::array<std::uint32_t, 8> h_{};
@@ -45,8 +50,8 @@ public:
 
     static Digest of(std::span<const std::uint8_t> data);
 
-    // One 64-byte block (used by the shared buffering helper).
-    void block(const std::uint8_t* p);
+    // `count` consecutive 64-byte blocks (used by the shared buffering helper).
+    void blocks(const std::uint8_t* p, std::size_t count);
 
 private:
     std::array<std::uint32_t, 4> h_{};

@@ -3,9 +3,24 @@
 #include "crypto/hash.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cstring>
 #include <string_view>
+#include <utility>
+
+#if defined(__aarch64__) && defined(__ARM_FEATURE_SHA2)
+    #include <arm_neon.h>
+#elif defined(__x86_64__) || defined(_M_X64)
+    #include <immintrin.h>
+    #if defined(_MSC_VER) && !defined(__clang__)
+        #include <intrin.h>
+        #define ZP_SHA256_TARGET
+    #else
+        #include <cpuid.h>
+        #define ZP_SHA256_TARGET __attribute__((target("sha,sse4.1,ssse3")))
+    #endif
+#endif
 
 namespace zp
 {
@@ -214,6 +229,44 @@ constexpr std::array<int, 64> md5_r = {
     21,
 };
 
+template <std::size_t I>
+inline void md5_step(std::uint32_t& a, std::uint32_t& b, std::uint32_t& c, std::uint32_t& d, const std::array<std::uint32_t, 16>& m)
+{
+    std::uint32_t f = 0;
+    std::size_t g = 0;
+    if constexpr (I < 16)
+    {
+        f = d ^ (b & (c ^ d));
+        g = I;
+    }
+    else if constexpr (I < 32)
+    {
+        f = c ^ (d & (b ^ c));
+        g = (5 * I + 1) % 16;
+    }
+    else if constexpr (I < 48)
+    {
+        f = b ^ c ^ d;
+        g = (3 * I + 5) % 16;
+    }
+    else
+    {
+        f = c ^ (b | ~d);
+        g = (7 * I) % 16;
+    }
+    const auto tmp = d;
+    d = c;
+    c = b;
+    b = b + std::rotl(a + f + md5_k[I] + m[g], md5_r[I]);
+    a = tmp;
+}
+
+template <std::size_t... I>
+inline void md5_rounds(std::uint32_t& a, std::uint32_t& b, std::uint32_t& c, std::uint32_t& d, const std::array<std::uint32_t, 16>& m, std::index_sequence<I...>)
+{
+    (md5_step<I>(a, b, c, d, m), ...);
+}
+
 std::uint32_t load_be32(const std::uint8_t* p)
 {
     return (static_cast<std::uint32_t>(p[0]) << 24) | (static_cast<std::uint32_t>(p[1]) << 16) | (static_cast<std::uint32_t>(p[2]) << 8) | p[3];
@@ -236,13 +289,13 @@ void feed(Self& self, std::array<std::uint8_t, 64>& buf, std::size_t& buffered, 
         data = data.subspan(n);
         if (buffered < buf.size())
             return;
-        self.block(buf.data());
+        self.blocks(buf.data(), 1);
         buffered = 0;
     }
-    while (data.size() >= 64)
+    if (const auto count = data.size() / 64; count > 0)
     {
-        self.block(data.data());
-        data = data.subspan(64);
+        self.blocks(data.data(), count);
+        data = data.subspan(count * 64);
     }
     if (!data.empty())
     {
@@ -251,14 +304,7 @@ void feed(Self& self, std::array<std::uint8_t, 64>& buf, std::size_t& buffered, 
     }
 }
 
-}
-
-Sha256::Sha256() :
-    h_{ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 }
-{
-}
-
-void Sha256::block(const std::uint8_t* p)
+void sha256_portable(std::array<std::uint32_t, 8>& state, const std::uint8_t* p)
 {
     std::array<std::uint32_t, 64> w{};
     for (std::size_t i = 0; i < 16; ++i)
@@ -269,7 +315,7 @@ void Sha256::block(const std::uint8_t* p)
         const auto s1 = std::rotr(w[i - 2], 17) ^ std::rotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
         w[i] = w[i - 16] + s0 + w[i - 7] + s1;
     }
-    auto [a, b, c, d, e, f, g, h] = h_;
+    auto [a, b, c, d, e, f, g, h] = state;
     for (std::size_t i = 0; i < 64; ++i)
     {
         const auto s1 = std::rotr(e, 6) ^ std::rotr(e, 11) ^ std::rotr(e, 25);
@@ -287,14 +333,173 @@ void Sha256::block(const std::uint8_t* p)
         b = a;
         a = t1 + t2;
     }
-    h_[0] += a;
-    h_[1] += b;
-    h_[2] += c;
-    h_[3] += d;
-    h_[4] += e;
-    h_[5] += f;
-    h_[6] += g;
-    h_[7] += h;
+    state[0] += a;
+    state[1] += b;
+    state[2] += c;
+    state[3] += d;
+    state[4] += e;
+    state[5] += f;
+    state[6] += g;
+    state[7] += h;
+}
+
+#if defined(__aarch64__) && defined(__ARM_FEATURE_SHA2)
+
+void sha256_hardware(std::array<std::uint32_t, 8>& state, const std::uint8_t* p, std::size_t count)
+{
+    uint32x4_t state0 = vld1q_u32(state.data());
+    uint32x4_t state1 = vld1q_u32(state.data() + 4);
+    for (; count > 0; --count, p += 64)
+    {
+        const auto abef = state0;
+        const auto cdgh = state1;
+        std::array<uint32x4_t, 4> w{};
+        for (std::size_t i = 0; i < 4; ++i)
+            w[i] = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(p + 16 * i)));
+        for (std::size_t g = 0; g < 16; ++g)
+        {
+            const auto k = vaddq_u32(w[g % 4], vld1q_u32(sha_k.data() + 4 * g));
+            if (g < 12)
+                w[g % 4] = vsha256su0q_u32(w[g % 4], w[(g + 1) % 4]);
+            const auto prev = state0;
+            state0 = vsha256hq_u32(state0, state1, k);
+            state1 = vsha256h2q_u32(state1, prev, k);
+            if (g < 12)
+                w[g % 4] = vsha256su1q_u32(w[g % 4], w[(g + 2) % 4], w[(g + 3) % 4]);
+        }
+        state0 = vaddq_u32(state0, abef);
+        state1 = vaddq_u32(state1, cdgh);
+    }
+    vst1q_u32(state.data(), state0);
+    vst1q_u32(state.data() + 4, state1);
+}
+
+bool cpu_has_sha256()
+{
+    return true;
+}
+
+#elif defined(__x86_64__) || defined(_M_X64)
+
+// NOLINTBEGIN(portability-simd-intrinsics)
+struct M128
+{
+    __m128i v;
+};
+
+ZP_SHA256_TARGET void sha256_hardware(std::array<std::uint32_t, 8>& state, const std::uint8_t* p, std::size_t count)
+{
+    const __m128i mask = _mm_set_epi64x(0x0c0d0e0f08090a0bLL, 0x0405060700010203LL);
+    __m128i tmp = _mm_loadu_si128(reinterpret_cast<const __m128i*>(state.data()));
+    __m128i state1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(state.data() + 4));
+    tmp = _mm_shuffle_epi32(tmp, 0xB1);
+    state1 = _mm_shuffle_epi32(state1, 0x1B);
+    __m128i state0 = _mm_alignr_epi8(tmp, state1, 8);
+    state1 = _mm_blend_epi16(state1, tmp, 0xF0);
+    for (; count > 0; --count, p += 64)
+    {
+        const auto abef = state0;
+        const auto cdgh = state1;
+        std::array<M128, 4> w{};
+        for (std::size_t i = 0; i < 4; ++i)
+            w[i].v = _mm_shuffle_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(p + 16 * i)), mask);
+        for (std::size_t g = 0; g < 16; ++g)
+        {
+            auto msg = _mm_add_epi32(w[g % 4].v, _mm_loadu_si128(reinterpret_cast<const __m128i*>(sha_k.data() + 4 * g)));
+            state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
+            if (g >= 3 && g < 15)
+            {
+                const auto t = _mm_alignr_epi8(w[g % 4].v, w[(g + 3) % 4].v, 4);
+                w[(g + 1) % 4].v = _mm_sha256msg2_epu32(_mm_add_epi32(w[(g + 1) % 4].v, t), w[g % 4].v);
+            }
+            msg = _mm_shuffle_epi32(msg, 0x0E);
+            state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
+            if (g >= 1 && g < 13)
+                w[(g + 3) % 4].v = _mm_sha256msg1_epu32(w[(g + 3) % 4].v, w[g % 4].v);
+        }
+        state0 = _mm_add_epi32(state0, abef);
+        state1 = _mm_add_epi32(state1, cdgh);
+    }
+    tmp = _mm_shuffle_epi32(state0, 0x1B);
+    state1 = _mm_shuffle_epi32(state1, 0xB1);
+    state0 = _mm_blend_epi16(tmp, state1, 0xF0);
+    state1 = _mm_alignr_epi8(state1, tmp, 8);
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(state.data()), state0);
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(state.data() + 4), state1);
+}
+// NOLINTEND(portability-simd-intrinsics)
+
+bool cpu_has_sha256()
+{
+    constexpr unsigned ssse3 = 1u << 9;
+    constexpr unsigned sse41 = 1u << 19;
+    constexpr unsigned sha = 1u << 29;
+    #if defined(_MSC_VER) && !defined(__clang__)
+    std::array<int, 4> r{};
+    __cpuid(r.data(), 0);
+    if (r[0] < 7)
+        return false;
+    __cpuid(r.data(), 1);
+    const auto ecx1 = static_cast<unsigned>(r[2]);
+    __cpuidex(r.data(), 7, 0);
+    const auto ebx7 = static_cast<unsigned>(r[1]);
+    #else
+    unsigned a = 0;
+    unsigned b = 0;
+    unsigned c = 0;
+    unsigned d = 0;
+    if (__get_cpuid_max(0, nullptr) < 7 || !__get_cpuid(1, &a, &b, &c, &d))
+        return false;
+    const auto ecx1 = c;
+    __cpuid_count(7, 0, a, b, c, d);
+    const auto ebx7 = b;
+    #endif
+    return (ecx1 & ssse3) && (ecx1 & sse41) && (ebx7 & sha);
+}
+
+#else
+
+void sha256_hardware(std::array<std::uint32_t, 8>&, const std::uint8_t*, std::size_t) {}
+
+bool cpu_has_sha256()
+{
+    return false;
+}
+
+#endif
+
+std::atomic<bool>& sha256_hardware_enabled()
+{
+    static std::atomic<bool> enabled{ cpu_has_sha256() };
+    return enabled;
+}
+
+}
+
+Sha256::Sha256() :
+    h_{ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 }
+{
+}
+
+void Sha256::blocks(const std::uint8_t* p, std::size_t count)
+{
+    if (sha256_hardware_enabled().load(std::memory_order_relaxed))
+    {
+        sha256_hardware(h_, p, count);
+        return;
+    }
+    for (; count > 0; --count, p += 64)
+        sha256_portable(h_, p);
+}
+
+bool Sha256::hardware_accelerated() noexcept
+{
+    return sha256_hardware_enabled().load();
+}
+
+void Sha256::set_hardware_enabled(bool enabled) noexcept
+{
+    sha256_hardware_enabled().store(enabled && cpu_has_sha256());
 }
 
 void Sha256::update(std::span<const std::uint8_t> data)
@@ -336,46 +541,20 @@ Md5::Md5() :
 {
 }
 
-void Md5::block(const std::uint8_t* p)
+void Md5::blocks(const std::uint8_t* p, std::size_t count)
 {
-    std::array<std::uint32_t, 16> m{};
-    for (std::size_t i = 0; i < 16; ++i)
-        m[i] = load_le32(p + 4 * i);
-    auto [a, b, c, d] = h_;
-    for (std::size_t i = 0; i < 64; ++i)
+    for (; count > 0; --count, p += 64)
     {
-        std::uint32_t f = 0;
-        std::size_t g = 0;
-        if (i < 16)
-        {
-            f = (b & c) | (~b & d);
-            g = i;
-        }
-        else if (i < 32)
-        {
-            f = (d & b) | (~d & c);
-            g = (5 * i + 1) % 16;
-        }
-        else if (i < 48)
-        {
-            f = b ^ c ^ d;
-            g = (3 * i + 5) % 16;
-        }
-        else
-        {
-            f = c ^ (b | ~d);
-            g = (7 * i) % 16;
-        }
-        const auto tmp = d;
-        d = c;
-        c = b;
-        b = b + std::rotl(a + f + md5_k[i] + m[g], md5_r[i]);
-        a = tmp;
+        std::array<std::uint32_t, 16> m{};
+        for (std::size_t i = 0; i < 16; ++i)
+            m[i] = load_le32(p + 4 * i);
+        auto [a, b, c, d] = h_;
+        md5_rounds(a, b, c, d, m, std::make_index_sequence<64>{});
+        h_[0] += a;
+        h_[1] += b;
+        h_[2] += c;
+        h_[3] += d;
     }
-    h_[0] += a;
-    h_[1] += b;
-    h_[2] += c;
-    h_[3] += d;
 }
 
 void Md5::update(std::span<const std::uint8_t> data)

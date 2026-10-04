@@ -38,6 +38,7 @@ core/src/io/             streams, file system, input sources
 core/src/io/zip/         planner, builder, reader, extractor, editor, metadata, path policy
 core/src/codecs/         codec registry, store, deflate
 core/src/pipeline/       context, thread pools, memory budget
+bench/                   zp_bench throughput benchmark
 tests/unit, tests/integration, tests/support, tests/capi
 cmake/Packaging.cmake    install layout, platform resources, CPack
 packaging/               icons, .desktop, Info.plist, Windows resources, WiX patch, signing hook
@@ -135,8 +136,8 @@ require the magic; anything else is a foreign comment (`nullopt`).
 ### 4.5 Building and the pipeline
 
 - One `Context` per library context: N worker threads (N = `threads`, 0 = hardware concurrency)
-  plus two service threads (reader, hasher). The writer runs on the calling thread. Jobs in one
-  context are serialized by a mutex. (WASM pool size N + 3 remains correct.)
+  plus three service threads (reader, SHA-256 hasher, MD5 hasher). The writer runs on the calling
+  thread. Jobs in one context are serialized by a mutex. (WASM pool size: N + 4.)
 - The reader cuts each file into fixed segments (store 4 MiB, deflate 1 MiB with the previous
   32 KiB as dictionary); workers compute the segment CRC and encode; the writer reorders by
   sequence number, writes, and combines CRCs with `crc32_combine`.
@@ -251,9 +252,15 @@ Fallback entries are always stored, not deflated (zip design 6).
   header + frames × channels × bytes + 34 bytes per block.
 
 **Hashes and patching.**
-- A hasher thread computes the SHA-256 of the whole source file and the FLAC MD5 of the samples. The
-  MD5 input is signed little-endian samples of the container width. For multi-mono there is one
-  MD5 per channel. Its queue holds at most 16 chunks of 1 MiB, outside the memory budget.
+- `HashJob` computes the SHA-256 of the whole source file and the FLAC MD5 of the samples on two
+  service threads (lanes) that read the same queue of chunks; a chunk is dropped once both lanes
+  have consumed it, and the producer blocks while either lane is 16 chunks (1 MiB each, outside
+  the memory budget) behind. The MD5 input is signed little-endian samples of the container width.
+  For multi-mono there is one MD5 per channel.
+- SHA-256 uses the CPU's SHA instructions when available (ARMv8 SHA2 when the compiler targets it,
+  e.g. Apple silicon; x86-64 SHA-NI detected with CPUID at run time) and the portable code
+  otherwise (WASM, older CPUs). `Sha256::set_hardware_enabled(false)` forces the portable path
+  (tests compare both). MD5 is fully unrolled (compile-time round constants).
 - Seekable output: the header is written with zeroed MD5, frame sizes and SHA-256. At the end the
   writer patches the header in place through the adapter. The entry CRC is
   `crc32_combine(crc(final header), crc(frames), len(frames))`.
@@ -312,8 +319,10 @@ trailing bytes | SHA-256 (32).
 - Restore re-runs `scan_pcm` on a virtual file made of the records, zeros for the audio and the
   trailing bytes, which recovers the container layout and its padding. It then writes records,
   decoded samples, padding and trailing bytes while hashing.
-- Checks: zip CRC-32 of every member (checked as the stream is consumed), libFLAC's MD5 check,
-  sample count, and SHA-256. Any failure deletes the partial output.
+- Checks: zip CRC-32 of every member (checked as the stream is consumed), sample count, and
+  SHA-256 of the restored file. libFLAC's MD5 check is enabled only when there is no project block
+  (no SHA-256 to compare); otherwise it would repeat what SHA-256 already proves. Any failure
+  deletes the partial output.
 - `flac::restore` also rebuilds FLAC files made by `flac --keep-foreign-metadata` (no project
   block, so no SHA-256). The extractor does not restore those automatically, because they do not
   carry our ID (spec).
@@ -325,8 +334,8 @@ trailing bytes | SHA-256 (32).
 - `bindings/js` builds `satchel.mjs` + `satchel.wasm`: an ES module (`createSatchel()`) that
   exports every `ZP_API` function of `zp.h` (the export list is generated from the header) plus
   `ccall`, `cwrap`, `addFunction` and heap helpers. Maximum memory 512 MB
-  (`ZP_WASM_MAXIMUM_MEMORY`), pthread pool `min(hardwareConcurrency, 16) + 3` (N workers + reader,
-  hasher and the caller), growable if more threads are needed.
+  (`ZP_WASM_MAXIMUM_MEMORY`), pthread pool `min(hardwareConcurrency, 16) + 4` (N workers + reader,
+  two hashers and the caller), growable if more threads are needed.
 - The module blocks while a job runs, so in a browser it must run inside a Web Worker (main spec 3);
   under Node it can run on the main thread.
 - The Catch2 suite is also built for WASM and runs under Node (`-sPROXY_TO_PTHREAD`, `NODERAWFS`);
@@ -507,6 +516,14 @@ defaults and "Copy as CLI command".
 - Universal (arm64 + x86_64) macOS build; the dmg is arm64 only.
 - The per-release manual pass.
 
+### 4.14 C API
+
+`core/include/zp/zp.h`. Additions beyond the design doc's list: stream constructors (file, atomic
+file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
+`zp_plan_executable`, `zp_plan_total_bytes`, build result accessors, extraction issue/item/outcome
+accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status_name`,
+`zp_version`. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
+
 ### 4.15 Packaging and releases (main spec 12.3)
 
 `cmake/Packaging.cmake` (included from the root) defines the install layout and CPack:
@@ -534,13 +551,34 @@ defaults and "Copy as CLI command".
   .p12), `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`,
   `APPLE_APP_PASSWORD`, `WINDOWS_CERTIFICATE` (base64 .pfx), `WINDOWS_CERTIFICATE_PASSWORD`.
 
-### 4.14 C API
+### 4.16 Performance (zip design doc 8.6)
 
-`core/include/zp/zp.h`. Additions beyond the design doc's list: stream constructors (file, atomic
-file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
-`zp_plan_executable`, `zp_plan_total_bytes`, build result accessors, extraction issue/item/outcome
-accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status_name`,
-`zp_version`. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
+`bench/bench.cpp` builds `zp_bench` (option `ZP_BUILD_BENCH`, on by default; also for WASM, run
+with `node zp_bench.js`). It generates 24-bit stereo audio (tones + noise), word-salad text and
+random bytes (`--size` MiB each), hashes the audio, then builds and extracts (to the null sink)
+each case with 1 and N threads (`--threads`, default hardware concurrency). `--json` prints
+machine-readable results. CI runs it with `--size 32` on Linux (GCC) and Windows as a smoke test.
+
+Results with 256 MiB inputs (MiB/s; build = input bytes per second; Apple M-series, 8 threads):
+
+| Case | Build, 1 thread | Build, 8 threads | Extract | Size |
+|---|---|---|---|---|
+| audio, FLAC 5 | 127 | 496 | 238 | 59.7% |
+| audio, FLAC 0 | 152 | 521 | 272 | 74.2% |
+| text, deflate 6 | 54 | 191–308 | 1040–1170 | 18.2% |
+| text, deflate 1 | 294–333 | 1420–1800 | 720 | 36.1% |
+| random (stored) | 1460–2030 | 2480–2710 | 5800–6900 | 100% |
+
+SHA-256 1.1–1.3 GiB/s with the CPU instructions, MD5 630 MiB/s. Before this work the hasher ran
+portable SHA-256 (207 MiB/s) and MD5 (236 MiB/s) back to back on one thread, which capped FLAC
+builds at about 106 MiB/s at any thread count; spec 8.6's warning was right.
+
+WASM in Node (same machine, 8 threads): portable SHA-256 190 MiB/s, MD5 150 MiB/s; FLAC 5 builds
+at about 170 MiB/s, capped by MD5; extraction of FLAC about 110 MiB/s (single-threaded decode).
+FLAC still beats deflate on audio (deflate stores this audio: it saves under 2%).
+
+Known limits: a single FLAC entry restores on one thread (decode-bound, about 240 MiB/s natively);
+several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds.
 
 ## 5. Status
 
