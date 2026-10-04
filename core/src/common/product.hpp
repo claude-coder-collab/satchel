@@ -12,7 +12,7 @@ namespace zp::product
 {
 
 inline constexpr std::string_view app_name = "Satchel";
-inline constexpr std::string_view dearchiver_url = "https://satchel.invalid/open";
+inline constexpr std::string_view dearchiver_url = "https://claude-coder-collab.github.io/satchel/";
 
 // EOCD comment magic (main spec 6.4). Placeholder, not registered anywhere.
 inline constexpr std::array<std::uint8_t, 4> archive_magic{ 'S', 'T', 'C', 'H' };

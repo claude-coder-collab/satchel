@@ -1,0 +1,75 @@
+/* SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial */
+/* Copyright (c) 2026 Venn Audio Ltd. */
+:root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1d2330;
+    --muted: #5b6475;
+    --line: #dde1e8;
+    --accent: #2457d6;
+    --accent-text: #ffffff;
+    --error: #b42318;
+    --error-bg: #fdecea;
+    --ok-bg: #e7f6ec;
+    --ok: #146c2e;
+    color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #14171c;
+        --card: #1d2128;
+        --text: #e7eaf0;
+        --muted: #9aa3b2;
+        --line: #303641;
+        --accent: #6e95ff;
+        --accent-text: #0b1020;
+        --error: #ff8a80;
+        --error-bg: #3a1f1d;
+        --ok-bg: #173323;
+        --ok: #7ad79a;
+    }
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+header, main, footer, .banner, .job { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+header h1 { margin: 24px 0 4px; font-size: 26px; }
+.tagline { color: var(--muted); margin: 0 0 16px; }
+main { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.card h2 { margin: 0 0 12px; font-size: 18px; }
+.drop { display: block; border: 2px dashed var(--line); border-radius: 8px; padding: 24px; text-align: center; color: var(--muted); cursor: pointer; }
+.drop.over { border-color: var(--accent); color: var(--text); }
+.drop input, .link input { display: none; }
+.link { display: inline-block; margin-top: 8px; color: var(--accent); cursor: pointer; text-decoration: underline; }
+.summary { margin: 12px 0 8px; }
+.options { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 8px 0; }
+.options input[type=text] { margin-left: 6px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.actions { display: flex; gap: 8px; margin: 8px 0 12px; }
+button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+.table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--card); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.badge { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--ok-bg); color: var(--ok); font-size: 12px; }
+.banner { margin-top: 16px; }
+.banner > div, .banner.error, .banner.ok { padding: 10px 14px; border-radius: 8px; }
+.banner.error { background: var(--error-bg); color: var(--error); }
+.banner.ok { background: var(--ok-bg); color: var(--ok); }
+.issue { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 8px 0; }
+.issue.blocking { border-color: var(--error); }
+.issue .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.issue input[type=text] { flex: 1; min-width: 160px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.warning { color: var(--muted); font-size: 13px; }
+.job { margin-top: 16px; }
+.job progress { width: 100%; }
+.job-detail { color: var(--muted); font-size: 13px; }
+footer { color: var(--muted); font-size: 13px; margin: 32px auto 24px; }
+footer a { color: var(--accent); }

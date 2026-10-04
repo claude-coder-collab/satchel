@@ -3,6 +3,8 @@
 #include "zp/zp.h"
 
 #include "codecs/flac/restore.hpp"
+#include "common/json_writer.hpp"
+#include "common/main_thread.hpp"
 #include "common/product.hpp"
 #include "io/file_system.hpp"
 #include "io/input_source.hpp"
@@ -15,6 +17,7 @@
 #include "pipeline/context.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -150,7 +153,8 @@ public:
     {
         if (!cb_.read)
             return fail(Status::InvalidArgument, "stream is not readable");
-        const auto n = cb_.read(cb_.user, buf, len);
+        std::int64_t n = -1;
+        run_on_main_thread([&] { n = cb_.read(cb_.user, buf, len); });
         if (n < 0 || std::cmp_greater(n, len))
             return fail(Status::IoError, "read callback failed");
         pos_ += static_cast<std::uint64_t>(n);
@@ -160,7 +164,8 @@ public:
     {
         if (!cb_.write)
             return fail(Status::InvalidArgument, "stream is not writable");
-        const auto n = cb_.write(cb_.user, buf, len);
+        std::int64_t n = -1;
+        run_on_main_thread([&] { n = cb_.write(cb_.user, buf, len); });
         if (n < 0 || std::cmp_greater(n, len))
             return fail(Status::IoError, "write callback failed");
         pos_ += static_cast<std::uint64_t>(n);
@@ -171,7 +176,9 @@ public:
     {
         if (!cb_.seek)
             return fail(Status::InvalidArgument, "stream is not seekable");
-        if (cb_.seek(cb_.user, pos) != 0)
+        int rc = -1;
+        run_on_main_thread([&] { rc = cb_.seek(cb_.user, pos); });
+        if (rc != 0)
             return fail(Status::IoError, "seek callback failed");
         pos_ = pos;
         return {};
@@ -181,7 +188,8 @@ public:
     {
         if (!cb_.size)
             return std::nullopt;
-        const auto s = cb_.size(cb_.user);
+        std::int64_t s = -1;
+        run_on_main_thread([&] { s = cb_.size(cb_.user); });
         if (s < 0)
             return std::nullopt;
         return static_cast<std::uint64_t>(s);
@@ -191,6 +199,163 @@ public:
 private:
     zp_stream_callbacks_t cb_;
     std::uint64_t pos_ = 0;
+};
+
+class CallbackItemStream final : public IChunkedStream
+{
+public:
+    CallbackItemStream(zp_read_fn read_fn, void* user, std::size_t item, std::uint64_t item_size) :
+        read_(read_fn),
+        user_(user),
+        item_(item),
+        size_(item_size)
+    {
+    }
+
+    Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override
+    {
+        const auto want = static_cast<std::size_t>(std::min<std::uint64_t>(len, size_ > pos_ ? size_ - pos_ : 0));
+        if (want == 0)
+            return 0;
+        std::int64_t n = -1;
+        run_on_main_thread([&] { n = read_(user_, item_, pos_, buf, want); });
+        if (n < 0 || std::cmp_greater(n, want))
+            return fail(Status::IoError, "read callback failed");
+        pos_ += static_cast<std::uint64_t>(n);
+        return static_cast<std::size_t>(n);
+    }
+    [[nodiscard]] bool seekable() const override { return true; }
+    VoidResult seek(std::uint64_t pos) override
+    {
+        pos_ = pos;
+        return {};
+    }
+    [[nodiscard]] std::uint64_t tell() const override { return pos_; }
+    [[nodiscard]] std::optional<std::uint64_t> size() const override { return size_; }
+    VoidResult reopen() override { return seek(0); }
+
+private:
+    zp_read_fn read_;
+    void* user_;
+    std::size_t item_;
+    std::uint64_t size_;
+    std::uint64_t pos_ = 0;
+};
+
+class CallbackInputSource final : public InputSource
+{
+public:
+    CallbackInputSource(const zp_input_item_t* items, std::size_t count, zp_read_fn read_fn, void* user) :
+        read_(read_fn),
+        user_(user)
+    {
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            InputItem item;
+            item.archive_path = items[i].archive_path ? items[i].archive_path : "";
+            item.source_path = "input:" + item.archive_path;
+            item.kind = items[i].kind == ZP_KIND_DIRECTORY ? ItemKind::Directory : ItemKind::File;
+            item.size = item.kind == ItemKind::File ? items[i].size : 0;
+            item.mtime_ns = items[i].mtime * 1'000'000'000;
+            item.unix_mode = items[i].unix_mode ? items[i].unix_mode : (item.kind == ItemKind::Directory ? 0755u : 0644u);
+            if (item.kind == ItemKind::File)
+            {
+                const auto size = item.size;
+                item.opener = [this, i, size]() -> Result<std::unique_ptr<IChunkedStream>> {
+                    return std::make_unique<CallbackItemStream>(read_, user_, i, size);
+                };
+            }
+            items_.push_back(std::move(item));
+        }
+    }
+
+    Result<std::vector<InputItem>> enumerate() override { return items_; }
+
+private:
+    zp_read_fn read_;
+    void* user_;
+    std::vector<InputItem> items_;
+};
+
+class CallbackOutputFile final : public OutputFile
+{
+public:
+    CallbackOutputFile(const zp_sink_callbacks_t& cb, std::int64_t handle) :
+        cb_(cb),
+        handle_(handle)
+    {
+    }
+    CallbackOutputFile(const CallbackOutputFile&) = delete;
+    CallbackOutputFile& operator=(const CallbackOutputFile&) = delete;
+    CallbackOutputFile(CallbackOutputFile&&) = delete;
+    CallbackOutputFile& operator=(CallbackOutputFile&&) = delete;
+    ~CallbackOutputFile() override
+    {
+        if (!done_ && cb_.discard)
+            run_on_main_thread([&] { cb_.discard(cb_.user, handle_); });
+    }
+
+    VoidResult write(std::span<const std::uint8_t> data) override
+    {
+        int rc = -1;
+        run_on_main_thread([&] { rc = cb_.write(cb_.user, handle_, data.data(), data.size()); });
+        if (rc != 0)
+            return fail(Status::IoError, "write callback failed");
+        return {};
+    }
+
+    VoidResult commit(std::int64_t mtime, std::optional<std::uint32_t> unix_mode) override
+    {
+        int rc = -1;
+        run_on_main_thread([&] { rc = cb_.commit ? cb_.commit(cb_.user, handle_, mtime, unix_mode.value_or(0), unix_mode ? 1 : 0) : 0; });
+        done_ = true;
+        if (rc != 0)
+            return fail(Status::IoError, "commit callback failed");
+        return {};
+    }
+
+private:
+    zp_sink_callbacks_t cb_;
+    std::int64_t handle_;
+    bool done_ = false;
+};
+
+class CallbackSink final : public OutputSink
+{
+public:
+    explicit CallbackSink(const zp_sink_callbacks_t& cb) :
+        cb_(cb)
+    {
+    }
+
+    bool exists(const std::string& path) override
+    {
+        int rc = 0;
+        if (cb_.exists)
+            run_on_main_thread([&] { rc = cb_.exists(cb_.user, path.c_str()); });
+        return rc != 0;
+    }
+    VoidResult make_directory(const std::string& path) override
+    {
+        int rc = 0;
+        if (cb_.make_directory)
+            run_on_main_thread([&] { rc = cb_.make_directory(cb_.user, path.c_str()); });
+        if (rc != 0)
+            return fail(Status::IoError, "cannot create folder '" + path + "'");
+        return {};
+    }
+    VoidResult set_directory_attributes(const std::string&, std::int64_t, std::optional<std::uint32_t>) override { return {}; }
+    Result<std::unique_ptr<OutputFile>> create_file(const std::string& path, bool replace) override
+    {
+        std::int64_t handle = -1;
+        run_on_main_thread([&] { handle = cb_.open_file(cb_.user, path.c_str(), replace ? 1 : 0); });
+        if (handle < 0)
+            return fail(Status::IoError, "cannot create '" + path + "'");
+        return std::make_unique<CallbackOutputFile>(cb_, handle);
+    }
+
+private:
+    zp_sink_callbacks_t cb_;
 };
 
 class CallbackProgress final : public ProgressSink
@@ -208,6 +373,65 @@ private:
     void* user_;
 };
 
+const char* kind_name(ItemKind k)
+{
+    switch (k)
+    {
+        case ItemKind::Directory:
+            return "directory";
+        case ItemKind::Symlink:
+            return "symlink";
+        default:
+            return "file";
+    }
+}
+
+const char* codec_text(PlanCodec c)
+{
+    switch (c)
+    {
+        case PlanCodec::Flac:
+            return "flac";
+        case PlanCodec::FlacMono:
+            return "flac_mono";
+        case PlanCodec::Generated:
+            return "generated";
+        case PlanCodec::Kept:
+            return "kept";
+        default:
+            return "general";
+    }
+}
+
+const char* issue_text(ExtractIssueKind k)
+{
+    switch (k)
+    {
+        case ExtractIssueKind::SymlinkSkipped:
+            return "symlink_skipped";
+        case ExtractIssueKind::UnsupportedMethod:
+            return "unsupported_method";
+        case ExtractIssueKind::UnsafePath:
+            return "unsafe_path";
+        case ExtractIssueKind::NameCollision:
+            return "name_collision";
+        case ExtractIssueKind::IncompleteGroup:
+            return "incomplete_group";
+        case ExtractIssueKind::ExistsAtDestination:
+            return "exists_at_destination";
+    }
+    return "unknown";
+}
+
+char* dup_string(const std::string& s)
+{
+    auto* p = static_cast<char*>(std::malloc(s.size() + 1));
+    if (!p)
+        return nullptr;
+    std::memcpy(p, s.data(), s.size() + 1);
+    return p;
+}
+
 int kind_code(ItemKind k)
 {
     switch (k)
@@ -224,6 +448,133 @@ int kind_code(ItemKind k)
 }
 
 extern "C" {
+
+char* zp_plan_describe(const zp_plan_t* plan)
+{
+    ZP_REQUIRE(plan, nullptr);
+    return guarded(
+        [&]() -> char* {
+            JsonWriter j;
+            j.begin_object().field("executable", plan->plan.executable()).field("total_bytes", plan->plan.total_input_bytes());
+            j.key("entries").begin_array();
+            for (const auto& e : plan->plan.entries)
+            {
+                j.begin_object().field("source_path", e.item.source_path).field("output_name", e.output_name).field("kind", kind_name(e.item.kind));
+                j.field("codec", codec_text(e.codec)).field("size", e.item.size).field("mtime", e.item.mtime_seconds());
+                if (e.is_converted())
+                    j.field("restored_name", e.restored_name());
+                if (e.channel_index)
+                    j.field("channel_index", static_cast<std::uint64_t>(*e.channel_index)).field("channel_count", static_cast<std::uint64_t>(e.channel_count));
+                if (e.flac_fallback_reason)
+                    j.field("fallback", std::string(fallback_reason_text(*e.flac_fallback_reason)) + " (" + e.flac_fallback_detail + ")");
+                j.end_object();
+            }
+            j.end_array().key("conflicts").begin_array();
+            for (const auto& c : plan->plan.conflicts)
+            {
+                j.begin_object().field("kind", c.kind == ConflictKind::Collision ? "collision" : "invalid_name").field("key", c.collision_key).field("detail", c.detail);
+                j.key("entries").begin_array();
+                for (const auto i : c.entries)
+                    j.value(static_cast<std::uint64_t>(i));
+                j.end_array().end_object();
+            }
+            j.end_array().key("warnings").begin_array();
+            for (const auto& w : plan->plan.warnings)
+                j.begin_object().field("kind", w.kind == WarningKind::SymlinkSkipped ? "symlink_skipped" : "flac_fallback").field("source_path", w.source_path).field("detail", w.detail).end_object();
+            j.end_array().end_object();
+            return dup_string(j.str());
+        },
+        nullptr
+    );
+}
+
+char* zp_build_result_describe(const zp_build_result_t* result)
+{
+    ZP_REQUIRE(result, nullptr);
+    return guarded(
+        [&]() -> char* {
+            JsonWriter j;
+            j.begin_object().field("status", status_name(result->result.status)).field("message", result->result.message).field("zip64", result->result.zip64);
+            j.key("entries").begin_array();
+            for (const auto& e : result->result.per_entry)
+            {
+                j.begin_object().field("plan_index", static_cast<std::uint64_t>(e.plan_index)).field("name", e.name).field("method", static_cast<int>(e.method));
+                j.field("compressed_size", e.compressed_size).field("uncompressed_size", e.uncompressed_size).field("crc32", static_cast<std::uint64_t>(e.crc32));
+                j.field("status", status_name(e.status)).field("message", e.message).end_object();
+            }
+            j.end_array().end_object();
+            return dup_string(j.str());
+        },
+        nullptr
+    );
+}
+
+char* zp_reader_describe(const zp_reader_t* reader)
+{
+    ZP_REQUIRE(reader, nullptr);
+    return guarded(
+        [&]() -> char* {
+            JsonWriter j;
+            j.begin_object();
+            j.key("app_version");
+            if (reader->reader->metadata())
+                j.value(reader->app_version);
+            else
+                j.null();
+            j.field("zip64", reader->reader->zip64()).key("entries").begin_array();
+            for (std::size_t i = 0; i < reader->reader->entries().size(); ++i)
+            {
+                const auto header = reader->reader->flac_header(i);
+                const auto& e = reader->reader->entries()[i];
+                j.begin_object().field("index", static_cast<std::uint64_t>(i)).field("name", e.name).field("kind", kind_name(e.kind));
+                j.field("method", static_cast<std::uint64_t>(e.raw_method)).field("supported", e.method != EntryMethod::Unsupported);
+                j.field("compressed_size", e.compressed_size).field("uncompressed_size", e.uncompressed_size).field("crc32", static_cast<std::uint64_t>(e.crc32)).field("mtime", e.mtime);
+                j.field("flac_restorable", e.flac_restorable);
+                if (header && header->project)
+                    j.field("restores_to", header->project->original_name);
+                if (e.flac_group)
+                    j.field("channel_index", static_cast<std::uint64_t>(e.flac_group->channel_index)).field("channel_count", static_cast<std::uint64_t>(e.flac_group->channel_count));
+                j.end_object();
+            }
+            j.end_array().end_object();
+            return dup_string(j.str());
+        },
+        nullptr
+    );
+}
+
+char* zp_xplan_describe(const zp_xplan_t* xplan)
+{
+    ZP_REQUIRE(xplan, nullptr);
+    return guarded(
+        [&]() -> char* {
+            JsonWriter j;
+            j.begin_object().field("status", status_name(xplan->result.status)).field("message", xplan->result.message);
+            j.key("issues").begin_array();
+            for (const auto& i : xplan->plan.issues)
+                j.begin_object().field("kind", issue_text(i.kind)).field("entry", static_cast<std::uint64_t>(i.entry)).field("name", i.name).field("detail", i.detail).field("is_error", i.is_error()).end_object();
+            j.end_array().key("items").begin_array();
+            for (const auto& i : xplan->plan.items)
+            {
+                const char* decision = i.decision == ItemDecision::Skip ? "skip" : i.decision == ItemDecision::Replace ? "replace"
+                    : i.decision == ItemDecision::Undecided                                                            ? "undecided"
+                                                                                                                       : "write";
+                j.begin_object().field("entry", static_cast<std::uint64_t>(i.entry)).field("target", i.target).field("kind", kind_name(i.kind)).field("decision", decision).field("restore", !i.members.empty()).end_object();
+            }
+            j.end_array().key("outcomes").begin_array();
+            for (const auto& o : xplan->result.outcomes)
+                j.begin_object().field("entry", static_cast<std::uint64_t>(o.entry)).field("target", o.target).field("status", status_name(o.status)).field("message", o.message).end_object();
+            j.end_array().end_object();
+            return dup_string(j.str());
+        },
+        nullptr
+    );
+}
+
+void zp_free(void* ptr)
+{
+    std::free(ptr);
+}
 
 const char* zp_last_error(void)
 {
@@ -372,6 +723,19 @@ zp_input_t* zp_input_from_paths(const char* const* paths, size_t count)
             }
             auto* in = new zp_input();
             in->source = std::make_unique<FilesystemInputSource>(std::move(roots));
+            return in;
+        },
+        nullptr
+    );
+}
+
+zp_input_t* zp_input_from_callbacks(const zp_input_item_t* items, size_t count, zp_read_fn read, void* user)
+{
+    ZP_REQUIRE((items || count == 0) && read, nullptr);
+    return guarded(
+        [&]() -> zp_input_t* {
+            auto* in = new zp_input();
+            in->source = std::make_unique<CallbackInputSource>(items, count, read, user);
             return in;
         },
         nullptr
@@ -718,6 +1082,19 @@ zp_sink_t* zp_sink_filesystem(const char* destination)
         [&]() -> zp_sink_t* {
             auto* s = new zp_sink();
             s->sink = std::make_unique<FilesystemOutputSink>(path_from_utf8(destination));
+            return s;
+        },
+        nullptr
+    );
+}
+
+zp_sink_t* zp_sink_from_callbacks(const zp_sink_callbacks_t* callbacks)
+{
+    ZP_REQUIRE(callbacks && callbacks->open_file && callbacks->write, nullptr);
+    return guarded(
+        [&]() -> zp_sink_t* {
+            auto* s = new zp_sink();
+            s->sink = std::make_unique<CallbackSink>(*callbacks);
             return s;
         },
         nullptr

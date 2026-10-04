@@ -24,3 +24,23 @@ jobs:
         env:
           TSAN_OPTIONS: halt_on_error=1 second_deadlock_stack=1
         run: ctest --test-dir build/clang-tsan -C Debug --output-on-failure
+
+  browsers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.10
+          actions-cache-folder: emsdk-cache
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build
+        run: |
+          emcmake cmake --preset wasm
+          cmake --build build/wasm --config Release --target satchel_web
+      - name: Browser tests (Chromium, Firefox, WebKit)
+        run: |
+          pip install pytest playwright
+          python -m playwright install --with-deps chromium firefox webkit
+          SATCHEL_WEB_DIR=build/wasm/web SATCHEL_BROWSERS=chromium,firefox,webkit python -m pytest -q tests/web

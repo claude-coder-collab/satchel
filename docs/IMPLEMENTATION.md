@@ -18,7 +18,7 @@ first public release.
 | Item | Placeholder | Notes |
 |---|---|---|
 | Product name | `Satchel` | Working name, used in the readme template, `ENCODER` tag, archive comment |
-| `{DEARCHIVER_URL}` | `https://satchel.invalid/open` | Also the AGPL source-offer location |
+| `{DEARCHIVER_URL}` | `https://claude-coder-collab.github.io/satchel/` | The browser app, deployed by `.github/workflows/pages.yml`; its footer links the source (AGPL §13) |
 | EOCD comment magic | `STCH` (0x53544348) | Big-endian in the binary record |
 | FLAC APPLICATION ID | `Stch` | Must be registered with Xiph |
 | Copyright holder | Venn Audio Ltd. | SPDX: `AGPL-3.0-only OR LicenseRef-Commercial` |
@@ -325,7 +325,62 @@ trailing bytes | SHA-256 (32).
 - `ZP_API` in `zp.h` marks exports: `used` + default visibility under Emscripten and GCC/Clang,
   `dllexport`/`dllimport` for a Windows DLL (`ZP_SHARED_BUILD` / `ZP_SHARED`).
 
-### 4.10 Bindings (main spec 5)
+### 4.10 Browser (main spec 3, 4)
+
+**C API additions** (useful to every binding, required by the browser):
+- `zp_input_from_callbacks`: items described by the caller and read through a callback.
+- `zp_sink_from_callbacks`: an extraction destination implemented by the caller.
+- `zp_*_describe`: JSON descriptions of a plan, build result, archive listing or extraction plan,
+  freed with `zp_free`.
+
+**Threading.** Under Emscripten pthreads, every JavaScript callback (stream, input, sink) is
+proxied to the main runtime thread with `emscripten_proxy_sync` (`core/src/common/main_thread.*`).
+That is the Web Worker that owns the `File` objects and OPFS handles. It serves proxied calls
+while it blocks in `zp_build`/`zp_extract`, because the builder's writer runs on the calling
+thread and Emscripten processes the proxy queue during blocking waits. Native builds call the
+callbacks directly.
+
+**Module** (`bindings/js`):
+- Built with WasmFS (`-sWASMFS -sFORCE_FILESYSTEM`) and native WebAssembly exceptions
+  (`-fwasm-exceptions`, used everywhere, including tests).
+- `zp_wasm_mount_opfs(path)` (in `wasm_entry.c`) mounts the Origin Private File System through
+  WasmFS's OPFS backend. The core's ordinary file code then writes OPFS directly: atomic archive
+  output, filesystem extraction sink and multi-mono spill files.
+
+**JavaScript binding** (`bindings/js/src/satchel.mjs`, synchronous, worker-side):
+- `Satchel.load()`, `plan(items)` (items are `{path, data|file, lastModified}` or
+  `{path, directory: true}`).
+- `Plan`: `describe`, `resolve`, `build(writer)`, `buildToPath`, `buildBytes`.
+- `Archive`: `describe`, `extract(sinkCallbacks)`, `extractToPath`, `extractToMemory`, `verify`.
+- Blobs are read with `FileReaderSync`. Writers: `MemoryWriter`, `SyncHandleWriter`.
+- Tests: `test/smoke.mjs` and `test/glue.mjs` under Node. They cover parallel extraction calling
+  back into JavaScript from pthreads.
+
+**App** (`apps/web`, assembled into `build/wasm/web` by the `satchel_web` target):
+- `worker.mjs` owns the module and mounts OPFS at `/opfs`. Archives are built to OPFS and the
+  page offers them through `showSaveFilePicker` (stream copy) or a download link. Extraction goes
+  to an OPFS folder, then to a folder picked with `showDirectoryPicker` or per-file downloads.
+- The page plans, shows conflicts with Rename / Skip / Store unconverted, lists warnings, builds
+  with progress, opens archives, verifies and extracts.
+- If OPFS sync access handles are unusable (Playwright's WebKit, some private modes), the worker
+  falls back to WasmFS memory and returns Blobs. The footer says "in-memory mode".
+- Cross-origin isolation: `coi-serviceworker.js` (MIT, gzuidhof/coi-serviceworker v0.1.7) adds
+  COOP/COEP on hosts that cannot send headers, such as GitHub Pages. Without isolation the page
+  shows a specific error (tested).
+- `tools/serve_web.py` serves the app locally with the headers (`--no-isolation` to test the
+  error).
+
+**Deviations and open points.**
+- Spec 4 wants Chromium's File System Access output written directly. Synchronous writes to a
+  picker file are not possible, so output is staged in OPFS and then copied; the browser needs
+  free space for both copies until the staging file is removed.
+- The iOS Safari / Android Chrome multi-GB spike still needs real devices.
+
+**Tests:** `tests/web/test_web.py` (Playwright). CI runs Chromium on every change; the weekly Full
+workflow runs Chromium, Firefox and WebKit. Firefox could not be launched in the macOS VM used for
+development.
+
+### 4.11 Bindings (main spec 5)
 
 - `zp_shared` builds `libsatchel` (`.so`/`.dylib`/`satchel.dll`) from the whole core archive. Only
   `zp_*` symbols are exported (version script on Linux, `-exported_symbol` on macOS, `dllexport`
@@ -347,7 +402,7 @@ trailing bytes | SHA-256 (32).
 - Tests: `pytest` in `bindings/python`, `php tests/run.php` in `bindings/php`. Python and PHP
   produce byte-identical archives for the same input (checked when PHP is installed).
 
-### 4.11 Command-line tool (main spec 12.1)
+### 4.12 Command-line tool (main spec 12.1)
 
 `desktop/cli` builds `satchel` (CLI11 2.7.2, nlohmann/json 3.12.0). It uses only the C API, via
 the header-only wrapper `desktop/common/zp_cpp.hpp` (RAII handles, typed errors, list readers),
@@ -379,7 +434,7 @@ which the GUI will reuse.
 - Tests: `tests/cli/test_cli.py` (pytest; `SATCHEL_CLI` points to the binary). It runs on Linux and
   Windows in CI.
 
-### 4.12 C API
+### 4.13 C API
 
 `core/include/zp/zp.h`. Additions beyond the design doc's list: stream constructors (file, atomic
 file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
@@ -392,7 +447,7 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 | Spec step (main spec 10) | Status |
 |---|---|
 | 1. Zip layer: store, plan/execute, collisions, symlinks, path safety (native) | Done |
-| 2. WASM build + OPFS spike | WASM build, Node tests and module done; browser glue (Worker, OPFS, File System Access) and the device spike are pending |
+| 2. WASM build + OPFS spike | WASM build, JS binding, browser app with OPFS done; the iOS/Android multi-GB device spike is pending |
 | 3. Deflate: parallel deflate, store heuristic | Done |
 | 4. FLAC path | Done: all six containers, multichannel and multi-mono, tags, readme, editor regeneration |
 | 5. PHP and Python bindings | Done (wheels/packages with the bundled library come with releases) |
