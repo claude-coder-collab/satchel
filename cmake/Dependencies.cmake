@@ -60,7 +60,8 @@ FetchContent_MakeAvailable(flac)
 if(MSVC)
     target_compile_options(FLAC PRIVATE /fp:precise)
 else()
-    target_compile_options(FLAC PRIVATE -ffp-contract=off)
+    # -fwrapv: libFLAC's decoder relies on wraparound when it meets corrupt residuals.
+    target_compile_options(FLAC PRIVATE -ffp-contract=off -fwrapv)
 endif()
 
 find_package(Threads REQUIRED)

@@ -14,7 +14,8 @@
         { "name": "msvc", "inherits": "base", "cacheVariables": { "CMAKE_C_COMPILER": "cl", "CMAKE_CXX_COMPILER": "cl" } },
         { "name": "clang-asan", "inherits": "clang", "cacheVariables": { "ZP_ENABLE_SANITIZERS": "ON" } },
         { "name": "clang-tsan", "inherits": "clang", "cacheVariables": { "ZP_ENABLE_TSAN": "ON" } },
-        { "name": "wasm", "inherits": "base", "binaryDir": "${sourceDir}/build/wasm" }
+        { "name": "wasm", "inherits": "base", "binaryDir": "${sourceDir}/build/wasm" },
+        { "name": "fuzz", "inherits": "clang", "cacheVariables": { "ZP_BUILD_FUZZERS": "ON", "ZP_BUILD_TESTS": "OFF", "ZP_BUILD_CLI": "OFF", "ZP_BUILD_GUI": "OFF" } }
     ],
     "buildPresets": [
         { "name": "gcc-debug", "configurePreset": "gcc", "configuration": "Debug" },

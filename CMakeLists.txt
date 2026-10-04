@@ -44,3 +44,7 @@ endif()
 if(NOT EMSCRIPTEN)
     add_subdirectory(desktop/gui)
 endif()
+
+if(ZP_BUILD_FUZZERS)
+    add_subdirectory(tests/fuzz)
+endif()

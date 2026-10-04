@@ -1,0 +1,6 @@
+foreach(name archive pcm)
+    add_executable(fuzz_${name} fuzz_${name}.cpp)
+    target_link_libraries(fuzz_${name} PRIVATE zp::core)
+    target_compile_options(fuzz_${name} PRIVATE -fsanitize=fuzzer)
+    target_link_options(fuzz_${name} PRIVATE -fsanitize=fuzzer)
+endforeach()
