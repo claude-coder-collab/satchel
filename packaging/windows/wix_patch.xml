@@ -22,4 +22,24 @@
         <RegistryValue Root="HKLM" Key="Software\Classes\Applications\satchel-gui.exe" Name="FriendlyAppName" Value="Satchel" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\Classes\Applications\satchel-gui.exe\SupportedTypes" Name=".zip" Value="" Type="string" />
     </CPackWiXFragment>
+    <CPackWiXFragment Id="CM_CP_bin.satchel_shell.dll">
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}" Value="Satchel Preview Handler" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}\InprocServer32" Value="[INSTALL_ROOT]bin\satchel_shell.dll" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}\InprocServer32" Name="ThreadingModel" Value="Apartment" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{71C262A4-D20B-4503-9034-1243F449AFC8}" Value="Satchel Compress Command" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{71C262A4-D20B-4503-9034-1243F449AFC8}\InprocServer32" Value="[INSTALL_ROOT]bin\satchel_shell.dll" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{71C262A4-D20B-4503-9034-1243F449AFC8}\InprocServer32" Name="ThreadingModel" Value="Apartment" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{5F750275-DF17-4595-BA33-3771E2C5A0D3}" Value="Satchel Extract Command" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{5F750275-DF17-4595-BA33-3771E2C5A0D3}\InprocServer32" Value="[INSTALL_ROOT]bin\satchel_shell.dll" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{5F750275-DF17-4595-BA33-3771E2C5A0D3}\InprocServer32" Name="ThreadingModel" Value="Apartment" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}" Name="AppID" Value="{6d2b5079-2f0b-48dd-ab7f-97cec514d30b}" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}" Name="DisplayName" Value="Satchel Preview Handler" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.zip\ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Value="{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.flac\ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}" Value="{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\PreviewHandlers" Name="{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}" Value="Satchel Preview Handler" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\*\shell\satchel.compress" Name="ExplorerCommandHandler" Value="{71C262A4-D20B-4503-9034-1243F449AFC8}" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\satchel.compress" Name="ExplorerCommandHandler" Value="{71C262A4-D20B-4503-9034-1243F449AFC8}" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Satchel.zip\shell\satchel.extract" Name="ExplorerCommandHandler" Value="{5F750275-DF17-4595-BA33-3771E2C5A0D3}" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\SystemFileAssociations\.zip\shell\satchel.extract" Name="ExplorerCommandHandler" Value="{5F750275-DF17-4595-BA33-3771E2C5A0D3}" Type="string" />
+    </CPackWiXFragment>
 </CPackWiXPatch>

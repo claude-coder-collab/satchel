@@ -101,6 +101,36 @@ TEST_CASE("FLAC preview shows format, origin and tags without decoding", "[previ
     CHECK(preview_json(p).find("\"kind\":\"flac\"") != std::string::npos);
 }
 
+TEST_CASE("plain-text preview pieces", "[preview]")
+{
+    Preview p;
+    p.file_count = 2;
+    p.entry_count = 3;
+    p.total_size = 2000;
+    p.packed_size = 1000;
+    p.restorable_audio = 1;
+    p.created_by = "Satchel 1.0";
+    CHECK(preview_summary_text(p) == "2 files · 2.0 KB → 1.0 KB (50% smaller) · 1 audio file restorable · created with Satchel 1.0");
+    CHECK(preview_size_text(999) == "999 B");
+    Preview::Flac f;
+    f.sample_rate = 48000;
+    f.bits_per_sample = 16;
+    f.channels = 1;
+    f.total_samples = 48000 * 61;
+    f.original_name = "a.wav";
+    f.container = "WAV";
+    f.layout = "multi_mono";
+    f.channel_index = 2;
+    f.channel_count = 4;
+    f.tags = { { "TRACK_NAME", "Boom" } };
+    const auto rows = preview_flac_rows(f);
+    REQUIRE(rows.size() == 4);
+    CHECK(rows[0].second == "48000 Hz · 16-bit · 1 channel · 1:01.000");
+    CHECK(rows[1].second == "a.wav (WAV)");
+    CHECK(rows[2].second == "channel 2 of 4");
+    CHECK(rows[3].first == "TRACK_NAME");
+}
+
 TEST_CASE("preview refuses files that are neither zip nor FLAC", "[preview]")
 {
     const auto junk = test::text_bytes("just some text, not an archive");

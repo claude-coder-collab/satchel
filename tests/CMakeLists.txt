@@ -26,6 +26,7 @@ add_executable(zp_tests
     unit/test_pcm.cpp
     unit/test_planner.cpp
     unit/test_reader.cpp
+    unit/test_shell_command_line.cpp
     unit/test_streams.cpp
     unit/test_zip64_policy.cpp
     unit/test_zip_writer.cpp
@@ -39,7 +40,7 @@ add_executable(zp_tests
     integration/test_large.cpp
     integration/test_preview.cpp
 )
-target_include_directories(zp_tests PRIVATE support)
+target_include_directories(zp_tests PRIVATE support ${PROJECT_SOURCE_DIR}/desktop/windows)
 target_link_libraries(zp_tests PRIVATE zp::core zp_capi_c_check Catch2::Catch2WithMain)
 target_compile_definitions(zp_tests PRIVATE ZP_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures")
 if(EMSCRIPTEN)

@@ -174,6 +174,40 @@ void html_flac(std::string& out, const Preview::Flac& f)
 
 }
 
+std::string preview_size_text(std::uint64_t bytes)
+{
+    return human_size(bytes);
+}
+
+std::string preview_summary_text(const Preview& p)
+{
+    if (p.kind == Preview::Kind::Flac)
+        return p.flac && !p.flac->layout.empty() ? "FLAC audio · restores to the original file" : "FLAC audio";
+    auto text = std::format("{} file{} · {} → {} ({})", p.file_count, p.file_count == 1 ? "" : "s", human_size(p.total_size), human_size(p.packed_size), percent_smaller(p.total_size, p.packed_size));
+    if (p.restorable_audio > 0)
+        text += std::format(" · {}{} audio file{} restorable", p.restorable_audio_partial ? "at least " : "", p.restorable_audio, p.restorable_audio == 1 ? "" : "s");
+    if (p.created_by)
+        text += " · created with " + *p.created_by;
+    if (p.truncated)
+        text += std::format(" · first {} of {} entries shown", p.entries.size(), p.entry_count);
+    return text;
+}
+
+std::vector<std::pair<std::string, std::string>> preview_flac_rows(const Preview::Flac& f)
+{
+    std::vector<std::pair<std::string, std::string>> rows;
+    rows.emplace_back("Audio", std::format("{} Hz · {}-bit · {} channel{} · {}", f.sample_rate, f.bits_per_sample, f.channels, f.channels == 1 ? "" : "s", duration(f.total_samples, f.sample_rate)));
+    if (!f.original_name.empty())
+        rows.emplace_back("Original file", f.container.empty() ? f.original_name : f.original_name + " (" + f.container + ")");
+    else if (!f.container.empty())
+        rows.emplace_back("Original format", f.container);
+    if (f.layout == "multi_mono")
+        rows.emplace_back("Multi-mono", std::format("channel {} of {}", f.channel_index, f.channel_count));
+    for (const auto& [k, v] : f.tags)
+        rows.emplace_back(k, v);
+    return rows;
+}
+
 Preview::Flac describe_flac(const flac::Header& header)
 {
     Preview::Flac f;
