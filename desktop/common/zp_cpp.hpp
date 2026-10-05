@@ -168,6 +168,7 @@ struct EntryInfo
     bool flac_restorable = false;
     std::optional<std::pair<std::uint16_t, std::uint16_t>> flac_channel; // index, count
     std::string flac_original_name;
+    std::optional<std::uint64_t> original_size; // FLAC: size of the file it restores to; multi-mono: channel 1 only
 };
 
 inline std::vector<EntryInfo> reader_entries(const zp_reader_t* reader)
@@ -177,7 +178,9 @@ inline std::vector<EntryInfo> reader_entries(const zp_reader_t* reader)
     for (std::size_t i = 0; i < zp_reader_entry_count(reader); ++i)
     {
         check(zp_reader_get_entry(reader, i, &e));
-        EntryInfo info{ i, str(e.name), e.kind, e.method, e.supported != 0, e.compressed_size, e.uncompressed_size, e.crc32, e.mtime, std::nullopt, e.flac_restorable != 0, std::nullopt, str(e.flac_original_name) };
+        EntryInfo info{ i, str(e.name), e.kind, e.method, e.supported != 0, e.compressed_size, e.uncompressed_size, e.crc32, e.mtime, std::nullopt, e.flac_restorable != 0, std::nullopt, str(e.flac_original_name), std::nullopt };
+        if (std::uint64_t original = 0; zp_reader_flac_original_size(reader, i, &original) == ZP_OK)
+            info.original_size = original;
         if (e.has_unix_mode)
             info.unix_mode = e.unix_mode;
         if (e.has_flac_group)

@@ -126,6 +126,47 @@ TEST_CASE("every container round-trips bit-exactly through FLAC", "[flac][integr
     }
 }
 
+TEST_CASE("the original file size is derived from the FLAC metadata", "[flac][integration]")
+{
+    const auto cases = corpus();
+    MemoryInputSource in;
+    for (const auto& c : cases)
+        in.add_file("audio/" + c.name, c.bytes, 1700000000LL * 1'000'000'000);
+    auto b = test::build(test::plan_of(in));
+    REQUIRE(b.result.status == Status::Ok);
+    auto x = test::extract_all(b.zip, { .restore_wav = false });
+    for (const auto& c : cases)
+    {
+        INFO(c.name);
+        const auto dot = c.name.rfind('.');
+        MemoryStream s(x.files["audio/" + c.name.substr(0, dot) + ".flac"].data);
+        const auto header = flac::read_header(s).value();
+        const auto size = flac::original_file_size(header, header.stream_info.channels);
+        REQUIRE(size);
+        CHECK(*size == c.bytes.size());
+    }
+}
+
+TEST_CASE("the original size of a multi-mono group comes from its first channel", "[flac][integration]")
+{
+    test::WavSpec w;
+    w.channels = 12;
+    w.bits = 24;
+    w.frames = 70000;
+    w.chunks = { { "iXML", test::ixml_chunk("P", "S", "T", { { 3, "Ch three" } }), false } };
+    const auto wav = test::make_wav(w);
+    MemoryInputSource in;
+    in.add_file("Take2.wav", wav);
+    auto b = test::build(test::plan_of(in));
+    REQUIRE(b.result.status == Status::Ok);
+    auto x = test::extract_all(b.zip, { .restore_wav = false });
+    MemoryStream s(x.files["Take2_ch01.flac"].data);
+    const auto header = flac::read_header(s).value();
+    const auto size = flac::original_file_size(header, header.project->channel_count);
+    REQUIRE(size);
+    CHECK(*size == wav.size());
+}
+
 TEST_CASE("FLAC output is identical across thread counts and output kinds", "[flac][integration]")
 {
     MemoryInputSource in;

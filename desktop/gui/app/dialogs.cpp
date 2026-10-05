@@ -349,6 +349,7 @@ ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settin
 {
     setWindowTitle(selection_.empty() ? tr("Extract all") : tr("Extract selected"));
     auto* form = new QFormLayout(this);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     auto* dest_row = new QHBoxLayout;
     destination_ = new QLineEdit(destination, this);
     auto* browse = new QPushButton(tr("Choose…"), this);
@@ -367,6 +368,7 @@ ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settin
     overwrite_ = new QComboBox(this);
     overwrite_->addItems({ tr("Ask"), tr("Skip"), tr("Replace") });
     overwrite_->setCurrentIndex(static_cast<int>(settings_.overwrite));
+    overwrite_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     form->addRow(restore_);
     form->addRow(readme_);
     form->addRow(tr("Existing files"), overwrite_);
@@ -383,6 +385,7 @@ ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settin
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     form->addRow(buttons);
+    resize(sizeHint().width() * 2, sizeHint().height());
 }
 
 std::optional<ExtractChoice> ExtractDialog::run()

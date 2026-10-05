@@ -110,6 +110,8 @@ std::vector<Row> group_rows(const std::vector<ListedEntry>& entries)
         Row r{ e.name, e.size, e.packed, e.method, e.restores_to, e.mtime, e.directory, { e.index }, {}, {}, 0, 0 };
         if (!e.group)
         {
+            r.size = e.original_size.value_or(e.size);
+            r.ratio_known = e.original_size || !e.method.starts_with("FLAC");
             rows.push_back(std::move(r));
             continue;
         }
@@ -118,18 +120,25 @@ std::vector<Row> group_rows(const std::vector<ListedEntry>& entries)
         {
             const auto slash = e.name.rfind('/');
             const auto folder = slash == std::string::npos ? std::string{} : e.name.substr(0, slash + 1);
-            Row g{ std::format("{}{} — {} channels", folder, e.restores_to, e.channel_count), 0, 0, "FLAC multi-mono", e.restores_to, e.mtime, false, {}, {}, folder + e.restores_to, 0, e.channel_count };
+            Row g{ std::format("{}{} — {} channels", folder, e.restores_to, e.channel_count), 0, 0, "FLAC multi-mono", e.restores_to, e.mtime, false, {}, {}, folder + e.restores_to, 0, e.channel_count, false };
             it = group_row.emplace(*e.group, rows.size()).first;
             rows.push_back(std::move(g));
         }
         auto& g = rows[it->second];
-        g.size += e.size;
         g.packed += e.packed;
+        if (!g.ratio_known)
+            g.size += e.size;
+        if (e.original_size)
+        {
+            g.size = *e.original_size;
+            g.ratio_known = true;
+        }
         g.mtime = std::max(g.mtime, e.mtime);
         g.entries.push_back(e.index);
         r.method = std::format("FLAC channel {}/{}", e.channel_index, e.channel_count);
         r.channel_index = e.channel_index;
         r.channel_count = e.channel_count;
+        r.ratio_known = false;
         g.children.push_back(std::move(r));
     }
     for (auto& r : rows)

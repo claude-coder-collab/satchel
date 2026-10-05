@@ -63,9 +63,9 @@ A system notification is sent when a job finishes while the window is not focuse
 
 ## Full mode window
 
-One window: toolbar across the top, archive browser on the left, Inspector on the right, archive summary and Jobs in the status bar.
+One window: archive browser on the left, Inspector on the right, archive summary and Jobs in the status bar. All commands live in the native menu bar (File, Archive, View, Help) rather than a toolbar. Simple mode has a View menu with Switch to Full Mode (Ctrl/Cmd+Shift+M); in Full mode the same shortcut switches back.
 
-&#91;embedded content: Full mode main window · toolbar, browser, inspector, status bar\]
+&#91;embedded content: Full mode main window · browser, inspector, status bar\]
 
 Selecting a row fills the Inspector; a multi-mono set is one row that expands to its channel files. With no archive open, the browser area shows a drop zone and recent archives.
 
@@ -78,7 +78,7 @@ The center pane lists the open archive's entries, read from the central director
 | Name | Entry name; folders expandable in tree view |
 | Size | Uncompressed size |
 | Packed | Stored size |
-| Ratio | Packed / size, as % saved |
+| Ratio | Packed / size, as % saved. For FLAC, size is the original audio file's, derived from the stored metadata (`zp_reader_flac_original_size`); a multi-mono set shows it on its group row. Blank where it cannot be known, and for folders, selections and totals containing such entries |
 | Method | Store · Deflate · FLAC · FLAC multi-mono |
 | Restores to | Original filename for converted audio (e.g. `take1.wav`), blank otherwise |
 | Modified | Entry date |

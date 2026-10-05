@@ -65,6 +65,7 @@ struct ListedEntry
     std::optional<std::string> group; // multi-mono group key (folder + restored name)
     std::uint16_t channel_index = 0;
     std::uint16_t channel_count = 0;
+    std::optional<std::uint64_t> original_size; // FLAC: the file it restores to; multi-mono: channel 1 only
 };
 
 struct Row
@@ -83,6 +84,7 @@ struct Row
     std::string group_name;
     std::uint16_t channel_index = 0;
     std::uint16_t channel_count = 0;
+    bool ratio_known = true; // size and packed allow a saving to be shown
 };
 
 // One row per entry, except that the members of a multi-mono group become one row

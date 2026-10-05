@@ -150,6 +150,30 @@ Result<PcmLayout> layout_from_records(const std::vector<ForeignRecord>& records,
     return fail(Status::CorruptArchive, "foreign metadata does not describe the FLAC audio");
 }
 
+Result<std::uint64_t> original_file_size(const Header& lead, std::uint32_t channels)
+{
+    const auto& info = lead.stream_info;
+    if (info.bits_per_sample % 8 != 0)
+        return fail(Status::UnsupportedMethod, std::format("{}-bit FLAC cannot be mapped to the original container", info.bits_per_sample));
+    std::vector<ForeignRecord> records;
+    if (lead.project && lead.project->layout != Layout::Standard)
+    {
+        auto unpacked = unpack_private(lead.project->private_data);
+        if (!unpacked)
+            return std::unexpected(unpacked.error());
+        records = std::move(*unpacked);
+    }
+    else
+        records = lead.foreign;
+    if (records.empty())
+        return fail(Status::CorruptArchive, "FLAC file carries no foreign metadata");
+    const auto trailing = lead.project ? lead.project->trailing.size() : 0;
+    auto layout = layout_from_records(records, channels, info.bits_per_sample / 8, info.total_samples, trailing);
+    if (!layout)
+        return std::unexpected(layout.error());
+    return layout->file_size;
+}
+
 namespace
 {
 

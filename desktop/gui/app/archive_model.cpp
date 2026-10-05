@@ -9,6 +9,7 @@
 #include <QMimeData>
 #include <QPalette>
 
+#include <limits>
 #include <map>
 #include <utility>
 
@@ -25,6 +26,7 @@ struct ArchiveModel::Node
     std::vector<std::size_t> entries;
     std::uint64_t size = 0;
     std::uint64_t packed = 0;
+    bool ratio_known = true;
 
     Node* add(std::unique_ptr<Node> child)
     {
@@ -89,6 +91,7 @@ void ArchiveModel::set_entries(const std::vector<zpp::EntryInfo>& entries)
             : e.method == ZP_METHOD_DEFLATE ? "Deflate"
                                             : "Store";
         l.restores_to = e.flac_original_name;
+        l.original_size = e.original_size;
         l.mtime = e.mtime;
         if (e.flac_channel)
         {
@@ -131,6 +134,7 @@ void ArchiveModel::rebuild()
         n->entries = r.entries;
         n->size = r.size;
         n->packed = r.packed;
+        n->ratio_known = r.ratio_known;
         for (const auto& c : r.children)
         {
             auto child = std::make_unique<Node>();
@@ -139,6 +143,7 @@ void ArchiveModel::rebuild()
             child->entries = c.entries;
             child->size = c.size;
             child->packed = c.packed;
+            child->ratio_known = c.ratio_known;
             n->add(std::move(child));
         }
         return n;
@@ -194,6 +199,7 @@ void ArchiveModel::rebuild()
             {
                 n->size += c->size;
                 n->packed += c->packed;
+                n->ratio_known = n->ratio_known && c->ratio_known;
             }
         }
     };
@@ -253,7 +259,7 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
                 case Packed:
                     return folder && !tree_ ? QVariant() : QString::fromStdString(satchel_gui::human_size(n->packed));
                 case Ratio:
-                    return n->size ? QString("%1%").arg(satchel_gui::percent_saved(n->size, n->packed)) : QString();
+                    return n->size && n->ratio_known ? QString("%1%").arg(satchel_gui::percent_saved(n->size, n->packed)) : QString();
                 case Method:
                     return r && !r->directory ? labels::row_method(*r) : folder ? labels::method("Folder")
                                                                                 : QString();
@@ -283,7 +289,7 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
                 case Packed:
                     return QVariant::fromValue<qulonglong>(n->packed);
                 case Ratio:
-                    return satchel_gui::percent_saved(n->size, n->packed);
+                    return !n->ratio_known ? std::numeric_limits<int>::min() : satchel_gui::percent_saved(n->size, n->packed);
                 case Modified:
                     return QVariant::fromValue<qlonglong>(mtime);
                 default:

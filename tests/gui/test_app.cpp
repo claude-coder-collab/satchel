@@ -3,6 +3,7 @@
 // Automated UI smoke tests (desktop UI spec, "Testing"): both modes launch, a 100,000-entry
 // archive opens within the target, and a Simple-mode drop compresses end to end.
 #include "app.hpp"
+#include "archive_model.hpp"
 #include "mac_services.hpp"
 #include "main_window.hpp"
 #include "simple_window.hpp"
@@ -78,6 +79,35 @@ private slots:
         qInfo("opened 100,000 entries in %lld ms", static_cast<long long>(ms));
         // The spec target is 1 s on a desktop; shared CI runners and sanitizer builds get some slack.
         QVERIFY2(ms < limit_ms, qPrintable(QString("took %1 ms").arg(ms)));
+    }
+
+    void flac_ratio_needs_the_original_size()
+    {
+        zpp::EntryInfo text;
+        text.index = 0;
+        text.name = "a.txt";
+        text.uncompressed_size = 1000;
+        text.compressed_size = 400;
+        text.supported = true;
+        zpp::EntryInfo audio;
+        audio.index = 1;
+        audio.name = "b.flac";
+        audio.uncompressed_size = 500;
+        audio.compressed_size = 500;
+        audio.supported = true;
+        audio.flac_restorable = true;
+        audio.flac_original_name = "b.wav";
+        zpp::EntryInfo known = audio;
+        known.index = 2;
+        known.name = "c.flac";
+        known.original_size = 2000;
+        ArchiveModel model;
+        model.set_entries({ text, audio, known });
+        QCOMPARE(model.rowCount(), 3);
+        QCOMPARE(model.index(0, ArchiveModel::Ratio).data().toString(), QString("60%"));
+        QCOMPARE(model.index(1, ArchiveModel::Ratio).data().toString(), QString());
+        QCOMPARE(model.index(2, ArchiveModel::Ratio).data().toString(), QString("75%"));
+        QCOMPARE(model.index(2, ArchiveModel::Size).data().toString(), QString::fromStdString(satchel_gui::human_size(2000)));
     }
 
     void simple_mode_compresses_a_drop()

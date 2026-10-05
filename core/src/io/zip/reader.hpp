@@ -53,6 +53,7 @@ struct ZipEntryInfo
     bool zip64 = false;
     bool flac_restorable = false;
     std::optional<FlacGroupInfo> flac_group;
+    std::optional<std::uint64_t> flac_original_size; // whole original file; for multi-mono, set on channel 1 only
 };
 
 struct CopiedEntry

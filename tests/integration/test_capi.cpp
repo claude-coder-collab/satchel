@@ -259,6 +259,11 @@ TEST_CASE("C API callback input and sink, and JSON descriptions", "[capi]")
     CHECK(flac_json.find("\"id\":\"fmt \"") != std::string::npos);
     CHECK(flac_json.find("\"ENCODER\"") != std::string::npos);
     CHECK(zp_reader_flac_describe(reader, 1) == nullptr);
+    std::uint64_t original_size = 0;
+    REQUIRE(zp_reader_flac_original_size(reader, 2, &original_size) == ZP_OK);
+    CHECK(original_size == wav.size());
+    CHECK(zp_reader_flac_original_size(reader, 1, &original_size) == ZP_INVALID_ARGUMENT);
+    CHECK(listing.find("\"original_size\":" + std::to_string(wav.size())) != std::string::npos);
 
     struct Sink
     {
