@@ -126,9 +126,6 @@ MainWindow::MainWindow(App& app) :
 
 void MainWindow::build_ui()
 {
-    auto* tb = addToolBar(tr("Main"));
-    tb->setObjectName("main-toolbar");
-    tb->setToolButtonStyle(Qt::ToolButtonTextOnly);
     const auto action = [&](const QString& text, const QKeySequence& key, auto slot) {
         auto* a = new QAction(text, this);
         a->setShortcut(key);
@@ -136,38 +133,40 @@ void MainWindow::build_ui()
         addAction(a);
         return a;
     };
-    tb->addAction(action(tr("New Archive"), QKeySequence::New, [this] { new_archive(); }));
-    tb->addAction(action(tr("Open"), QKeySequence::Open, [this] {
+    auto* file_menu = menuBar()->addMenu(tr("&File"));
+    file_menu->addAction(action(tr("New Archive"), QKeySequence::New, [this] { new_archive(); }));
+    file_menu->addAction(action(tr("Open…"), QKeySequence::Open, [this] {
         const auto f = QFileDialog::getOpenFileName(this, tr("Open archive"), {}, tr("Zip archives (*.zip);;All files (*)"));
         if (!f.isEmpty())
             open_archive(f);
     }));
-    tb->addAction(action(tr("Add Files"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A), [this] { add_files(); }));
-    tb->addSeparator();
-    tb->addAction(action(tr("Extract All"), QKeySequence(), [this] { extract(false); }));
-    tb->addAction(action(tr("Extract Selected"), QKeySequence(Qt::CTRL | Qt::Key_E), [this] { extract(true); }));
-    tb->addAction(action(tr("Verify"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), [this] { verify(); }));
-    tb->addSeparator();
-    tb->addAction(action(tr("Rename"), QKeySequence(Qt::Key_F2), [this] { rename_selected(); }));
-    tb->addAction(action(tr("Delete"), QKeySequence::Delete, [this] { delete_selected(); }));
-    tb->addSeparator();
-    tree_action_ = action(tr("Tree View"), QKeySequence(), [this] { model_->set_tree(tree_action_->isChecked()); });
-    tree_action_->setCheckable(true);
-    tb->addAction(tree_action_);
-    tb->addAction(action(tr("Settings"), QKeySequence::Preferences, [this] {
+    file_menu->addSeparator();
+    auto* settings = action(tr("Settings…"), QKeySequence::Preferences, [this] {
         SettingsDialog d(app_.settings(), this);
         if (d.exec() == QDialog::Accepted)
         {
             app_.settings() = d.settings();
             app_.save();
         }
-    }));
-    tb->addAction(action(tr("Simple Mode"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [this] { app_.toggle_mode(); }));
+    });
+    settings->setMenuRole(QAction::PreferencesRole);
+    file_menu->addAction(settings);
 
+    auto* archive_menu = menuBar()->addMenu(tr("&Archive"));
+    archive_menu->addAction(action(tr("Add Files"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A), [this] { add_files(); }));
+    archive_menu->addSeparator();
+    archive_menu->addAction(action(tr("Extract All"), QKeySequence(), [this] { extract(false); }));
+    archive_menu->addAction(action(tr("Extract Selected"), QKeySequence(Qt::CTRL | Qt::Key_E), [this] { extract(true); }));
+    archive_menu->addAction(action(tr("Verify"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), [this] { verify(); }));
+    archive_menu->addSeparator();
+    archive_menu->addAction(action(tr("Rename"), QKeySequence(Qt::Key_F2), [this] { rename_selected(); }));
+    archive_menu->addAction(action(tr("Delete"), QKeySequence::Delete, [this] { delete_selected(); }));
+
+    tree_action_ = action(tr("Tree View"), QKeySequence(), [this] { model_->set_tree(tree_action_->isChecked()); });
+    tree_action_->setCheckable(true);
     auto* view_menu = menuBar()->addMenu(tr("&View"));
     view_menu->addAction(tree_action_);
-    auto* switch_mode = view_menu->addAction(tr("Switch to Simple Mode"));
-    connect(switch_mode, &QAction::triggered, this, [this] { app_.toggle_mode(); });
+    view_menu->addAction(action(tr("Switch to Simple Mode"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [this] { app_.toggle_mode(); }));
     if (app_.updater() && app_.updater()->available())
     {
         auto* help_menu = menuBar()->addMenu(tr("&Help"));

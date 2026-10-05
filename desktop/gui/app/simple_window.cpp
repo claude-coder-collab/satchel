@@ -12,6 +12,7 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QProcess>
@@ -60,6 +61,12 @@ SimpleWindow::SimpleWindow(App& app) :
     setAcceptDrops(true);
     resize(420, 300);
     auto* layout = new QVBoxLayout(this);
+    auto* menu_bar = new QMenuBar(this);
+    auto* mode_menu = menu_bar->addMenu(tr("&View"));
+    auto* to_full = mode_menu->addAction(tr("Switch to Full Mode"));
+    to_full->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
+    connect(to_full, &QAction::triggered, this, [this] { app_.toggle_mode(); });
+    layout->setMenuBar(menu_bar);
     pages_ = new QStackedWidget(this);
     layout->addWidget(pages_);
 
