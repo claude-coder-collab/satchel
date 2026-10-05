@@ -69,6 +69,8 @@ std::vector<std::uint8_t> read_file(const std::filesystem::path& p);
 // Path of an external tool on PATH, if installed.
 std::optional<std::string> find_tool(const std::string& name);
 int run(const std::string& command);
+// stdout of a command; nullopt if it fails.
+std::optional<std::string> run_capture(const std::string& command);
 
 // Hand-made archives for reader tests (third-party quirks, hostile names).
 struct RawEntry

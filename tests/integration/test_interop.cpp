@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "io/file_system.hpp"
+#include "pcm_fixtures.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -31,6 +32,43 @@ std::string q(const std::filesystem::path& p)
     return "\"" + p.string() + "\"";
 }
 
+}
+
+TEST_CASE("extracted FLACs decode in ffmpeg and show their tags", "[interop]")
+{
+    const auto ffprobe = test::find_tool("ffprobe");
+    const auto ffmpeg = test::find_tool("ffmpeg");
+    if (!ffprobe || !ffmpeg)
+        SKIP("ffprobe/ffmpeg not installed");
+    test::WavSpec six;
+    six.channels = 6;
+    six.bits = 24;
+    six.frames = 48000;
+    six.extensible = true;
+    six.chunks = { { "bext", test::bext_chunk("Scene 4 take 2", "Recorder", 1234567), false } };
+    test::WavSpec ten;
+    ten.channels = 10;
+    ten.frames = 24000;
+    ten.chunks = { { "iXML", test::ixml_chunk("P", "S", "T", { { 2, "Boom" } }), false } };
+    MemoryInputSource in;
+    in.add_file("six.wav", test::make_wav(six));
+    in.add_file("ten.wav", test::make_wav(ten));
+    const auto raw = test::extract_all(test::build(in).zip, { .restore_wav = false });
+    test::TempDir dir;
+    const auto probe = [&](const std::string& name) {
+        const auto path = dir.write(name, raw.files.at(name).data);
+        CHECK(test::run(std::format("\"{}\" -v error -i {} -f null -", *ffmpeg, q(path))) == 0);
+        const auto json = test::run_capture(std::format("\"{}\" -v error -show_entries stream=channels,sample_rate:format_tags -of json {}", *ffprobe, q(path)));
+        REQUIRE(json);
+        return *json;
+    };
+    const auto multichannel = probe("six.flac");
+    CHECK(multichannel.find("\"channels\": 6") != std::string::npos);
+    CHECK(multichannel.find("Scene 4 take 2") != std::string::npos);
+    const auto member = probe("ten_ch02.flac");
+    CHECK(member.find("\"channels\": 1") != std::string::npos);
+    CHECK(member.find("Boom") != std::string::npos);
+    CHECK(member.find("Satchel") != std::string::npos);
 }
 
 #ifndef _WIN32
