@@ -101,6 +101,35 @@ std::filesystem::path extract_output(const std::filesystem::path& archive, const
     return unique_path(output_dir(archive.parent_path(), output_folder) / archive.stem(), exists, true);
 }
 
+std::filesystem::path extract_staging(const std::filesystem::path& wanted_folder, const ExistsFn& exists)
+{
+    return unique_path(wanted_folder.parent_path() / (u8"." + wanted_folder.filename().u8string() + u8".extracting"), exists, true);
+}
+
+std::filesystem::path finalize_extraction(const std::filesystem::path& staging, const std::filesystem::path& wanted_folder, const ExistsFn& exists)
+{
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    std::vector<fs::path> children;
+    for (fs::directory_iterator it(staging, ec), end; !ec && it != end; it.increment(ec))
+        children.push_back(it->path());
+    if (ec)
+        return staging;
+    fs::path target;
+    if (children.size() == 1 && fs::is_directory(fs::symlink_status(children.front(), ec)))
+    {
+        target = unique_path(wanted_folder.parent_path() / children.front().filename(), exists, true);
+        fs::rename(children.front(), target, ec);
+        if (ec)
+            return staging;
+        fs::remove(staging, ec);
+        return target;
+    }
+    target = unique_path(wanted_folder, exists, true);
+    fs::rename(staging, target, ec);
+    return ec ? staging : target;
+}
+
 std::vector<Row> group_rows(const std::vector<ListedEntry>& entries)
 {
     std::vector<Row> rows;

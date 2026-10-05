@@ -218,10 +218,14 @@ void SimpleWindow::start_compress(const QStringList& paths)
 
 void SimpleWindow::start_extract(const QString& archive)
 {
-    const auto dest = q_path(satchel_gui::extract_output(fs_path(archive), app_.settings().simple_output_folder, exists));
+    const auto wanted = satchel_gui::extract_output(fs_path(archive), app_.settings().simple_output_folder, exists);
+    const auto staging = q_path(satchel_gui::extract_staging(wanted, exists));
     const auto settings = app_.settings();
-    mine_ << app_.jobs().enqueue(tr("Extracting %1").arg(QFileInfo(archive).fileName()), [archive, dest, settings](JobContext& jc) {
-        return extract_job(jc, archive, dest, settings, {}, false);
+    mine_ << app_.jobs().enqueue(tr("Extracting %1").arg(QFileInfo(archive).fileName()), [archive, staging, wanted, settings](JobContext& jc) {
+        auto o = extract_job(jc, archive, staging, settings, {}, false);
+        if (::exists(fs_path(staging)))
+            o.output = q_path(satchel_gui::finalize_extraction(fs_path(staging), wanted, exists));
+        return o;
     });
 }
 

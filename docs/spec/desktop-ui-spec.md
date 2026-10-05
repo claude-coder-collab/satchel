@@ -41,7 +41,7 @@ Drop files on the window (or the app icon) and the job starts immediately: zips 
 | --- | --- | --- |
 | Compress one item | `<item name>.zip` | Next to the item |
 | Compress several items | `<parent folder name>.zip` | Next to the items |
-| Extract | Folder `<archive name>/` | Next to the archive |
+| Extract | Folder `<archive name>/`, or, when the archive holds exactly one top-level folder, that folder alone with no enclosing folder (numbered if the name is taken) | Next to the archive |
 
 - Existing outputs are never overwritten: the app appends `  2 `, `  3 `… (`Recordings 2.zip`). This is the app naming its own output, not an in-archive collision, so it needs no decision.
 - Output location can be changed in Settings to a fixed folder.
