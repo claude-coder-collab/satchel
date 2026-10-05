@@ -186,6 +186,25 @@ def test_download_every_file_without_a_directory_picker(browser, tmp_path: Path)
     server.shutdown()
 
 
+def test_folder_note_only_without_a_directory_picker(browser) -> None:
+    server, url = serve(True)
+    try:
+        for picker in (True, False):
+            context = browser.new_context(service_workers="block")
+            if not picker:
+                context.add_init_script("delete window.showDirectoryPicker")
+            page = context.new_page()
+            page.goto(url)
+            page.wait_for_selector("body[data-ready=true]", timeout=30000)
+            has_picker = page.evaluate("typeof window.showDirectoryPicker === 'function'")
+            assert page.is_visible("#folder-note") == (not has_picker)
+            if not has_picker:
+                assert "Chromium" in page.inner_text("#folder-note")
+            context.close()
+    finally:
+        server.shutdown()
+
+
 def test_conflict_resolution_ui(page) -> None:
     page.set_input_files("#create-input", [
         {"name": "take1.wav", "mimeType": "audio/wav", "buffer": WAV},
