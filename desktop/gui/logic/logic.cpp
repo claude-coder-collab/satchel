@@ -107,7 +107,7 @@ std::vector<Row> group_rows(const std::vector<ListedEntry>& entries)
     std::map<std::string, std::size_t> group_row;
     for (const auto& e : entries)
     {
-        Row r{ e.name, e.size, e.packed, e.method, e.restores_to, e.mtime, e.directory, { e.index }, {} };
+        Row r{ e.name, e.size, e.packed, e.method, e.restores_to, e.mtime, e.directory, { e.index }, {}, {}, 0, 0 };
         if (!e.group)
         {
             rows.push_back(std::move(r));
@@ -118,7 +118,7 @@ std::vector<Row> group_rows(const std::vector<ListedEntry>& entries)
         {
             const auto slash = e.name.rfind('/');
             const auto folder = slash == std::string::npos ? std::string{} : e.name.substr(0, slash + 1);
-            Row g{ std::format("{}{} — {} channels", folder, e.restores_to, e.channel_count), 0, 0, "FLAC multi-mono", e.restores_to, e.mtime, false, {}, {} };
+            Row g{ std::format("{}{} — {} channels", folder, e.restores_to, e.channel_count), 0, 0, "FLAC multi-mono", e.restores_to, e.mtime, false, {}, {}, folder + e.restores_to, 0, e.channel_count };
             it = group_row.emplace(*e.group, rows.size()).first;
             rows.push_back(std::move(g));
         }
@@ -128,6 +128,8 @@ std::vector<Row> group_rows(const std::vector<ListedEntry>& entries)
         g.mtime = std::max(g.mtime, e.mtime);
         g.entries.push_back(e.index);
         r.method = std::format("FLAC channel {}/{}", e.channel_index, e.channel_count);
+        r.channel_index = e.channel_index;
+        r.channel_count = e.channel_count;
         g.children.push_back(std::move(r));
     }
     for (auto& r : rows)

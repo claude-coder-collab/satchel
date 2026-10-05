@@ -517,8 +517,7 @@ defaults and "Copy as CLI command".
 **Not done yet (desktop):**
 - Windows 11 top-level context-menu entries (sparse MSIX package; needs a signing certificate).
 - An optional Linux previewer plugin (Nautilus/Dolphin).
-- Translations beyond English. A few display strings come from the Qt-free logic library
-  (`savings_text`, multi-mono group labels) and are not translatable yet.
+- Translations beyond English.
 - The per-release manual pass.
 
 **Translations.** `desktop/gui/translations/satchel_en.ts` holds every `tr()` string (English
@@ -527,6 +526,11 @@ with `cmake --build <dir> --target satchel_lupdate`). `lrelease` output is embed
 `satchel_gui_app` under `:/i18n` (`ZP_HAS_TRANSLATIONS` when Qt Linguist tools are found; optional).
 At startup the app installs Qt's own `qtbase_<locale>` and `:/i18n/satchel_<locale>` translators
 for the system locale. Adding a language = adding `satchel_<lang>.ts` to `ts_files`.
+Text the Qt-free logic library describes in English (method names, multi-mono group and member
+labels, savings) is displayed through `desktop/gui/app/labels.{hpp,cpp}`, which formats it with
+`QCoreApplication::translate` (contexts `Method` and `Archive`) from structured fields
+(`Row::group_name`, `channel_index`, `channel_count`); the English strings stay for the logic
+tests and sorting keys.
 
 **Updates.** `desktop/gui/app/updater.hpp`: `Updater::create(automatic)` returns Sparkle 2 on macOS
 (`updater_mac.mm` loads `Contents/Frameworks/Sparkle.framework` with `NSBundle` and drives

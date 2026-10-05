@@ -20,6 +20,7 @@ if(ZP_BUILD_GUI AND Qt6_FOUND)
     add_library(satchel_gui_app STATIC
         app/app.cpp
         app/jobs.cpp
+        app/labels.cpp
         app/settings_store.cpp
         app/archive_model.cpp
         app/dialogs.cpp
