@@ -4,7 +4,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <set>
 
 using namespace satchel_gui;
@@ -42,6 +44,45 @@ TEST_CASE("output naming never overwrites", "[gui]")
     CHECK(extract_output("/r/other.zip", std::nullopt, exists) == fs::path("/r/other"));
     existing.insert("/r/notes.txt");
     CHECK(extract_output("/r/notes.txt.zip", std::nullopt, exists) == fs::path("/r/notes.txt 2"));
+}
+
+TEST_CASE("a single extracted folder loses its enclosing folder", "[gui]")
+{
+    const auto root = fs::temp_directory_path() / "satchel_finalize_test";
+    fs::remove_all(root);
+    fs::create_directories(root);
+    const auto exists = [](const fs::path& p) { std::error_code ec; return fs::exists(p, ec); };
+    const auto stage = [&](const char* folder, std::initializer_list<const char*> files) {
+        const auto staging = extract_staging(root / folder, exists);
+        for (const auto* f : files)
+        {
+            fs::create_directories((staging / f).parent_path());
+            std::ofstream(staging / f) << "x";
+        }
+        return staging;
+    };
+
+    auto staging = stage("Foo", { "Foo/a.txt", "Foo/sub/b.txt" });
+    CHECK(finalize_extraction(staging, root / "Foo", exists) == root / "Foo");
+    CHECK(fs::exists(root / "Foo" / "a.txt"));
+    CHECK(fs::exists(root / "Foo" / "sub" / "b.txt"));
+    CHECK(!fs::exists(root / "Foo" / "Foo"));
+    CHECK(!fs::exists(staging));
+
+    staging = stage("Foo", { "Foo/c.txt" });
+    CHECK(finalize_extraction(staging, root / "Foo", exists) == root / "Foo 2");
+    CHECK(fs::exists(root / "Foo 2" / "c.txt"));
+    CHECK(fs::exists(root / "Foo" / "a.txt"));
+
+    staging = stage("Mixed", { "one/a.txt", "b.txt" });
+    CHECK(finalize_extraction(staging, root / "Mixed", exists) == root / "Mixed");
+    CHECK(fs::exists(root / "Mixed" / "one" / "a.txt"));
+    CHECK(fs::exists(root / "Mixed" / "b.txt"));
+
+    staging = stage("Loose", { "only.txt" });
+    CHECK(finalize_extraction(staging, root / "Loose", exists) == root / "Loose");
+    CHECK(fs::exists(root / "Loose" / "only.txt"));
+    fs::remove_all(root);
 }
 
 TEST_CASE("multi-mono members become one row", "[gui]")

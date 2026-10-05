@@ -49,6 +49,13 @@ std::filesystem::path unique_path(const std::filesystem::path& wanted, const Exi
 std::filesystem::path compress_output(const std::vector<std::filesystem::path>& items, const std::optional<std::filesystem::path>& output_folder, const ExistsFn& exists);
 // Folder "<archive name>/" next to the archive (or in output_folder).
 std::filesystem::path extract_output(const std::filesystem::path& archive, const std::optional<std::filesystem::path>& output_folder, const ExistsFn& exists);
+// Where to extract before finalize_extraction: a hidden sibling of `wanted_folder`.
+std::filesystem::path extract_staging(const std::filesystem::path& wanted_folder, const ExistsFn& exists);
+// Moves a finished extraction out of `staging`. When it holds exactly one folder, that folder is
+// moved next to `wanted_folder` under its own name (no enclosing folder); otherwise `staging`
+// itself becomes `wanted_folder`. Names are made unique; returns the final path, or `staging`
+// if it could not be moved.
+std::filesystem::path finalize_extraction(const std::filesystem::path& staging, const std::filesystem::path& wanted_folder, const ExistsFn& exists);
 
 // ---- Archive browser rows --------------------------------------------------------------------
 
