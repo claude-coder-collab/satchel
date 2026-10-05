@@ -150,6 +150,13 @@ Result<PcmLayout> layout_from_records(const std::vector<ForeignRecord>& records,
     return fail(Status::CorruptArchive, "foreign metadata does not describe the FLAC audio");
 }
 
+namespace
+{
+
+constexpr std::size_t mono_round_samples = std::size_t{ 32 } * block_size;
+
+}
+
 VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open, const RestoreSink& sink, std::size_t threads)
 {
     auto order = order_members(headers);
@@ -244,7 +251,6 @@ VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open,
         std::uint64_t written = 0;
         if (mono && threads > 1)
         {
-            constexpr std::size_t round_samples = 32 * 4096;
             const std::size_t members = decoders.size();
             std::vector<std::vector<std::int32_t>> pending(members);
             std::vector<char> ended(members, 0);
@@ -254,7 +260,7 @@ VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open,
                 const auto worker = [&](std::size_t first) {
                     for (std::size_t c = first; c < members; c += threads)
                     {
-                        while (!ended[c] && pending[c].size() < round_samples)
+                        while (!ended[c] && pending[c].size() < mono_round_samples)
                         {
                             auto block = decoders[c]->next();
                             if (!block)
