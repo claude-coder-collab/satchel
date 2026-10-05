@@ -40,6 +40,7 @@
 #include <QMimeData>
 #include <QProgressBar>
 #include <QProgressDialog>
+#include <QSaveFile>
 #include <QSettings>
 #include <QSplitter>
 #include <QStackedWidget>
@@ -505,18 +506,39 @@ void MainWindow::update_inspector()
     inspector_->setHtml(html);
 }
 
+void MainWindow::create_blank_archive()
+{
+    auto path = QFileDialog::getSaveFileName(this, tr("Create blank archive"), {}, tr("Zip archives (*.zip)"));
+    if (path.isEmpty())
+        return;
+    if (QFileInfo(path).suffix().isEmpty())
+        path += ".zip";
+    static constexpr char empty_zip[22] = { 'P', 'K', 5, 6 };
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(empty_zip, sizeof empty_zip) != sizeof empty_zip || !file.commit())
+    {
+        QMessageBox::critical(this, tr("Cannot create archive"), tr("%1\n\n%2").arg(path, file.errorString()));
+        return;
+    }
+    open_archive(path);
+}
+
 void MainWindow::new_archive(const QStringList& given)
 {
     QStringList inputs = given;
     if (inputs.isEmpty())
     {
-        QMessageBox ask(QMessageBox::Question, tr("New archive"), tr("What do you want to compress?"), QMessageBox::Cancel, this);
-        auto* files = ask.addButton(tr("Files…"), QMessageBox::AcceptRole);
-        auto* folder = ask.addButton(tr("Folder…"), QMessageBox::AcceptRole);
+        QMessageBox ask(QMessageBox::Question, tr("New archive"), tr("How do you want to start the new archive?"), QMessageBox::Cancel, this);
+        ask.setInformativeText(tr("Blank archive: create an empty archive, then add files to it.\nCompress a folder: choose a folder and review how it will be compressed."));
+        auto* blank = ask.addButton(tr("Blank Archive…"), QMessageBox::AcceptRole);
+        auto* folder = ask.addButton(tr("Compress a Folder…"), QMessageBox::AcceptRole);
         ask.exec();
-        if (ask.clickedButton() == files)
-            inputs = QFileDialog::getOpenFileNames(this, tr("Choose files for the new archive"));
-        else if (ask.clickedButton() == folder)
+        if (ask.clickedButton() == blank)
+        {
+            create_blank_archive();
+            return;
+        }
+        if (ask.clickedButton() == folder)
         {
             const auto dir = QFileDialog::getExistingDirectory(this, tr("Choose a folder to compress"));
             if (!dir.isEmpty())
