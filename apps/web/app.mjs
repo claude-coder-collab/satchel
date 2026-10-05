@@ -66,6 +66,10 @@ function showResult(text, kind = 'ok', extra = []) {
     box.replaceChildren(el('div', { class: kind }, text, ...extra));
 }
 
+if (!window.showDirectoryPicker) {
+    $('folder-note').hidden = false;
+}
+
 function fatal(message) {
     const f = $('fatal');
     f.hidden = false;

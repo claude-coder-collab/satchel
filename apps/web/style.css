@@ -61,6 +61,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .badge { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--ok-bg); color: var(--ok); font-size: 12px; }
 .banner { margin-top: 16px; }
 .banner > div, .banner.error, .banner.ok { padding: 10px 14px; border-radius: 8px; }
+.banner.note { padding: 10px 14px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
 .banner.error { background: var(--error-bg); color: var(--error); }
 .banner.ok { background: var(--ok-bg); color: var(--ok); }
 .issue { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 8px 0; }
