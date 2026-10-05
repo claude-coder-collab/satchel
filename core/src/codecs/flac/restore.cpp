@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cstring>
 #include <format>
+#include <optional>
+#include <thread>
 
 namespace zp::flac
 {
@@ -148,6 +150,13 @@ Result<PcmLayout> layout_from_records(const std::vector<ForeignRecord>& records,
     return fail(Status::CorruptArchive, "foreign metadata does not describe the FLAC audio");
 }
 
+namespace
+{
+
+constexpr std::size_t mono_round_samples = std::size_t{ 32 } * block_size;
+
+}
+
 VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open, const RestoreSink& sink, std::size_t threads)
 {
     auto order = order_members(headers);
@@ -240,6 +249,72 @@ VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open,
             return {};
         }
         std::uint64_t written = 0;
+        if (mono && threads > 1)
+        {
+            const std::size_t members = decoders.size();
+            std::vector<std::vector<std::int32_t>> pending(members);
+            std::vector<char> ended(members, 0);
+            std::vector<std::optional<Error>> errors(members);
+            while (true)
+            {
+                const auto worker = [&](std::size_t first) {
+                    for (std::size_t c = first; c < members; c += threads)
+                    {
+                        while (!ended[c] && pending[c].size() < mono_round_samples)
+                        {
+                            auto block = decoders[c]->next();
+                            if (!block)
+                            {
+                                errors[c] = block.error();
+                                ended[c] = 1;
+                                break;
+                            }
+                            if (block->empty())
+                                ended[c] = 1;
+                            pending[c].insert(pending[c].end(), block->begin(), block->end());
+                        }
+                    }
+                };
+                std::vector<std::thread> pool;
+                pool.reserve(std::min(threads, members));
+                for (std::size_t t = 0; t < std::min(threads, members); ++t)
+                    pool.emplace_back(worker, t);
+                for (auto& t : pool)
+                    t.join();
+                for (const auto& e : errors)
+                {
+                    if (e)
+                        return std::unexpected(*e);
+                }
+                const auto frames = std::ranges::min(pending, {}, &std::vector<std::int32_t>::size).size();
+                if (frames == 0)
+                {
+                    if (std::ranges::any_of(pending, [](const auto& p) { return !p.empty(); }))
+                        return fail(Status::IncompleteGroup, "multi-mono members are not aligned");
+                    break;
+                }
+                interleaved.resize(frames * channels);
+                for (std::size_t c = 0; c < members; ++c)
+                {
+                    for (std::size_t f = 0; f < frames; ++f)
+                        interleaved[f * channels + c] = pending[c][f];
+                    pending[c].erase(pending[c].begin(), pending[c].begin() + static_cast<std::ptrdiff_t>(frames));
+                }
+                out.resize(frames * channels * width);
+                encode_samples(*layout, interleaved, out);
+                if (auto r = emit(out); !r)
+                    return r;
+                written += frames;
+            }
+            if (written != info.total_samples)
+                return fail(Status::CorruptArchive, "FLAC stream has a different length than its STREAMINFO");
+            for (auto& d : decoders)
+            {
+                if (auto r = d->finish(); !r)
+                    return r;
+            }
+            return {};
+        }
         while (true)
         {
             std::size_t frames = 0;

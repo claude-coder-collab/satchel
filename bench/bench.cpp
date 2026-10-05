@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Copyright (c) 2026 Venn Audio Ltd.
 // Throughput benchmark (zip design doc 8.6): hashing, building and extracting generated audio,
-// text and random data. Usage: zp_bench [--size MiB] [--threads N] [--json]
+// text and random data, with 1 and all hardware threads (or only --threads N).
+// Usage: zp_bench [--size MiB] [--threads N] [--case TEXT] [--json]
 #include "common/bytes.hpp"
 #include "crypto/hash.hpp"
 #include "io/input_source.hpp"
@@ -41,6 +42,8 @@ struct Options
     std::size_t size_mib = 256;
     int threads = 0;
     bool json = false;
+    bool explicit_threads = false;
+    std::string only;
 };
 
 struct Row
@@ -61,9 +64,8 @@ double seconds(F&& f)
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
-std::vector<std::uint8_t> wav_24bit_stereo(std::size_t bytes)
+std::vector<std::uint8_t> wav_24bit(std::size_t bytes, std::uint16_t channels)
 {
-    constexpr std::uint16_t channels = 2;
     constexpr std::uint32_t rate = 48000;
     const std::size_t frames = bytes / (3 * channels);
     ByteWriter w;
@@ -130,7 +132,7 @@ std::vector<std::uint8_t> random(std::size_t bytes)
 
 double hash_mib_s(const std::vector<std::uint8_t>& data, bool sha)
 {
-    (void)Sha256::of(std::span(data).first(std::min<std::size_t>(data.size(), 1 << 20)));
+    (void) Sha256::of(std::span(data).first(std::min<std::size_t>(data.size(), 1 << 20)));
     const auto t = seconds([&] {
         if (sha)
             (void) Sha256::of(data);
@@ -193,11 +195,16 @@ Options parse(int argc, char** argv)
             o.json = true;
         else if (a == "--size" && i + 1 < argc)
             o.size_mib = static_cast<std::size_t>(std::strtoul(argv[++i], nullptr, 10));
+        else if (a == "--case" && i + 1 < argc)
+            o.only = argv[++i];
         else if (a == "--threads" && i + 1 < argc)
+        {
             o.threads = std::atoi(argv[++i]);
+            o.explicit_threads = true;
+        }
         else
         {
-            std::println(stderr, "usage: zp_bench [--size MiB] [--threads N] [--json]");
+            std::println(stderr, "usage: zp_bench [--size MiB] [--threads N] [--case TEXT] [--json]");
             std::exit(2);
         }
     }
@@ -212,7 +219,8 @@ int main(int argc, char** argv)
 {
     const auto opt = parse(argc, argv);
     const auto bytes = opt.size_mib * 1024 * 1024;
-    const auto audio = wav_24bit_stereo(bytes);
+    const auto audio = wav_24bit(bytes, 2);
+    const auto multitrack = wav_24bit(bytes, 16);
     const auto prose = text(bytes);
     const auto noise = random(bytes);
 
@@ -220,16 +228,22 @@ int main(int argc, char** argv)
     const auto md5 = hash_mib_s(audio, false);
 
     std::vector<Row> rows;
-    for (const int threads : { 1, opt.threads })
+    const auto add = [&](const std::string& name, const std::string& file, const std::vector<std::uint8_t>& data, PlannerOptions planner, int threads) {
+        if (opt.only.empty() || name.find(opt.only) != std::string::npos)
+            rows.push_back(run(name, file, data, planner, threads));
+    };
+    std::vector<int> thread_counts{ opt.threads };
+    if (!opt.explicit_threads && opt.threads > 1)
+        thread_counts.insert(thread_counts.begin(), 1);
+    for (const int threads : thread_counts)
     {
-        rows.push_back(run("audio FLAC 5", "take.wav", audio, { .flac_enabled = true, .deflate_level = 6, .flac_level = 5 }, threads));
-        rows.push_back(run("audio FLAC 0", "take.wav", audio, { .flac_enabled = true, .deflate_level = 6, .flac_level = 0 }, threads));
-        rows.push_back(run("audio deflate 6", "take.wav", audio, { .flac_enabled = false, .deflate_level = 6, .flac_level = 5 }, threads));
-        rows.push_back(run("text deflate 6", "notes.txt", prose, {}, threads));
-        rows.push_back(run("text deflate 1", "notes.txt", prose, { .flac_enabled = true, .deflate_level = 1, .flac_level = 5 }, threads));
-        rows.push_back(run("random (stored)", "noise.bin", noise, {}, threads));
-        if (opt.threads == 1)
-            break;
+        add("audio FLAC 5", "take.wav", audio, { .flac_enabled = true, .deflate_level = 6, .flac_level = 5 }, threads);
+        add("audio FLAC 0", "take.wav", audio, { .flac_enabled = true, .deflate_level = 6, .flac_level = 0 }, threads);
+        add("16-ch multi-mono", "poly.wav", multitrack, {}, threads);
+        add("audio deflate 6", "take.wav", audio, { .flac_enabled = false, .deflate_level = 6, .flac_level = 5 }, threads);
+        add("text deflate 6", "notes.txt", prose, {}, threads);
+        add("text deflate 1", "notes.txt", prose, { .flac_enabled = true, .deflate_level = 1, .flac_level = 5 }, threads);
+        add("random (stored)", "noise.bin", noise, {}, threads);
     }
 
     double flac_best = 0;

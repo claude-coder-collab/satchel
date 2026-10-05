@@ -21,6 +21,14 @@ using AppId = std::array<std::uint8_t, 4>;
 
 inline constexpr std::uint32_t block_size = 4096;
 inline constexpr std::uint32_t blocks_per_segment = 64;
+// Blocks per parallel encoding segment for a source with `channels` channels: 64 up to stereo,
+// fewer for wider sources (at least 4) so segments stay a few MB and several fit in the memory
+// budget. Frames are encoded independently, so the output does not depend on it.
+constexpr std::uint32_t segment_blocks(std::uint32_t channels)
+{
+    const auto blocks = blocks_per_segment * 2 / (channels < 2 ? 2 : channels);
+    return blocks < 4 ? 4 : blocks;
+}
 inline constexpr std::uint32_t max_block_length = (1u << 24) - 1;
 
 enum class BlockType : std::uint8_t {
