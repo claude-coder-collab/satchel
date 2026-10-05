@@ -16,7 +16,7 @@ jobs:
   cla:
     runs-on: ubuntu-24.04
     if: >-
-      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'pull_request_target' && github.event.pull_request.user.login != 'claude-coder-collab') ||
       github.event.comment.body == 'recheck' ||
       github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
     steps:

@@ -2,7 +2,10 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "pipeline/context.hpp"
 
+#include "codecs/codec.hpp"
+
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <mutex>
 #include <thread>
@@ -127,6 +130,11 @@ Context::Context(int threads, std::uint64_t memory_budget) :
     workers_(resolve_threads(threads)),
     services_(3)
 {
+    static std::once_flag warmed;
+    std::call_once(warmed, [] {
+        const std::array<std::uint8_t, 1> byte{};
+        (void) crc32_update(0, byte);
+    });
 }
 
 }
