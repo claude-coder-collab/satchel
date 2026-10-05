@@ -758,4 +758,10 @@ bots are allow-listed).
   `flac` tool and ffmpeg.
 - Browser tests also run on emulated phones: `SATCHEL_DEVICES="iPhone 15:webkit,Pixel 7:chromium"`
   (Playwright device descriptors; weekly). Real iOS/Android devices remain a manual check.
+- Fuzzing (`fuzz` preset, libFuzzer + ASan/UBSan, `tests/fuzz`): `fuzz_archive` (open, plan and
+  verify an arbitrary archive, 2 threads, so single-entry FLAC archives take the parallel restore
+  path), `fuzz_pcm` (container scanner and tag reader), `fuzz_flac` (a standalone FLAC file: the
+  frame splitter, then `restore` with 1 and 3 threads, output capped at 64 MiB). Seeds come from
+  `tests/fuzz/make_seeds.py` plus small FLAC files and a one-FLAC archive made by the CLI
+  (`tests/fuzz/seeds`). The weekly `fuzz` job runs each for 15 minutes.
 - Sanitizers: `clang-asan` and `clang-tsan` presets. clang-tidy: `.clang-tidy` at the root.

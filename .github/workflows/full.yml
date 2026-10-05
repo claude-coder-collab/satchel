@@ -85,12 +85,15 @@ jobs:
           cmake --build build/fuzz --config Debug
       - name: Seed corpora
         run: |
-          mkdir -p corpus/archive corpus/pcm
+          mkdir -p corpus/archive corpus/pcm corpus/flac
           python3 tests/fuzz/make_seeds.py corpus
+          cp tests/fuzz/seeds/flac/* corpus/flac/
+          cp tests/fuzz/seeds/archive/* corpus/archive/
       - name: Fuzz
         run: |
           build/fuzz/tests/fuzz/Debug/fuzz_archive -max_total_time=900 -rss_limit_mb=4096 -timeout=30 corpus/archive
           build/fuzz/tests/fuzz/Debug/fuzz_pcm -max_total_time=900 -rss_limit_mb=4096 -timeout=30 -max_len=200000 corpus/pcm
+          build/fuzz/tests/fuzz/Debug/fuzz_flac -max_total_time=900 -rss_limit_mb=4096 -timeout=30 -max_len=100000 corpus/flac
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
