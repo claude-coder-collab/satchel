@@ -202,6 +202,7 @@ Result<std::uint64_t> decode_parallel(IChunkedStream& frames, const StreamInfo& 
     });
 
     std::vector<std::thread> workers;
+    workers.reserve(threads);
     for (std::size_t t = 0; t < threads; ++t)
     {
         workers.emplace_back([&] {
