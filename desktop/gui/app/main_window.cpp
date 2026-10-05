@@ -199,6 +199,7 @@ void MainWindow::build_ui()
 
     tree_action_ = action(tr("Tree View"), QKeySequence(), [this] { model_->set_tree(tree_action_->isChecked()); });
     tree_action_->setCheckable(true);
+    tree_action_->setChecked(true);
     auto* view_menu = menuBar()->addMenu(tr("&View"));
     view_menu->addAction(tree_action_);
     view_menu->addAction(action(tr("Switch to Simple Mode"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [this] { app_.toggle_mode(); }));
