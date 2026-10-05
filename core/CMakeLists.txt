@@ -13,6 +13,7 @@ add_library(zp_core STATIC
     src/codecs/flac/flac_file.cpp
     src/codecs/flac/flac_format.cpp
     src/codecs/flac/restore.cpp
+    src/codecs/flac/parallel_decode.cpp
     src/codecs/pcm/pcm_container.cpp
     src/codecs/pcm/tags.cpp
     src/crypto/hash.cpp

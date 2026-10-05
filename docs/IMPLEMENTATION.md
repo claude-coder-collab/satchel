@@ -590,8 +590,8 @@ Results with 256 MiB inputs (MiB/s; build = input bytes per second; Apple M-seri
 
 | Case | Build, 1 thread | Build, 8 threads | Extract | Size |
 |---|---|---|---|---|
-| audio, FLAC 5 | 127 | 496 | 238 | 59.7% |
-| audio, FLAC 0 | 152 | 521 | 272 | 74.2% |
+| audio, FLAC 5 | 127 | 370–496 | 250 (1 thread), 980 (8) | 59.7% |
+| audio, FLAC 0 | 152 | 430–521 | 260 (1 thread), 970 (8) | 74.2% |
 | text, deflate 6 | 54 | 191–308 | 1040–1170 | 18.2% |
 | text, deflate 1 | 294–333 | 1420–1800 | 720 | 36.1% |
 | random (stored) | 1460–2030 | 2480–2710 | 5800–6900 | 100% |
@@ -604,8 +604,21 @@ WASM in Node (same machine, 8 threads): portable SHA-256 190 MiB/s, MD5 150 MiB/
 at about 170 MiB/s, capped by MD5; extraction of FLAC about 110 MiB/s (single-threaded decode).
 FLAC still beats deflate on audio (deflate stores this audio: it saves under 2%).
 
-Known limits: a single FLAC entry restores on one thread (decode-bound, about 240 MiB/s natively);
-several entries restore in parallel. WASM MD5 is the cap for browser FLAC builds.
+**Parallel FLAC restore.** `codecs/flac/parallel_decode.{hpp,cpp}`: when an extraction has a single
+file, `flac::restore(..., threads = context threads)` decodes a single-stream FLAC in parallel
+(not multi-mono, not in WASM, only with a project block). A reader thread reads the stored FLAC
+past its metadata and `FrameSplitter` cuts it into frames: a boundary is a frame header with a
+valid CRC-8, the next frame number and the stream's sample-rate code and sample-size bits (the
+first frame must be number 0). Batches of 64 frames are decoded on worker threads by independent
+libFLAC decoders fed a synthetic `fLaC` + STREAMINFO (total samples and MD5 zeroed) header, and
+converted to container bytes there; the calling thread emits batches in order, hashing SHA-256
+and writing to the sink. libFLAC checks each frame's CRC-16, so a false boundary fails the
+restore instead of producing wrong output; the restored file is still checked against SHA-256
+and the entry CRC-32. At most 2 × threads batches are in flight. Single 24-bit stereo file:
+about 250 MiB/s on one thread, about 980 MiB/s on 8 (was 240 at any thread count).
+
+Known limits: multi-mono groups restore on one thread per group. WASM MD5 is the cap for
+browser FLAC builds.
 
 ### 4.17 Previews and OS integration (desktop UI spec, "OS integration")
 

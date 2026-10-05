@@ -320,6 +320,11 @@ ExtractResult ArchiveExtractor::execute(const ExtractionPlan& plan, ProgressSink
     TaskCounter tasks;
     std::size_t written = 0;
 
+#ifdef __EMSCRIPTEN__
+    const std::size_t restore_threads = 1;
+#else
+    const std::size_t restore_threads = files.size() == 1 ? context_.thread_count() : 1;
+#endif
     for (const auto* item : files)
     {
         tasks.add();
@@ -363,7 +368,7 @@ ExtractResult ArchiveExtractor::execute(const ExtractionPlan& plan, ProgressSink
                         return fail(Status::Cancelled, "cancelled");
                     return (*out)->write(bytes);
                 };
-                if (auto r = flac::restore(headers, opener, sink); !r)
+                if (auto r = flac::restore(headers, opener, sink, restore_threads); !r)
                     return r;
                 return (*out)->commit(e.mtime, e.unix_mode);
             };
