@@ -199,7 +199,7 @@ def test_folder_note_only_without_a_directory_picker(browser) -> None:
             has_picker = page.evaluate("typeof window.showDirectoryPicker === 'function'")
             assert page.is_visible("#folder-note") == (not has_picker)
             if not has_picker:
-                assert "Chrome" in page.inner_text("#folder-note")
+                assert "Chromium" in page.inner_text("#folder-note")
             context.close()
     finally:
         server.shutdown()
