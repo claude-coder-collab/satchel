@@ -8,7 +8,6 @@
 #include "crypto/hash.hpp"
 #include "io/stream.hpp"
 
-#include <array>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -17,6 +16,7 @@
 #include <mutex>
 #include <optional>
 #include <span>
+#include <thread>
 #include <vector>
 
 namespace zp::flac
@@ -62,42 +62,62 @@ struct Hashes
 class SourceHasher
 {
 public:
-    SourceHasher(const PcmLayout& layout, bool per_channel);
+    // per_channel: one MD5 per channel (multi-mono), split into `md5_groups` groups of channels
+    // that can be hashed on separate threads.
+    SourceHasher(const PcmLayout& layout, bool per_channel, std::size_t md5_groups = 1);
     void update(std::span<const std::uint8_t> chunk);
-    // The two halves of update(); they touch disjoint state, so two threads may run one each.
+    // The parts of update(): SHA-256, and the MD5s of one channel group. They touch disjoint
+    // state, so each may run on its own thread.
     void update_sha256(std::span<const std::uint8_t> chunk);
-    void update_md5(std::span<const std::uint8_t> chunk);
+    void update_md5(std::span<const std::uint8_t> chunk, std::size_t group = 0);
+    [[nodiscard]] std::size_t md5_groups() const { return groups_.size(); }
     Hashes finish();
 
 private:
-    void audio(std::span<const std::uint8_t> bytes);
+    struct Group
+    {
+        std::size_t first_channel = 0;
+        std::size_t channels = 0;
+        std::uint64_t position = 0;
+        std::vector<std::uint8_t> carry;
+        std::vector<std::uint8_t> scratch;
+        std::vector<std::vector<std::uint8_t>> channel_scratch;
+    };
+    void audio(Group& g, std::span<const std::uint8_t> bytes);
 
     const PcmLayout& layout_;
     bool per_channel_;
-    std::uint64_t position_ = 0;
     Sha256 sha_;
     std::vector<Md5> md5_;
-    std::vector<std::uint8_t> carry_;
-    std::vector<std::uint8_t> scratch_;
-    std::vector<std::vector<std::uint8_t>> channel_scratch_;
+    std::vector<Group> groups_;
 };
 
-// Runs a SourceHasher on two threads (SHA-256 and MD5 lanes); chunks are queued in order and
-// shared by both lanes.
+// Runs a SourceHasher on several threads ("lanes") that read one queue of chunks in order: lane 0
+// is SHA-256, lanes 1.. hash MD5 channel groups. Lanes 0 and 1 are run by the caller (service
+// threads); a multi-mono source with many channels gets more MD5 lanes, run on threads owned by
+// the job so they never wait for a busy pool.
 class HashJob
 {
 public:
     static constexpr std::size_t max_queued = 16;
-    enum class Lane : std::uint8_t { Sha256,
-        Md5 };
 
     HashJob(const PcmLayout& layout, bool per_channel);
+    HashJob(const HashJob&) = delete;
+    HashJob& operator=(const HashJob&) = delete;
+    HashJob(HashJob&&) = delete;
+    HashJob& operator=(HashJob&&) = delete;
+    ~HashJob();
+
     // Blocks while a lane has max_queued chunks waiting.
     void push(std::shared_ptr<const std::vector<std::uint8_t>> chunk);
     void close();
-    // Body of one hasher thread; both lanes must run.
-    void run(Lane lane);
+    // Body of lane 0 or 1 (the caller runs both); the job runs any further lanes itself.
+    void run(std::size_t lane);
     Hashes wait();
+
+    // MD5 channel groups for a source: more than one only for multi-mono with at least 8 channels
+    // (at most 4, never under WebAssembly).
+    static std::size_t md5_groups_for(const PcmLayout& layout, bool per_channel);
 
 private:
     SourceHasher hasher_;
@@ -106,10 +126,11 @@ private:
     std::deque<std::shared_ptr<const std::vector<std::uint8_t>>> queue_;
     std::uint64_t first_ = 0;
     std::uint64_t pushed_ = 0;
-    std::array<std::uint64_t, 2> next_{};
+    std::vector<std::uint64_t> next_;
     bool closed_ = false;
-    int lanes_done_ = 0;
+    std::size_t lanes_done_ = 0;
     std::optional<Hashes> result_;
+    std::vector<std::thread> extra_lanes_;
 };
 
 }

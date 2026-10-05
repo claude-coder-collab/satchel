@@ -316,7 +316,7 @@ void Reader::flac(std::size_t i, IChunkedStream& stream)
     {
         auto& job = job_;
         state->hasher = std::make_shared<flac::HashJob>(layout, mono);
-        for (const auto lane : { flac::HashJob::Lane::Sha256, flac::HashJob::Lane::Md5 })
+        for (const std::size_t lane : { std::size_t{ 0 }, std::size_t{ 1 } })
         {
             job.tasks.add();
             job.context.services().submit([hasher = state->hasher, &job, lane] {

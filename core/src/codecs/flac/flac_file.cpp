@@ -85,19 +85,29 @@ std::uint64_t encoded_size_bound(const PcmLayout& layout, std::uint64_t frames, 
     return frames * channels_per_stream * layout.bytes_per_sample + blocks * (32ull + 2ull * channels_per_stream);
 }
 
-SourceHasher::SourceHasher(const PcmLayout& layout, bool per_channel) :
+SourceHasher::SourceHasher(const PcmLayout& layout, bool per_channel, std::size_t md5_groups) :
     layout_(layout),
     per_channel_(per_channel),
     md5_(per_channel ? layout.channels : 1)
 {
-    if (per_channel_)
-        channel_scratch_.resize(layout.channels);
+    const std::size_t channels = per_channel ? layout.channels : 1;
+    const std::size_t groups = std::clamp<std::size_t>(md5_groups, 1, channels);
+    for (std::size_t g = 0; g < groups; ++g)
+    {
+        Group group;
+        group.first_channel = channels * g / groups;
+        group.channels = channels * (g + 1) / groups - group.first_channel;
+        if (per_channel_)
+            group.channel_scratch.resize(group.channels);
+        groups_.push_back(std::move(group));
+    }
 }
 
 void SourceHasher::update(std::span<const std::uint8_t> chunk)
 {
     update_sha256(chunk);
-    update_md5(chunk);
+    for (std::size_t g = 0; g < groups_.size(); ++g)
+        update_md5(chunk, g);
 }
 
 void SourceHasher::update_sha256(std::span<const std::uint8_t> chunk)
@@ -105,52 +115,52 @@ void SourceHasher::update_sha256(std::span<const std::uint8_t> chunk)
     sha_.update(chunk);
 }
 
-void SourceHasher::update_md5(std::span<const std::uint8_t> chunk)
+void SourceHasher::update_md5(std::span<const std::uint8_t> chunk, std::size_t group)
 {
-    const auto start = position_;
-    const auto end = position_ + chunk.size();
-    position_ = end;
+    auto& g = groups_.at(group);
+    const auto start = g.position;
+    const auto end = g.position + chunk.size();
+    g.position = end;
     const auto a0 = std::max(start, layout_.audio_offset);
     const auto a1 = std::min(end, layout_.audio_offset + layout_.audio_size);
     if (a0 < a1)
-        audio(chunk.subspan(static_cast<std::size_t>(a0 - start), static_cast<std::size_t>(a1 - a0)));
+        audio(g, chunk.subspan(static_cast<std::size_t>(a0 - start), static_cast<std::size_t>(a1 - a0)));
 }
 
-void SourceHasher::audio(std::span<const std::uint8_t> bytes)
+void SourceHasher::audio(Group& g, std::span<const std::uint8_t> bytes)
 {
     const std::size_t unit = per_channel_ ? layout_.frame_bytes() : layout_.bytes_per_sample;
     std::span<const std::uint8_t> data = bytes;
     std::vector<std::uint8_t> joined;
-    if (!carry_.empty())
+    if (!g.carry.empty())
     {
-        joined = carry_;
+        joined = g.carry;
         joined.insert(joined.end(), bytes.begin(), bytes.end());
-        carry_.clear();
+        g.carry.clear();
         data = joined;
     }
     const auto whole = data.size() - data.size() % unit;
     if (whole < data.size())
-        carry_.assign(data.begin() + static_cast<std::ptrdiff_t>(whole), data.end());
+        g.carry.assign(data.begin() + static_cast<std::ptrdiff_t>(whole), data.end());
     data = data.first(whole);
     if (data.empty())
         return;
-    const auto canonical = md5_bytes(layout_, data, scratch_);
+    const auto canonical = md5_bytes(layout_, data, g.scratch);
     if (!per_channel_)
     {
         md5_[0].update(canonical);
         return;
     }
     const auto width = layout_.bytes_per_sample;
-    const auto channels = layout_.channels;
     const auto frames = canonical.size() / layout_.frame_bytes();
-    for (auto& s : channel_scratch_)
+    for (auto& s : g.channel_scratch)
         s.resize(frames * width);
     const auto split = [&]<std::size_t W>() {
         const auto stride = layout_.frame_bytes();
-        for (std::size_t c = 0; c < channels; ++c)
+        for (std::size_t k = 0; k < g.channels; ++k)
         {
-            const auto* src = canonical.data() + c * W;
-            auto* dst = channel_scratch_[c].data();
+            const auto* src = canonical.data() + (g.first_channel + k) * W;
+            auto* dst = g.channel_scratch[k].data();
             for (std::size_t f = 0; f < frames; ++f, src += stride, dst += W)
                 std::memcpy(dst, src, W);
         }
@@ -170,8 +180,8 @@ void SourceHasher::audio(std::span<const std::uint8_t> bytes)
             split.template operator()<4>();
             break;
     }
-    for (std::size_t c = 0; c < channels; ++c)
-        md5_[c].update(channel_scratch_[c]);
+    for (std::size_t k = 0; k < g.channels; ++k)
+        md5_[g.first_channel + k].update(g.channel_scratch[k]);
 }
 
 Hashes SourceHasher::finish()
@@ -183,15 +193,38 @@ Hashes SourceHasher::finish()
     return h;
 }
 
-HashJob::HashJob(const PcmLayout& layout, bool per_channel) :
-    hasher_(layout, per_channel)
+std::size_t HashJob::md5_groups_for(const PcmLayout& layout, bool per_channel)
 {
+#ifdef __EMSCRIPTEN__
+    (void) layout;
+    (void) per_channel;
+    return 1;
+#else
+    if (!per_channel || layout.channels < 8)
+        return 1;
+    return std::min<std::size_t>(4, layout.channels / 4);
+#endif
+}
+
+HashJob::HashJob(const PcmLayout& layout, bool per_channel) :
+    hasher_(layout, per_channel, md5_groups_for(layout, per_channel)),
+    next_(1 + hasher_.md5_groups(), 0)
+{
+    for (std::size_t lane = 2; lane < next_.size(); ++lane)
+        extra_lanes_.emplace_back([this, lane] { run(lane); });
+}
+
+HashJob::~HashJob()
+{
+    close();
+    for (auto& t : extra_lanes_)
+        t.join();
 }
 
 void HashJob::push(std::shared_ptr<const std::vector<std::uint8_t>> chunk)
 {
     std::unique_lock lock(mutex_);
-    cv_.wait(lock, [this] { return pushed_ - std::min(next_[0], next_[1]) < max_queued; });
+    cv_.wait(lock, [this] { return pushed_ - std::ranges::min(next_) < max_queued; });
     queue_.push_back(std::move(chunk));
     ++pushed_;
     cv_.notify_all();
@@ -204,26 +237,25 @@ void HashJob::close()
     cv_.notify_all();
 }
 
-void HashJob::run(Lane lane)
+void HashJob::run(std::size_t lane)
 {
-    const auto l = static_cast<std::size_t>(lane);
     while (true)
     {
         std::shared_ptr<const std::vector<std::uint8_t>> chunk;
         {
             std::unique_lock lock(mutex_);
-            cv_.wait(lock, [&] { return closed_ || next_[l] < pushed_; });
-            if (next_[l] == pushed_)
+            cv_.wait(lock, [&] { return closed_ || next_[lane] < pushed_; });
+            if (next_[lane] == pushed_)
                 break;
-            chunk = queue_[static_cast<std::size_t>(next_[l] - first_)];
+            chunk = queue_[static_cast<std::size_t>(next_[lane] - first_)];
         }
-        if (lane == Lane::Sha256)
+        if (lane == 0)
             hasher_.update_sha256(*chunk);
         else
-            hasher_.update_md5(*chunk);
+            hasher_.update_md5(*chunk, lane - 1);
         std::lock_guard lock(mutex_);
-        ++next_[l];
-        while (first_ < std::min(next_[0], next_[1]))
+        ++next_[lane];
+        while (first_ < std::ranges::min(next_))
         {
             queue_.pop_front();
             ++first_;
@@ -231,7 +263,7 @@ void HashJob::run(Lane lane)
         cv_.notify_all();
     }
     std::lock_guard lock(mutex_);
-    if (++lanes_done_ == 2)
+    if (++lanes_done_ == next_.size())
         result_ = hasher_.finish();
     cv_.notify_all();
 }
@@ -239,7 +271,7 @@ void HashJob::run(Lane lane)
 Hashes HashJob::wait()
 {
     std::unique_lock lock(mutex_);
-    cv_.wait(lock, [this] { return lanes_done_ == 2; });
+    cv_.wait(lock, [this] { return lanes_done_ == next_.size(); });
     return result_.value_or(Hashes{});
 }
 
