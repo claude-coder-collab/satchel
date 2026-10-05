@@ -149,6 +149,43 @@ def test_create_then_open_and_restore(page, tmp_path: Path) -> None:
         assert restored.read_bytes() == WAV
 
 
+def test_download_every_file_without_a_directory_picker(browser, tmp_path: Path) -> None:
+    server, url = serve(True)
+    context = browser.new_context(accept_downloads=True, service_workers="block")
+    context.add_init_script("delete window.showDirectoryPicker")
+    page = context.new_page()
+    page.goto(url)
+    page.wait_for_selector("body[data-ready=true]", timeout=30000)
+    page.set_input_files("#create-input", [
+        {"name": "take1.wav", "mimeType": "audio/wav", "buffer": WAV},
+        {"name": "notes.txt", "mimeType": "text/plain", "buffer": b"notes " * 1000},
+    ])
+    page.wait_for_selector("#plan-entries tbody tr")
+    page.click("#build")
+    page.wait_for_selector("#result .ok")
+    with page.expect_download() as built:
+        page.click("#result a[download]")
+    archive = tmp_path / "out.zip"
+    built.value.save_as(archive)
+    page.set_input_files("#open-input", str(archive))
+    page.wait_for_selector("#entries tbody tr")
+    page.click("#extract")
+    page.wait_for_selector("#result button:has-text('Download all')")
+    downloads = []
+    page.on("download", lambda d: downloads.append(d))
+    page.click("#result button:has-text('Download all')")
+    page.wait_for_timeout(2500)
+    saved = {}
+    for d in downloads:
+        target = tmp_path / d.suggested_filename
+        d.save_as(target)
+        saved[d.suggested_filename] = target.read_bytes()
+    assert saved["take1.wav"] == WAV
+    assert saved["notes.txt"] == b"notes " * 1000
+    context.close()
+    server.shutdown()
+
+
 def test_conflict_resolution_ui(page) -> None:
     page.set_input_files("#create-input", [
         {"name": "take1.wav", "mimeType": "audio/wav", "buffer": WAV},

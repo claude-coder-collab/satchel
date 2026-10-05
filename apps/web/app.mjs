@@ -182,6 +182,7 @@ async function extractAll() {
     if (window.showDirectoryPicker) {
         extra.push(' ', el('button', { class: 'primary', onclick: () => saveToFolder(files) }, 'Save to a folder…'));
     } else {
+        extra.push(el('button', { class: 'primary', onclick: () => downloadEach(files) }, `Download all ${files.length} file(s)`), ' ');
         extra.push(el('div', {}, ...files.flatMap(([path, handle]) => [el('a', { href: '#', onclick: async (ev) => {
             ev.preventDefault();
             const f = await handle.getFile();
@@ -193,6 +194,15 @@ async function extractAll() {
         extra.push(el('div', { class: 'warning' }, p));
     }
     showResult(message, failed.length || refused.length ? 'error' : 'ok', extra);
+}
+
+async function downloadEach(files) {
+    for (const [path, handle] of files) {
+        const a = downloadLink(await handle.getFile(), path.split('/').pop());
+        a.click();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        URL.revokeObjectURL(a.href);
+    }
 }
 
 async function saveToFolder(files) {
