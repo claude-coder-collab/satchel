@@ -36,6 +36,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QMimeData>
 #include <QProgressBar>
 #include <QProgressDialog>
@@ -509,7 +510,18 @@ void MainWindow::new_archive(const QStringList& given)
     QStringList inputs = given;
     if (inputs.isEmpty())
     {
-        inputs = QFileDialog::getOpenFileNames(this, tr("Choose files for the new archive"));
+        QMessageBox ask(QMessageBox::Question, tr("New archive"), tr("What do you want to compress?"), QMessageBox::Cancel, this);
+        auto* files = ask.addButton(tr("Files…"), QMessageBox::AcceptRole);
+        auto* folder = ask.addButton(tr("Folder…"), QMessageBox::AcceptRole);
+        ask.exec();
+        if (ask.clickedButton() == files)
+            inputs = QFileDialog::getOpenFileNames(this, tr("Choose files for the new archive"));
+        else if (ask.clickedButton() == folder)
+        {
+            const auto dir = QFileDialog::getExistingDirectory(this, tr("Choose a folder to compress"));
+            if (!dir.isEmpty())
+                inputs << dir;
+        }
         if (inputs.isEmpty())
             return;
     }
