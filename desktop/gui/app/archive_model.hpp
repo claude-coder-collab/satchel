@@ -64,7 +64,7 @@ private:
     std::vector<satchel_gui::Row> rows_;
     std::unique_ptr<Node> root_;
     QHash<int, QString> verification_;
-    bool tree_ = false;
+    bool tree_ = true;
 };
 
 class ArchiveFilter : public QSortFilterProxyModel

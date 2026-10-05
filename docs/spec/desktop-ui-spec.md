@@ -85,7 +85,7 @@ The center pane lists the open archive's entries, read from the central director
 
 - Converted audio carries a "restorable" badge.
 - A multi-mono set is one row (`take2.wav — 16 channels`), expandable to its `_chNN.flac` members. Selecting, extracting, renaming or deleting the row acts on the whole group.
-- Tree view and flat list toggle; sorting on every column; column visibility saved.
+- Tree view (the default) and flat list toggle; sorting on every column; column visibility saved.
 - Search field filters by name; filter chips by method and by "restorable only".
 - Third-party entries the core can't read (unsupported method, symlinks) are shown greyed with the reason as a tooltip.
 - The table model is virtualized, so 100,000+ entries scroll smoothly.
