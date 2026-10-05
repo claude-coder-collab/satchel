@@ -2,6 +2,21 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en" sourcelanguage="en">
 <context>
+    <name>Archive</name>
+    <message>
+        <source>%1 — %2 channels</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 → %2, %3% smaller</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 → %2, %3% larger</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ArchiveModel</name>
     <message>
         <source>This entry uses a compression method or encryption that cannot be read</source>
@@ -195,6 +210,14 @@
     </message>
     <message>
         <source>Switch to Simple Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Check for Updates…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -513,6 +536,45 @@
     </message>
     <message>
         <source>No jobs running</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>Method</name>
+    <message>
+        <source>Store</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Deflate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>FLAC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>FLAC multi-mono</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unsupported</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Symlink</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Other</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>FLAC channel %1/%2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

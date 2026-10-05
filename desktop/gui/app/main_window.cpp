@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "main_window.hpp"
 
+#include "labels.hpp"
+
 #include "updater.hpp"
 
 #include "app.hpp"
@@ -369,10 +371,10 @@ void MainWindow::update_summary()
     const bool ours = zp_reader_get_app_version(reader_.get(), version.data(), version.size()) == ZP_OK;
     QStringList counts;
     for (auto it = methods.begin(); it != methods.end(); ++it)
-        counts << QString("%1 %2").arg(it.value()).arg(it.key());
+        counts << QString("%1 %2").arg(it.value()).arg(labels::method(it.key().toStdString()));
     summary_->setText(tr("Created by %1 · %2 · %3 · Zip64 %4")
             .arg(ours ? QString::fromUtf8(version.data()) : tr("unknown tool"))
-            .arg(qs(satchel_gui::savings_text(size, packed)))
+            .arg(labels::savings(size, packed))
             .arg(counts.join(", "))
             .arg(zp_reader_zip64(reader_.get()) ? tr("yes") : tr("no")));
 }
@@ -414,7 +416,7 @@ void MainWindow::update_inspector()
                 .arg(tr("%1 items selected").arg(rows.size()))
                 .arg(row_html(tr("Entries"), QString::number(ids.size())))
                 .arg(row_html(tr("Size"), size_text(size)))
-                .arg(row_html(tr("Saved"), qs(satchel_gui::savings_text(size, packed)))));
+                .arg(row_html(tr("Saved"), labels::savings(size, packed))));
         return;
     }
     const auto& e = entries_[ids.front()];

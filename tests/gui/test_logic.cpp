@@ -60,6 +60,9 @@ TEST_CASE("multi-mono members become one row", "[gui]")
     REQUIRE(rows[1].children.size() == 3);
     CHECK(rows[1].children[0].name == "dir/t_ch01.flac");
     CHECK(rows[1].children[2].method == "FLAC channel 3/3");
+    CHECK(rows[1].group_name == "dir/t.wav");
+    CHECK(rows[1].channel_count == 3);
+    CHECK(rows[1].children[2].channel_index == 3);
     CHECK(rows[2].restores_to == "x.wav");
     CHECK(percent_saved(300, 180) == 40);
     CHECK(percent_saved(0, 0) == 0);

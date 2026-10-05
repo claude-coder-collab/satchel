@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "jobs.hpp"
 
+#include "labels.hpp"
+
 #include <condition_variable>
 
 namespace
@@ -142,7 +144,7 @@ JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, 
     if (out.status == ZP_OK || out.status == ZP_SOURCE_CHANGED)
     {
         zpp::check(zp_stream_commit(stream.get()));
-        out.summary = qs(satchel_gui::savings_text(out.input_bytes, out.output_bytes));
+        out.summary = labels::savings(out.input_bytes, out.output_bytes);
         if (!out.details.isEmpty())
             out.summary += QString(" · %1 warning(s)").arg(out.details.size());
     }

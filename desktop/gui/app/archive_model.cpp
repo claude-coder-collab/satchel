@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "archive_model.hpp"
 
+#include "labels.hpp"
+
 #include <QDateTime>
 #include <QFileIconProvider>
 #include <QMimeData>
@@ -144,7 +146,7 @@ void ArchiveModel::rebuild()
     if (!tree_)
     {
         for (const auto& r : rows_)
-            root_->add(make_row_node(r, QString::fromStdString(r.name)));
+            root_->add(make_row_node(r, labels::row_name(r)));
         return;
     }
     std::map<QString, Node*> folders;
@@ -176,9 +178,12 @@ void ArchiveModel::rebuild()
             f->entries = r.entries;
             continue;
         }
-        const auto slash = name.lastIndexOf('/', name.indexOf(" — ") < 0 ? -1 : name.indexOf(" — "));
-        auto* parent = slash < 0 ? root_.get() : folder_for(name.left(slash));
-        parent->add(make_row_node(r, slash < 0 ? name : name.mid(slash + 1)));
+        const bool group = r.channel_count > 0 && r.channel_index == 0;
+        const auto path = group ? QString::fromStdString(r.group_name) : name;
+        const auto slash = path.lastIndexOf('/');
+        auto* parent = slash < 0 ? root_.get() : folder_for(path.left(slash));
+        const auto leaf = slash < 0 ? path : path.mid(slash + 1);
+        parent->add(make_row_node(r, group ? labels::group_label(leaf, r.channel_count) : leaf));
     }
     // Folder totals.
     std::function<void(Node*)> total = [&](Node* n) {
@@ -250,7 +255,8 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
                 case Ratio:
                     return n->size ? QString("%1%").arg(satchel_gui::percent_saved(n->size, n->packed)) : QString();
                 case Method:
-                    return method;
+                    return r && !r->directory ? labels::row_method(*r) : folder ? labels::method("Folder")
+                                                                                : QString();
                 case RestoresTo:
                     return r ? QString::fromStdString(r->restores_to) : QString();
                 case Modified:

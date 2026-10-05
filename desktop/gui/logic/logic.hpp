@@ -78,6 +78,11 @@ struct Row
     bool directory = false;
     std::vector<std::size_t> entries; // archive entries this row stands for (a group has all members)
     std::vector<Row> children; // group members, in channel order
+    // Multi-mono: a group row has group_name (folder + restored name) and channel_count; a member
+    // row has channel_index and channel_count. The English `name`/`method` text is built from these.
+    std::string group_name;
+    std::uint16_t channel_index = 0;
+    std::uint16_t channel_count = 0;
 };
 
 // One row per entry, except that the members of a multi-mono group become one row
