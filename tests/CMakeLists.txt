@@ -38,6 +38,7 @@ add_executable(zp_tests
     integration/test_flac.cpp
     integration/test_interop.cpp
     integration/test_large.cpp
+    integration/test_parallel_restore.cpp
     integration/test_preview.cpp
 )
 target_include_directories(zp_tests PRIVATE support ${PROJECT_SOURCE_DIR}/desktop/windows)

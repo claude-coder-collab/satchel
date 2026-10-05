@@ -262,6 +262,14 @@ Result<std::vector<std::uint8_t>> renumber_frame(std::span<const std::uint8_t> f
     return out;
 }
 
+std::optional<std::uint64_t> frame_start(std::span<const std::uint8_t> bytes)
+{
+    const auto h = parse_frame_header(bytes);
+    if (!h || crc8(bytes.first(h->header_length - 1)) != bytes[h->header_length - 1])
+        return std::nullopt;
+    return h->number;
+}
+
 std::optional<std::uint64_t> frame_number(std::span<const std::uint8_t> frame)
 {
     const auto h = parse_frame_header(frame);

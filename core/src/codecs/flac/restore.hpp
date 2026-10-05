@@ -30,8 +30,9 @@ Result<PcmLayout> layout_from_records(const std::vector<ForeignRecord>& records,
 
 // Rebuilds the original file from a FLAC file (layouts 0 and 2, or a file written by
 // `flac --keep-foreign-metadata`) or from a multi-mono group. headers[k] belongs to member k
-// (channel order). The SHA-256 of the output is checked when the project block has one; the
-// FLAC MD5 signature is always checked when present.
-VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open, const RestoreSink& sink);
+// (channel order). The SHA-256 of the output is checked when the project block has one; otherwise
+// the FLAC MD5 signature is checked. With threads > 1 a single FLAC stream is decoded in parallel
+// (batches of frames on worker threads); `sink` is always called from the calling thread.
+VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open, const RestoreSink& sink, std::size_t threads = 1);
 
 }

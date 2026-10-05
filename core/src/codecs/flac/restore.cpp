@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "codecs/flac/restore.hpp"
 
+#include "codecs/flac/parallel_decode.hpp"
+
 #include "codecs/flac/flac_codec.hpp"
 #include "crypto/hash.hpp"
 
@@ -146,7 +148,7 @@ Result<PcmLayout> layout_from_records(const std::vector<ForeignRecord>& records,
     return fail(Status::CorruptArchive, "foreign metadata does not describe the FLAC audio");
 }
 
-VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open, const RestoreSink& sink)
+VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open, const RestoreSink& sink, std::size_t threads)
 {
     auto order = order_members(headers);
     if (!order)
@@ -181,8 +183,28 @@ VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open,
 
     std::vector<std::unique_ptr<IChunkedStream>> streams;
     std::vector<std::unique_ptr<Decoder>> decoders;
+    const bool parallel = !mono && threads > 1 && lead.project.has_value();
+    if (parallel)
+    {
+        auto s = open((*order)[0]);
+        if (!s)
+            return std::unexpected(s.error());
+        std::vector<std::uint8_t> skip(64u << 10);
+        for (std::uint64_t left = lead.metadata_size; left > 0;)
+        {
+            auto n = (*s)->read(skip.data(), static_cast<std::size_t>(std::min<std::uint64_t>(left, skip.size())));
+            if (!n)
+                return std::unexpected(n.error());
+            if (*n == 0)
+                return fail(Status::CorruptArchive, "FLAC file ends inside its metadata");
+            left -= *n;
+        }
+        streams.push_back(std::move(*s));
+    }
     for (const auto m : *order)
     {
+        if (parallel)
+            break;
         auto s = open(m);
         if (!s)
             return std::unexpected(s.error());
@@ -204,6 +226,19 @@ VoidResult restore(const std::vector<Header>& headers, const MemberOpener& open,
     std::vector<std::int32_t> interleaved;
     std::vector<std::uint8_t> out;
     const auto write_audio = [&]() -> VoidResult {
+        if (parallel)
+        {
+            const auto convert = [&](std::span<const std::int32_t> samples, std::vector<std::uint8_t>& bytes) {
+                bytes.resize(samples.size() * width);
+                encode_samples(*layout, samples, bytes);
+            };
+            auto decoded = decode_parallel(*streams[0], info, { .threads = threads }, convert, emit);
+            if (!decoded)
+                return std::unexpected(decoded.error());
+            if (*decoded != info.total_samples)
+                return fail(Status::CorruptArchive, "FLAC stream has a different length than its STREAMINFO");
+            return {};
+        }
         std::uint64_t written = 0;
         while (true)
         {

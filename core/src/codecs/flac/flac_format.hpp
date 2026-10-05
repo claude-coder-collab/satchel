@@ -62,6 +62,8 @@ struct Frame
 Result<std::vector<std::uint8_t>> renumber_frame(std::span<const std::uint8_t> frame, std::uint64_t frame_number);
 // Frame number of a fixed-blocksize frame (for tests and checks).
 std::optional<std::uint64_t> frame_number(std::span<const std::uint8_t> frame);
+// Frame number if `bytes` starts with a complete fixed-blocksize frame header whose CRC-8 matches.
+std::optional<std::uint64_t> frame_start(std::span<const std::uint8_t> bytes);
 
 void append_block_header(ByteWriter& w, BlockType type, std::size_t length, bool last);
 
