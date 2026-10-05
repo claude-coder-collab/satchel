@@ -44,6 +44,7 @@ protected:
 private:
     void build_ui();
     void new_archive(const QStringList& given = {});
+    void create_blank_archive();
     void add_files(const QStringList& given = {});
     void extract(bool selected);
     void verify();

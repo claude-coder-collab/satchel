@@ -112,7 +112,7 @@ Multiple selection shows combined totals (count, size, packed, savings).
 
 In Full mode every build goes through a plan review, so the user sees exactly what will happen before any data is written.
 
-1. **Add**: New Archive, then drag in files/folders or use Add. Choose output name and location.
+1. **Add**: New Archive asks whether to create a blank archive (choose a location; an empty zip opens, then drag in files/folders or use Add) or to compress a folder (choose the folder, then review the plan and choose output name and location).
 2. **Plan review** (sheet over the window): one row per planned entry with output name, chosen method, and reason ("FLAC: 24-bit, 6 ch", "Stored: 32-bit float", "Deflate"). Totals at the top: file count, input size, entries per method.
 3. **Issues panel** in the same sheet:
    - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls; Build stays disabled until all are resolved.
