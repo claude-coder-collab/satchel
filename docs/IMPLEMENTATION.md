@@ -384,7 +384,7 @@ callbacks directly.
 **App** (`apps/web`, assembled into `build/wasm/web` by the `satchel_web` target):
 - `worker.mjs` owns the module and mounts OPFS at `/opfs`. Archives are built to OPFS and the
   page offers them through `showSaveFilePicker` (stream copy) or a download link. Extraction goes
-  to an OPFS folder, then to a folder picked with `showDirectoryPicker` or per-file downloads.
+  to an OPFS folder, then to a folder picked with `showDirectoryPicker` or per-file downloads (links, plus a "Download all" button that clicks each one in turn; folder structure is not preserved).
 - The page plans, shows conflicts with Rename / Skip / Store unconverted, lists warnings, builds
   with progress, opens archives, verifies and extracts.
 - If OPFS sync access handles are unusable (Playwright's WebKit, some private modes), the worker
