@@ -28,6 +28,11 @@ Result<std::vector<std::size_t>> order_members(const std::vector<Header>& header
 // The container layout described by the foreign records, for audio of `frames` frames.
 Result<PcmLayout> layout_from_records(const std::vector<ForeignRecord>& records, std::uint32_t channels, std::uint32_t bytes_per_sample, std::uint64_t frames, std::uint64_t trailing_size);
 
+// The size of the original file a FLAC file (layouts 0 and 2) or the lead member (channel 1) of a
+// multi-mono group was made from, worked out from the stored metadata alone. `channels` is the
+// channel count of the original file.
+Result<std::uint64_t> original_file_size(const Header& lead, std::uint32_t channels);
+
 // Rebuilds the original file from a FLAC file (layouts 0 and 2, or a file written by
 // `flac --keep-foreign-metadata`) or from a multi-mono group. headers[k] belongs to member k
 // (channel order). The SHA-256 of the output is checked when the project block has one; otherwise

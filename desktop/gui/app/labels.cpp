@@ -60,8 +60,10 @@ QString row_name(const satchel_gui::Row& row)
     return QString::fromStdString(row.name);
 }
 
-QString savings(std::uint64_t input, std::uint64_t output)
+QString savings(std::uint64_t input, std::uint64_t output, bool ratio_known)
 {
+    if (!ratio_known)
+        return QCoreApplication::translate("Archive", "%1 → %2").arg(size_text(input), size_text(output));
     const auto saved = satchel_gui::percent_saved(input, output);
     return saved >= 0 ? QCoreApplication::translate("Archive", "%1 → %2, %3% smaller").arg(size_text(input), size_text(output)).arg(saved)
                       : QCoreApplication::translate("Archive", "%1 → %2, %3% larger").arg(size_text(input), size_text(output)).arg(std::abs(saved));

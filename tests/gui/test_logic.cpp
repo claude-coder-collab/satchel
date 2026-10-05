@@ -47,10 +47,10 @@ TEST_CASE("output naming never overwrites", "[gui]")
 TEST_CASE("multi-mono members become one row", "[gui]")
 {
     std::vector<ListedEntry> entries;
-    entries.push_back({ 0, "dir/notes.txt", false, 10, 5, "Deflate", {}, 1, std::nullopt, 0, 0 });
+    entries.push_back({ 0, "dir/notes.txt", false, 10, 5, "Deflate", {}, 1, std::nullopt, 0, 0, std::nullopt });
     for (const std::uint16_t ch : { std::uint16_t{ 2 }, std::uint16_t{ 1 }, std::uint16_t{ 3 } })
-        entries.push_back({ ch, std::format("dir/t_ch0{}.flac", ch), false, 100, 60, "FLAC", "t.wav", 2, std::string("dir/|t.wav"), ch, 3 });
-    entries.push_back({ 4, "dir/x.flac", false, 50, 40, "FLAC", "x.wav", 3, std::nullopt, 0, 0 });
+        entries.push_back({ ch, std::format("dir/t_ch0{}.flac", ch), false, 100, 60, "FLAC", "t.wav", 2, std::string("dir/|t.wav"), ch, 3, std::nullopt });
+    entries.push_back({ 4, "dir/x.flac", false, 50, 40, "FLAC", "x.wav", 3, std::nullopt, 0, 0, std::nullopt });
     const auto rows = group_rows(entries);
     REQUIRE(rows.size() == 3);
     CHECK(rows[1].name == "dir/t.wav — 3 channels");
@@ -64,8 +64,28 @@ TEST_CASE("multi-mono members become one row", "[gui]")
     CHECK(rows[1].channel_count == 3);
     CHECK(rows[1].children[2].channel_index == 3);
     CHECK(rows[2].restores_to == "x.wav");
+    CHECK_FALSE(rows[1].ratio_known);
+    CHECK_FALSE(rows[2].ratio_known);
+    CHECK(rows[0].ratio_known);
     CHECK(percent_saved(300, 180) == 40);
     CHECK(percent_saved(0, 0) == 0);
+}
+
+TEST_CASE("the original size makes a FLAC ratio known", "[gui]")
+{
+    std::vector<ListedEntry> entries;
+    for (const std::uint16_t ch : { std::uint16_t{ 2 }, std::uint16_t{ 1 }, std::uint16_t{ 3 } })
+        entries.push_back({ ch, std::format("t_ch0{}.flac", ch), false, 100, 60, "FLAC", "t.wav", 2, std::string("|t.wav"), ch, 3, ch == 1 ? std::optional<std::uint64_t>(900) : std::nullopt });
+    entries.push_back({ 4, "x.flac", false, 50, 40, "FLAC", "x.wav", 3, std::nullopt, 0, 0, 200 });
+    const auto rows = group_rows(entries);
+    REQUIRE(rows.size() == 2);
+    CHECK(rows[0].ratio_known);
+    CHECK(rows[0].size == 900);
+    CHECK(rows[0].packed == 180);
+    CHECK_FALSE(rows[0].children[0].ratio_known);
+    CHECK(rows[1].ratio_known);
+    CHECK(rows[1].size == 200);
+    CHECK(rows[1].packed == 40);
 }
 
 TEST_CASE("timecode formatting", "[gui]")

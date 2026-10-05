@@ -3,6 +3,7 @@
 #include "io/zip/reader.hpp"
 
 #include "codecs/codec.hpp"
+#include "codecs/flac/restore.hpp"
 #include "common/bytes.hpp"
 #include "io/zip/minizip_adapter.hpp"
 #include "io/zip/path_policy.hpp"
@@ -545,6 +546,13 @@ std::optional<flac::Header> ArchiveReader::flac_header(std::size_t index)
         e.flac_restorable = true;
         if (header->project->layout == flac::Layout::MultiMonoMember)
             e.flac_group = FlacGroupInfo{ header->project->group_id, header->project->channel_index, header->project->channel_count };
+        const bool lead = header->project->layout != flac::Layout::MultiMonoMember || header->project->channel_index == 1;
+        const std::uint32_t channels = header->project->layout == flac::Layout::MultiMonoMember ? header->project->channel_count : header->stream_info.channels;
+        if (lead)
+        {
+            if (const auto size = flac::original_file_size(*header, channels))
+                e.flac_original_size = *size;
+        }
     }
     return header;
 }

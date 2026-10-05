@@ -23,6 +23,6 @@ QString row_name(const satchel_gui::Row& row);
 // "NAME — N channels".
 QString group_label(const QString& name, int channels);
 // "4.2 GB → 2.3 GB, 45% smaller".
-QString savings(std::uint64_t input, std::uint64_t output);
+QString savings(std::uint64_t input, std::uint64_t output, bool ratio_known = true);
 
 }

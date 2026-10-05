@@ -78,7 +78,7 @@ The center pane lists the open archive's entries, read from the central director
 | Name | Entry name; folders expandable in tree view |
 | Size | Uncompressed size |
 | Packed | Stored size |
-| Ratio | Packed / size, as % saved |
+| Ratio | Packed / size, as % saved. For FLAC, size is the original audio file's, derived from the stored metadata (`zp_reader_flac_original_size`); a multi-mono set shows it on its group row. Blank where it cannot be known, and for folders, selections and totals containing such entries |
 | Method | Store · Deflate · FLAC · FLAC multi-mono |
 | Restores to | Original filename for converted audio (e.g. `take1.wav`), blank otherwise |
 | Modified | Entry date |

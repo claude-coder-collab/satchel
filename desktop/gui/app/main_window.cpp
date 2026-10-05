@@ -47,9 +47,10 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QTextBrowser>
-#include <QToolBar>
 #include <QTreeView>
 #include <QUrl>
+
+#include <numeric>
 
 namespace
 {
@@ -57,6 +58,40 @@ namespace
 QString qs(const std::string& s)
 {
     return QString::fromStdString(s);
+}
+
+struct Totals
+{
+    std::uint64_t size = 0;
+    std::uint64_t packed = 0;
+    bool ratio_known = true;
+};
+
+// Sizes are those of the original files where the archive can tell (FLAC), so the saving is real.
+// It is unknown for FLAC without that, and for selections that split a multi-mono group.
+template <typename Ids>
+Totals totals_of(const std::vector<zpp::EntryInfo>& entries, const Ids& ids)
+{
+    Totals t;
+    std::size_t lead_members = 0;
+    std::size_t other_members = 0;
+    for (const auto i : ids)
+    {
+        const auto& e = entries[i];
+        t.packed += e.compressed_size;
+        if (e.flac_channel && !e.original_size)
+        {
+            ++other_members;
+            continue;
+        }
+        t.size += e.original_size.value_or(e.uncompressed_size);
+        if (e.flac_channel)
+            lead_members += e.flac_channel->second - 1u;
+        else
+            t.ratio_known = t.ratio_known && (e.original_size || !e.flac_restorable);
+    }
+    t.ratio_known = t.ratio_known && lead_members == other_members;
+    return t;
 }
 
 QString esc(const QString& s)
@@ -355,13 +390,12 @@ void MainWindow::reload()
 
 void MainWindow::update_summary()
 {
-    std::uint64_t size = 0;
-    std::uint64_t packed = 0;
+    std::vector<std::size_t> all(entries_.size());
+    std::iota(all.begin(), all.end(), std::size_t{ 0 });
+    const auto totals = totals_of(entries_, all);
     QMap<QString, int> methods;
     for (const auto& e : entries_)
     {
-        size += e.uncompressed_size;
-        packed += e.compressed_size;
         if (e.kind == ZP_KIND_FILE)
             methods[e.flac_channel ? "FLAC multi-mono" : e.flac_restorable ? "FLAC"
                     : e.method == ZP_METHOD_DEFLATE                        ? "Deflate"
@@ -375,7 +409,7 @@ void MainWindow::update_summary()
         counts << QString("%1 %2").arg(it.value()).arg(labels::method(it.key().toStdString()));
     summary_->setText(tr("Created by %1 · %2 · %3 · Zip64 %4")
             .arg(ours ? QString::fromUtf8(version.data()) : tr("unknown tool"))
-            .arg(labels::savings(size, packed))
+            .arg(labels::savings(totals.size, totals.packed, totals.ratio_known))
             .arg(counts.join(", "))
             .arg(zp_reader_zip64(reader_.get()) ? tr("yes") : tr("no")));
 }
@@ -406,26 +440,22 @@ void MainWindow::update_inspector()
     }
     if (rows.size() > 1)
     {
-        std::uint64_t size = 0;
-        std::uint64_t packed = 0;
-        for (const auto i : ids)
-        {
-            size += entries_[i].uncompressed_size;
-            packed += entries_[i].compressed_size;
-        }
+        const auto totals = totals_of(entries_, ids);
         inspector_->setHtml(QString("<h3>%1</h3><table>%2%3%4</table>")
                 .arg(tr("%1 items selected").arg(rows.size()))
                 .arg(row_html(tr("Entries"), QString::number(ids.size())))
-                .arg(row_html(tr("Size"), size_text(size)))
-                .arg(row_html(tr("Saved"), labels::savings(size, packed))));
+                .arg(row_html(tr("Size"), size_text(totals.size)))
+                .arg(row_html(tr("Saved"), labels::savings(totals.size, totals.packed, totals.ratio_known))));
         return;
     }
     const auto& e = entries_[ids.front()];
     QString html = QString("<h3>%1</h3><table>").arg(esc(rows.front().data(Qt::DisplayRole).toString()));
     html += row_html(tr("Name"), qs(e.name));
-    html += row_html(tr("Size"), size_text(e.uncompressed_size));
-    html += row_html(tr("Packed"), size_text(e.compressed_size));
-    html += row_html(tr("Ratio"), QString("%1% saved").arg(satchel_gui::percent_saved(e.uncompressed_size, e.compressed_size)));
+    const auto totals = totals_of(entries_, ids);
+    html += row_html(tr("Size"), size_text(totals.size));
+    html += row_html(tr("Packed"), size_text(totals.packed));
+    if (totals.ratio_known)
+        html += row_html(tr("Ratio"), QString("%1% saved").arg(satchel_gui::percent_saved(totals.size, totals.packed)));
     html += row_html(tr("Method"), rows.front().sibling(rows.front().row(), ArchiveModel::Method).data().toString());
     html += row_html(tr("CRC-32"), QString("%1").arg(e.crc32, 8, 16, QChar('0')));
     html += row_html(tr("Modified"), QDateTime::fromSecsSinceEpoch(e.mtime).toString(Qt::ISODate));

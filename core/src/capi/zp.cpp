@@ -557,6 +557,8 @@ char* zp_reader_describe(const zp_reader_t* reader)
                 j.field("flac_restorable", e.flac_restorable);
                 if (header && header->project)
                     j.field("restores_to", header->project->original_name);
+                if (e.flac_original_size)
+                    j.field("original_size", *e.flac_original_size);
                 if (e.flac_group)
                     j.field("channel_index", static_cast<std::uint64_t>(e.flac_group->channel_index)).field("channel_count", static_cast<std::uint64_t>(e.flac_group->channel_count));
                 j.end_object();
@@ -1144,6 +1146,16 @@ int zp_reader_get_entry(const zp_reader_t* reader, size_t i, zp_entry_info_t* ou
         out->flac_channel_index = e.flac_group->channel_index;
         out->flac_channel_count = e.flac_group->channel_count;
     }
+    return ZP_OK;
+}
+
+int zp_reader_flac_original_size(const zp_reader_t* reader, size_t i, uint64_t* size)
+{
+    ZP_REQUIRE(reader && size && i < reader->reader->entries().size(), ZP_INVALID_ARGUMENT);
+    reader->reader->flac_header(i);
+    const auto& original = reader->reader->entries()[i].flac_original_size;
+    ZP_REQUIRE(original, ZP_INVALID_ARGUMENT);
+    *size = *original;
     return ZP_OK;
 }
 

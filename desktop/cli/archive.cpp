@@ -170,6 +170,8 @@ int run_list(const GlobalOptions& g, const std::string& archive)
                 { "mtime", e.mtime } };
             if (!e.flac_original_name.empty())
                 je["restores_to"] = e.flac_original_name;
+            if (e.original_size)
+                je["original_size"] = *e.original_size;
             if (e.flac_channel)
                 je["channel"] = { { "index", e.flac_channel->first }, { "count", e.flac_channel->second } };
             j["entries"].push_back(std::move(je));

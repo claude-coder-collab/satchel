@@ -512,7 +512,7 @@ defaults and "Copy as CLI command".
 - Tests: `satchel_gui_logic_tests` (Catch2) and `satchel_gui_tests` (Qt Test, offscreen): both
   modes launch, a 100k-entry archive opens (< 3 s allowed on CI), and Simple mode compresses and
   extracts a drop end to end.
-- C API addition: `zp_reader_flac_describe`.
+- C API additions: `zp_reader_flac_describe`, `zp_reader_flac_original_size` (size of the original file, derived from the stored metadata; used for the Ratio column).
 
 **Not done yet (desktop):**
 - Windows 11 top-level context-menu entries (sparse MSIX package; needs a signing certificate).
