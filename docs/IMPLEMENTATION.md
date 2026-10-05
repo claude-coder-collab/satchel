@@ -583,8 +583,9 @@ accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status
 `bench/bench.cpp` builds `zp_bench` (option `ZP_BUILD_BENCH`, on by default; also for WASM, run
 with `node zp_bench.js`). It generates 24-bit stereo audio (tones + noise), word-salad text and
 random bytes (`--size` MiB each), hashes the audio, then builds and extracts (to the null sink)
-each case with 1 and N threads (`--threads`, default hardware concurrency). `--json` prints
-machine-readable results. CI runs it with `--size 32` on Linux (GCC) and Windows as a smoke test.
+each case with 1 and all hardware threads, or only `--threads N`; `--case TEXT` runs the cases
+whose name contains TEXT (cases: audio FLAC 5/0, 16-ch multi-mono, audio deflate 6, text deflate
+6/1, random). `--json` prints machine-readable results. CI runs it with `--size 32` on Linux (GCC) and Windows as a smoke test.
 
 Results with 256 MiB inputs (MiB/s; build = input bytes per second; Apple M-series, 8 threads):
 
@@ -617,8 +618,20 @@ restore instead of producing wrong output; the restored file is still checked ag
 and the entry CRC-32. At most 2 × threads batches are in flight. Single 24-bit stereo file:
 about 250 MiB/s on one thread, about 980 MiB/s on 8 (was 240 at any thread count).
 
-Known limits: multi-mono groups restore on one thread per group. WASM MD5 is the cap for
-browser FLAC builds.
+Multi-mono groups restore with the members decoded in parallel in rounds of 32 blocks
+(min(threads, members) threads per round), interleaved on the calling thread (16 channels:
+225 → about 390 MiB/s on 8 threads).
+
+Segments: 64 blocks for up to two channels, `64 × 2 / channels` blocks (at least 4) for wider
+sources (`flac::segment_blocks`), so a 16-channel segment is about 1.5 MB instead of 50 MB and
+several fit in the memory budget; frames are encoded independently, so output bytes do not
+change. The multi-mono MD5 lane de-interleaves with width-specialised loops.
+
+Known limits: multi-mono builds (about 100–140 MiB/s for 16 channels on the 6 GiB test VM) are
+bounded by the single MD5 lane (one MD5 per channel, all on one thread) and by writing and
+copying the spill files. libFLAC's own per-encoder MD5 cannot be disabled through its public API
+and costs worker CPU. WASM MD5 is the cap for browser FLAC builds. Large `--size` values on
+machines with little RAM measure swapping: the benchmark keeps all inputs and outputs in memory.
 
 ### 4.17 Previews and OS integration (desktop UI spec, "OS integration")
 

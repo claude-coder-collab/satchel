@@ -145,11 +145,30 @@ void SourceHasher::audio(std::span<const std::uint8_t> bytes)
     const auto frames = canonical.size() / layout_.frame_bytes();
     for (auto& s : channel_scratch_)
         s.resize(frames * width);
-    for (std::size_t f = 0; f < frames; ++f)
-    {
-        const auto* src = canonical.data() + f * layout_.frame_bytes();
+    const auto split = [&]<std::size_t W>() {
+        const auto stride = layout_.frame_bytes();
         for (std::size_t c = 0; c < channels; ++c)
-            std::memcpy(channel_scratch_[c].data() + f * width, src + c * width, width);
+        {
+            const auto* src = canonical.data() + c * W;
+            auto* dst = channel_scratch_[c].data();
+            for (std::size_t f = 0; f < frames; ++f, src += stride, dst += W)
+                std::memcpy(dst, src, W);
+        }
+    };
+    switch (width)
+    {
+        case 1:
+            split.template operator()<1>();
+            break;
+        case 2:
+            split.template operator()<2>();
+            break;
+        case 3:
+            split.template operator()<3>();
+            break;
+        default:
+            split.template operator()<4>();
+            break;
     }
     for (std::size_t c = 0; c < channels; ++c)
         md5_[c].update(channel_scratch_[c]);

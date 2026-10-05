@@ -349,7 +349,8 @@ void Reader::flac(std::size_t i, IChunkedStream& stream)
     settings.sample_rate = layout.sample_rate;
     settings.level = job_.plan.options.flac_level;
 
-    const std::uint64_t seg_frames = static_cast<std::uint64_t>(flac::block_size) * flac::blocks_per_segment;
+    const std::uint32_t seg_blocks = flac::segment_blocks(layout.channels);
+    const std::uint64_t seg_frames = static_cast<std::uint64_t>(flac::block_size) * seg_blocks;
     const std::uint64_t seg_bytes = seg_frames * layout.frame_bytes();
     const std::uint64_t frame_cost = layout.frame_bytes() + 4ull * layout.channels;
     std::vector<std::uint8_t> seg;
@@ -362,7 +363,7 @@ void Reader::flac(std::size_t i, IChunkedStream& stream)
         auto& job = job_;
         auto raw = std::make_shared<const std::vector<std::uint8_t>>(std::move(seg));
         seg.clear();
-        const auto first_frame = seg_index * flac::blocks_per_segment;
+        const auto first_frame = seg_index * seg_blocks;
         for (std::uint32_t k = 0; k < streams; ++k)
         {
             const auto my_seq = seq_++;
