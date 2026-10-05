@@ -9,22 +9,21 @@ stored. Archives open in any unzip tool.
 
 ## Status
 
-Early development. The native zip layer (planning, collisions, symlink handling, path safety,
-parallel build pipeline, reading, extraction, editing, C API) is in place. Deflate, FLAC, WASM,
-bindings, CLI and GUI follow the order in the [main spec](docs/spec/main-spec.md), section 10.
+All steps of the [main spec](docs/spec/main-spec.md) are implemented; what remains needs
+certificates, accounts or real devices (see [implementation status](docs/IMPLEMENTATION.md#5-status)).
 
-## Building
+| Component | Where |
+|---|---|
+| Core library and C API (`zp_*`) | `core/`, [zp.h](core/include/zp/zp.h) |
+| Command-line tool `satchel` (create, extract, list, verify, edit, restore, preview) | `desktop/cli` |
+| Desktop app (Qt 6, Simple and Full modes) | `desktop/gui` |
+| Quick Look extension, Finder services (macOS) | `desktop/macos`, `desktop/gui/app/mac_services.mm` |
+| Preview handler and Explorer commands (Windows) | `desktop/windows` |
+| Browser app (WebAssembly, OPFS) | `apps/web`, [live](https://claude-coder-collab.github.io/satchel/) |
+| Python, PHP and JavaScript bindings | `bindings/` |
+| Packages (deb, AppImage, dmg, MSI, wheels, npm) | `.github/workflows/release.yml` |
 
-Requirements: CMake ≥ 3.28, Ninja, and a C++26 compiler (Clang ≥ 18, GCC ≥ 14) or MSVC 2022.
-Dependencies are downloaded at pinned versions during configuration.
-
-```sh
-cmake --preset clang
-cmake --build build/clang --config Release
-ctest --test-dir build/clang -C Release --output-on-failure
-```
-
-Other presets: `gcc`, `msvc`, `clang-asan` (AddressSanitizer + UBSan), `clang-tsan`.
+Packages are built unsigned until signing certificates exist.
 
 ## Documentation
 
