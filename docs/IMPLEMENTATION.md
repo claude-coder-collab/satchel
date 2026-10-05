@@ -254,8 +254,13 @@ Fallback entries are always stored, not deflated (zip design 6).
   header + frames × channels × bytes + 34 bytes per block.
 
 **Hashes and patching.**
-- `HashJob` computes the SHA-256 of the whole source file and the FLAC MD5 of the samples on two
-  service threads (lanes) that read the same queue of chunks; a chunk is dropped once both lanes
+- `HashJob` computes the SHA-256 of the whole source file and the FLAC MD5 of the samples on
+  lanes that read the same queue of chunks: lane 0 SHA-256, lanes 1.. MD5. Lanes 0 and 1 run on
+  service threads. A multi-mono source with 8 or more channels splits its per-channel MD5s into
+  `min(4, channels / 4)` contiguous channel groups, one lane each; lanes beyond the second run on
+  threads the job owns (never pool tasks, so they cannot starve the workers). Never more than one
+  MD5 lane under WebAssembly. Grouping does not change any hash (tested for any split and
+  chunking); a chunk is dropped once both lanes
   have consumed it, and the producer blocks while either lane is 16 chunks (1 MiB each, outside
   the memory budget) behind. The MD5 input is signed little-endian samples of the container width.
   For multi-mono there is one MD5 per channel.
@@ -627,9 +632,8 @@ sources (`flac::segment_blocks`), so a 16-channel segment is about 1.5 MB instea
 several fit in the memory budget; frames are encoded independently, so output bytes do not
 change. The multi-mono MD5 lane de-interleaves with width-specialised loops.
 
-Known limits: multi-mono builds (about 100–140 MiB/s for 16 channels on the 6 GiB test VM) are
-bounded by the single MD5 lane (one MD5 per channel, all on one thread) and by writing and
-copying the spill files. libFLAC's own per-encoder MD5 cannot be disabled through its public API
+Known limits: multi-mono builds (about 100–190 MiB/s for 16 channels on the 6 GiB test VM,
+noisy) are bounded by writing and copying the spill files. libFLAC's own per-encoder MD5 cannot be disabled through its public API
 and costs worker CPU. WASM MD5 is the cap for browser FLAC builds. Large `--size` values on
 machines with little RAM measure swapping: the benchmark keeps all inputs and outputs in memory.
 

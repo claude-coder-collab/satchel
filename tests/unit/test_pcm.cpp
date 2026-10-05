@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Copyright (c) 2026 Venn Audio Ltd.
+#include "codecs/flac/flac_file.hpp"
 #include "codecs/pcm/pcm_container.hpp"
 #include "codecs/pcm/tags.hpp"
 #include "pcm_fixtures.hpp"
@@ -235,4 +236,33 @@ TEST_CASE("mirrored tags from bext, iXML and INFO", "[pcm][tags]")
     for (const auto& [name, value] : mono)
         track |= name == "TRACK_NAME" && value == "Lav";
     CHECK(track);
+}
+
+TEST_CASE("MD5 channel groups give the same hashes as one group", "[pcm][hash]")
+{
+    test::WavSpec w;
+    w.channels = 12;
+    w.bits = 24;
+    w.frames = 7001;
+    w.chunks = { { "LIST", test::text_bytes("odd sized chunk"), true } };
+    const auto wav = test::make_wav(w);
+    const auto layout = *scan(wav).layout;
+    const auto hash = [&](std::size_t groups, std::size_t step) {
+        flac::SourceHasher h(layout, true, groups);
+        for (std::size_t off = 0; off < wav.size(); off += step)
+            h.update(std::span(wav).subspan(off, std::min(step, wav.size() - off)));
+        return h.finish();
+    };
+    const auto one = hash(1, 4096);
+    REQUIRE(one.md5.size() == 12);
+    for (const std::size_t groups : { 2u, 3u, 5u, 12u, 40u })
+    {
+        for (const std::size_t step : { 1000u, 7u, 65536u })
+        {
+            CAPTURE(groups, step);
+            const auto other = hash(groups, step);
+            CHECK(other.sha256 == one.sha256);
+            CHECK(other.md5 == one.md5);
+        }
+    }
 }
