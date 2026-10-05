@@ -232,3 +232,7 @@ UI logic that decides anything lives outside the widgets so it can be unit-teste
 
 - [ ] Simple mode with a mixed drop (zips plus other files): compress all, as specified, or ask once?
 - [ ] Product name and icon, needed for the previewers, context-menu labels and readme.
+
+## File-manager actions quit when clean
+
+When a job started by a file-manager action ("Compress with Satchel", "Extract with Satchel", including the macOS Finder services and the `--compress`/`--extract` flags) finishes with status OK and no warnings or per-entry problems, and no other job is running and Full mode is not open, Satchel quits instead of showing the Done page. Any warning, failure, cancellation or changed source keeps the window open on the result page. Drag-and-drop onto the window never quits.

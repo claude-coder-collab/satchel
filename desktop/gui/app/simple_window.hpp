@@ -5,6 +5,7 @@
 #include "jobs.hpp"
 
 #include <QElapsedTimer>
+#include <QSet>
 #include <QStringList>
 #include <QWidget>
 
@@ -46,6 +47,7 @@ private:
     QPushButton* reveal_ = nullptr;
     QPushButton* retry_ = nullptr;
     QList<int> mine_;
+    QSet<int> quit_when_clean_;
     int current_ = 0;
     QElapsedTimer timer_;
     QString last_output_;

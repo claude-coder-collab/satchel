@@ -4,7 +4,9 @@
 
 #include "app.hpp"
 #include "dialogs.hpp"
+#include "main_window.hpp"
 
+#include <QApplication>
 #include <QCloseEvent>
 #include <QDesktopServices>
 #include <QDir>
@@ -156,6 +158,7 @@ void SimpleWindow::handle(const QStringList& paths, satchel_gui::Intent intent)
     for (const auto& p : paths)
         items.push_back(fs_path(p));
     const auto action = satchel_gui::drop_action(items, intent);
+    const auto first_new_job = mine_.size();
     QStringList selected;
     for (const auto& p : satchel_gui::action_items(items, action))
         selected << q_path(p);
@@ -170,6 +173,11 @@ void SimpleWindow::handle(const QStringList& paths, satchel_gui::Intent intent)
             break;
         case satchel_gui::DropAction::None:
             break;
+    }
+    if (intent != satchel_gui::Intent::Auto)
+    {
+        for (auto i = first_new_job; i < mine_.size(); ++i)
+            quit_when_clean_.insert(mine_[i]);
     }
 }
 
@@ -250,6 +258,7 @@ void SimpleWindow::on_finished(int id, const QString& title, const JobOutcome& o
 {
     if (!mine_.removeOne(id))
         return;
+    const bool quit_if_clean = quit_when_clean_.remove(id);
     last_output_ = outcome.output;
     const bool ok = outcome.status == ZP_OK || outcome.status == ZP_SOURCE_CHANGED;
     result_->setText(ok ? outcome.summary : (outcome.status == ZP_CANCELLED ? tr("Cancelled") : tr("Failed: %1").arg(outcome.message)));
@@ -263,6 +272,11 @@ void SimpleWindow::on_finished(int id, const QString& title, const JobOutcome& o
     );
     reveal_->setVisible(ok);
     retry_->setVisible(!ok && outcome.status != ZP_CANCELLED);
+    if (quit_if_clean && outcome.status == ZP_OK && outcome.details.isEmpty() && mine_.isEmpty() && !app_.jobs().busy() && !(app_.full() && app_.full()->isVisible()))
+    {
+        QApplication::quit();
+        return;
+    }
     pages_->setCurrentIndex(2);
     if (!isActiveWindow())
         app_.notify(title, ok ? outcome.summary : outcome.message);
