@@ -173,7 +173,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           f=$(find build/msvc -name satchel_gui_tests.exe | head -1)
-          "$f" > gui.txt 2>&1 || echo "exit $?"; head -c 6000 gui.txt
+          "$f" -o gui.txt,txt || echo "exit $?"; head -c 8000 gui.txt
       - name: CLI tests
         shell: bash
         run: |
