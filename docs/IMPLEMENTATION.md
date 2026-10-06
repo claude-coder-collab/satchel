@@ -685,16 +685,21 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   the provider with `[NSApp setServicesProvider:]` at startup and forwards the pasteboard's file
   URLs to `App::open_paths` with the Compress/Extract intent on the Qt thread.
   `perform_mac_service()` drives the same selectors from tests; other platforms get a stub.
-- macOS uninstaller: `packaging/macos/uninstall.py` (Python, stdlib only; tests in
-  `tests/tools/test_uninstall_macos.py`) plus `Uninstall Satchel.command`, both installed beside
-  `Satchel.app` in the dmg. It quits the app, `pluginkit -r` for the bundled and every registered
-  `<bundle id>.preview` extension, `lsregister -u`, moves the app (`/Applications`, `~/Applications`,
-  `--app PATH`) to the Trash, deletes the preferences domain and `~/Library` data (Application Support,
-  Caches, HTTPStorages, Saved Application State, Logs; skipped with `--keep-settings`), then
-  `pbs -flush` so the Finder services disappear. Flags: `--dry-run`, `-y`. Launch Services,
-  `defaults`, `osascript` and `pbs` steps are best-effort; a failed `pluginkit` or file removal is
-  reported and gives exit status 1. The wrapper uses `/usr/bin/python3` (macOS offers the Command Line
-  Tools if absent). Not yet run against a real dmg install.
+- macOS uninstaller: `satchel uninstall [--app PATH] [--keep-settings] [--dry-run] [-y] [--json]`, a
+  native subcommand compiled on macOS only (`desktop/cli/macos/uninstall.{hpp,cpp}`, static library
+  `satchel_macos_uninstall`; no Python or other runtime needed). The dmg also holds
+  `Uninstall Satchel.command`, a two-line `sh` wrapper that runs the CLI of the `Satchel.app` beside it;
+  an installed copy is `/Applications/Satchel.app/Contents/Helpers/satchel uninstall`. Steps: quit the app
+  (`osascript`, only if running), `pluginkit -r` for the bundled and every registered
+  `<bundle id>.preview` extension, `lsregister -u`, move each `Satchel.app` (`/Applications`,
+  `~/Applications`, `--app`) to `~/.Trash`, `defaults delete` the preferences domain, remove
+  `~/Library` data (Preferences, Application Support, Caches, HTTPStorages, Saved Application State,
+  Logs; skipped by `--keep-settings`), then `pbs -flush` so the Finder services disappear. The bundle
+  ID is read from the app's `Info.plist` with `plutil`. Launch Services, `defaults`, `osascript` and
+  `pbs` steps are best-effort; a failed `pluginkit` or file removal is reported and exits 1. Without
+  `-y` it asks for confirmation (declined exit code 4 when stdin is not a terminal). Commands go through
+  an injectable `Runner`; `tests/macos/test_uninstall.cpp` (Catch2, `satchel_uninstall_tests`) drives it
+  with a fake runner in a temporary home. Not yet run against a real dmg install.
 - Linux: Dolphin service menus `share/kio/servicemenus/satchel-{compress,extract}.desktop`
   (compress for all files and folders; extract and "Open in Satchel" for `application/zip`), and a
   nautilus-python extension `share/nautilus-python/extensions/satchel.py` (the `.deb` suggests

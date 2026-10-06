@@ -72,7 +72,7 @@ function(zp_install_macos_uninstaller)
     if(NOT APPLE)
         return()
     endif()
-    install(PROGRAMS "${PROJECT_SOURCE_DIR}/packaging/macos/Uninstall Satchel.command" "${PROJECT_SOURCE_DIR}/packaging/macos/uninstall.py" DESTINATION .)
+    install(PROGRAMS "${PROJECT_SOURCE_DIR}/packaging/macos/Uninstall Satchel.command" DESTINATION .)
 endfunction()
 
 function(zp_install_linux_desktop_files)

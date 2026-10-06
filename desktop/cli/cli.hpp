@@ -82,5 +82,8 @@ int run_verify(const GlobalOptions& g, const std::string& archive);
 int run_edit(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& adds, const std::vector<std::string>& removes, const std::vector<std::string>& renames, const std::vector<std::string>& replaces, const std::string& output);
 int run_restore(const GlobalOptions& g, const std::string& file, const std::string& output);
 int run_preview(const std::string& file, bool html);
+#ifdef __APPLE__
+int run_uninstall(const GlobalOptions& g, const std::vector<std::string>& extra_apps, bool keep_settings, bool dry_run);
+#endif
 
 }
