@@ -139,7 +139,7 @@ private slots:
         const auto extracted = finished.takeFirst().at(2).value<JobOutcome>();
         QCOMPARE(extracted.status, ZP_OK);
         // "notes.txt" exists as a file, so the folder gets a suffix instead of clashing.
-        QCOMPARE(extracted.output, dir_.filePath("notes.txt 2"));
+        QCOMPARE(QDir::fromNativeSeparators(extracted.output), dir_.filePath("notes.txt 2"));
         QVERIFY(QFile::exists(dir_.filePath("notes.txt 2/notes.txt")));
     }
 
