@@ -119,6 +119,21 @@ TEST_CASE("dry run only runs read-only commands", "[uninstall]")
     CHECK(std::ranges::all_of(runner.calls, [](const auto& c) { return c[0] == "plutil" || (c[0] == "pluginkit" && c[1] == "-mAvvv"); }));
 }
 
+TEST_CASE("quit_running off skips quitting; duplicate app paths are removed once", "[uninstall]")
+{
+    Sandbox sandbox;
+    FakeRunner runner;
+    auto options = sandbox.options();
+    options.quit_running = false;
+    options.apps = { sandbox.app, sandbox.app / ".." / "Satchel.app" };
+
+    const auto report = uninstall(options, std::ref(runner));
+
+    CHECK(report.failed.empty());
+    CHECK_FALSE(runner.called("osascript"));
+    CHECK(std::ranges::count_if(report.done, [](const auto& line) { return line.starts_with("move "); }) == 1);
+}
+
 TEST_CASE("a missing app is not an error", "[uninstall]")
 {
     Sandbox sandbox;

@@ -5,8 +5,10 @@
 #include "app.hpp"
 #include "archive_model.hpp"
 #include "mac_services.hpp"
+#include "mac_uninstall.hpp"
 #include "main_window.hpp"
 #include "simple_window.hpp"
+#include <QAction>
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -157,6 +159,23 @@ private slots:
         QVERIFY(!perform_mac_service(app, "unknownMessage", { input }));
 #else
         QSKIP("macOS only");
+#endif
+    }
+
+    void uninstall_menu_item_exists_only_on_macos()
+    {
+        App app;
+        app.show_simple();
+        app.show_full();
+        for (QWidget* window : { static_cast<QWidget*>(app.simple()), static_cast<QWidget*>(app.full()) })
+        {
+            int found = 0;
+            for (auto* action : window->findChildren<QAction*>())
+                found += action->text() == "Uninstall Satchel…";
+            QCOMPARE(found, uninstall_available() ? 1 : 0);
+        }
+#ifdef Q_OS_MACOS
+        QVERIFY(uninstall_available());
 #endif
     }
 

@@ -179,7 +179,13 @@ UninstallReport uninstall(const UninstallOptions& options, const Runner& runner)
     Steps steps(runner, options.dry_run, report);
 
     std::vector<fs::path> existing;
-    std::ranges::copy_if(options.apps, std::back_inserter(existing), [](const fs::path& p) { return fs::exists(p); });
+    for (const auto& app : options.apps)
+    {
+        std::error_code ec;
+        const bool seen = std::ranges::any_of(existing, [&](const fs::path& p) { return fs::equivalent(p, app, ec); });
+        if (fs::exists(app) && !seen)
+            existing.push_back(app);
+    }
 
     std::string bundle_id(default_bundle_id);
     if (!existing.empty())
@@ -190,7 +196,8 @@ UninstallReport uninstall(const UninstallOptions& options, const Runner& runner)
     }
 
     const auto script = "if application id \"" + bundle_id + "\" is running then tell application id \"" + bundle_id + "\" to quit";
-    steps.command("quit Satchel", { "osascript", "-e", script }, false);
+    if (options.quit_running)
+        steps.command("quit Satchel", { "osascript", "-e", script }, false);
 
     std::set<fs::path> extensions;
     for (const auto& app : existing)

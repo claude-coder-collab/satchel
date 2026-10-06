@@ -700,6 +700,12 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   `-y` it asks for confirmation (declined exit code 4 when stdin is not a terminal). Commands go through
   an injectable `Runner`; `tests/macos/test_uninstall.cpp` (Catch2, `satchel_uninstall_tests`) drives it
   with a fake runner in a temporary home. Not yet run against a real dmg install.
+  The apps also offer **Satchel > Uninstall Satchel…** (Help menu action with
+  `ApplicationSpecificRole`, in both Simple and Full mode; `desktop/gui/app/mac_uninstall.cpp`, stubbed
+  elsewhere). It asks "Uninstall and Delete Settings" / "Uninstall and Keep Settings" / Cancel, runs the
+  same `uninstall()` with `quit_running` off and the running bundle added to the app list, shows any
+  failed steps, and otherwise quits. No background daemon: considered and rejected as unusual for this
+  kind of app.
 - Linux: Dolphin service menus `share/kio/servicemenus/satchel-{compress,extract}.desktop`
   (compress for all files and folders; extract and "Open in Satchel" for `application/zip`), and a
   nautilus-python extension `share/nautilus-python/extensions/satchel.py` (the `.deb` suggests
