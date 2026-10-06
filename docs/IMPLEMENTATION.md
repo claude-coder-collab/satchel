@@ -706,6 +706,20 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   same `uninstall()` with `quit_running` off and the running bundle added to the app list, shows any
   failed steps, and otherwise quits. No background daemon: considered and rejected as unusual for this
   kind of app.
+- User-data cleanup (Windows and Linux; `desktop/gui/app/user_data.{hpp,cpp}`): the Windows MSI and the
+  `.deb` leave per-user data behind, so Help has **Delete Settings and Temporary Files…** (not on macOS,
+  where the uninstaller covers it). What the app leaves per user: the `QSettings` store (organisation
+  `Venn Audio`, application `Satchel`: `HKCU\Software\Venn Audio\Satchel` on Windows,
+  `~/.config/Venn Audio/Satchel.conf` on Linux; recent files, header layout, last mode, options);
+  WinSparkle's own key `HKCU\Software\<ZP_VENDOR>\Satchel\WinSparkle` (the path comes from WinSparkle's
+  documentation and the exe's version resource, not yet seen on a real Windows machine); and temp
+  leftovers `satchel-<ms>` (entries extracted for opening or dragging, never deleted by the app) and
+  `satchel-spill-*.flac` (spill files after a crash). It writes nothing to AppData or elsewhere. The
+  dialog offers "Delete Settings and Temporary Files", "Delete Settings Only" or Cancel, then quits; the
+  deletion runs in `PendingCleanup`'s destructor (declared before `App` in `main`) so nothing rewrites
+  the settings on exit. Empty vendor/organisation registry keys are removed, never non-empty ones.
+  Tested in `tests/gui/test_app.cpp` (settings redirected to a temp dir on Linux; matching only
+  Satchel's temp names). The Windows registry branch is compiled only on Windows and is untested.
 - Linux: Dolphin service menus `share/kio/servicemenus/satchel-{compress,extract}.desktop`
   (compress for all files and folders; extract and "Open in Satchel" for `application/zip`), and a
   nautilus-python extension `share/nautilus-python/extensions/satchel.py` (the `.deb` suggests

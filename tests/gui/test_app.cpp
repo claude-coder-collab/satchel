@@ -8,7 +8,10 @@
 #include "mac_uninstall.hpp"
 #include "main_window.hpp"
 #include "simple_window.hpp"
+#include "user_data.hpp"
 #include <QAction>
+#include <QSettings>
+#include <QTemporaryDir>
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -177,6 +180,51 @@ private slots:
 #ifdef Q_OS_MACOS
         QVERIFY(uninstall_available());
 #endif
+    }
+
+    void cleanup_menu_item_exists_where_available()
+    {
+        App app;
+        app.show_simple();
+        app.show_full();
+        for (QWidget* window : { static_cast<QWidget*>(app.simple()), static_cast<QWidget*>(app.full()) })
+        {
+            int found = 0;
+            for (auto* action : window->findChildren<QAction*>())
+                found += action->text() == "Delete Settings and Temporary Files…";
+            QCOMPARE(found, user_data_cleanup_available() ? 1 : 0);
+        }
+    }
+
+    void cleanup_deletes_settings_and_only_satchel_temp_files()
+    {
+        QTemporaryDir config;
+        QTemporaryDir temp;
+        QVERIFY(config.isValid() && temp.isValid());
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+        QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, config.path());
+#endif
+        QSettings().setValue("recent", QStringList{ "a.zip" });
+        QSettings().sync();
+        const QDir dir(temp.path());
+        QVERIFY(dir.mkpath("satchel-1700000000000"));
+        QVERIFY(QFile(dir.filePath("satchel-1700000000000/a.wav")).open(QIODevice::WriteOnly));
+        QVERIFY(QFile(dir.filePath("satchel-spill-00ab12cd-0.flac")).open(QIODevice::WriteOnly));
+        QVERIFY(QFile(dir.filePath("keep.txt")).open(QIODevice::WriteOnly));
+        QVERIFY(dir.mkpath("satchel-notes"));
+        QCOMPARE(satchel_gui::temp_leftovers(temp.path()).size(), 2);
+
+        const auto settings_only = satchel_gui::clean_user_data(temp.path(), false);
+        QVERIFY(settings_only.failed.isEmpty());
+        QVERIFY(!QSettings().contains("recent"));
+        QCOMPARE(satchel_gui::temp_leftovers(temp.path()).size(), 2);
+
+        const auto all = satchel_gui::clean_user_data(temp.path(), true);
+        QVERIFY(all.failed.isEmpty());
+        QCOMPARE(all.removed.size(), 2);
+        QVERIFY(satchel_gui::temp_leftovers(temp.path()).isEmpty());
+        QVERIFY(dir.exists("keep.txt"));
+        QVERIFY(dir.exists("satchel-notes"));
     }
 
     void translations_are_embedded()
