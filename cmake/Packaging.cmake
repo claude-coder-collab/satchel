@@ -68,6 +68,13 @@ function(zp_install_updater)
     endif()
 endfunction()
 
+function(zp_install_macos_uninstaller)
+    if(NOT APPLE)
+        return()
+    endif()
+    install(PROGRAMS "${PROJECT_SOURCE_DIR}/packaging/macos/Uninstall Satchel.command" "${PROJECT_SOURCE_DIR}/packaging/macos/uninstall.py" DESTINATION .)
+endfunction()
+
 function(zp_install_linux_desktop_files)
     if(APPLE OR WIN32)
         return()

@@ -69,6 +69,7 @@ if(ZP_BUILD_GUI AND Qt6_FOUND)
     endif()
     install(TARGETS satchel_gui BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     zp_install_linux_desktop_files()
+    zp_install_macos_uninstaller()
     zp_install_updater()
 
     if(APPLE OR WIN32)
