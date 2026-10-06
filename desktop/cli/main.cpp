@@ -122,6 +122,17 @@ int main(int argc, char** argv)
     preview->add_option("file", preview_file, "Zip or FLAC file")->required();
     preview->add_flag("--html", preview_html, "Print a self-contained HTML page instead of JSON");
 
+#ifdef __APPLE__
+    std::vector<std::string> uninstall_apps;
+    bool uninstall_keep_settings = false;
+    bool uninstall_dry_run = false;
+    auto* uninstall = app.add_subcommand("uninstall", "Remove Satchel, its Quick Look extension, Finder services and settings (macOS)");
+    uninstall->add_option("--app", uninstall_apps, "Another Satchel.app to remove (/Applications and ~/Applications are always checked)");
+    uninstall->add_flag("--keep-settings", uninstall_keep_settings, "Keep preferences, caches and saved state");
+    uninstall->add_flag("--dry-run", uninstall_dry_run, "Print what would be done");
+    add_globals(uninstall);
+#endif
+
     try
     {
         app.parse(argc, argv);
@@ -145,6 +156,10 @@ int main(int argc, char** argv)
             return run_edit(g, archive, adds, removes, edit_renames, replaces, output);
         if (*preview)
             return run_preview(preview_file, preview_html);
+#ifdef __APPLE__
+        if (*uninstall)
+            return run_uninstall(g, uninstall_apps, uninstall_keep_settings, uninstall_dry_run);
+#endif
         if (*restore)
             return run_restore(g, flac_file, restore_output);
     } catch (const zpp::Error& e)
