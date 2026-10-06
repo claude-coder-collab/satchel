@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(satchel VERSION 0.2.0 DESCRIPTION "Lossless media packaging as standard zip archives" LANGUAGES C CXX)
+project(satchel VERSION 0.3.0 DESCRIPTION "Lossless media packaging as standard zip archives" LANGUAGES C CXX)
 
 if(MSVC)
     set(ZP_CXX_STANDARD 23)
