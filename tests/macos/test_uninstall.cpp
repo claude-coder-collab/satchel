@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <fstream>
+#include <random>
+#include <unistd.h>
 
 using namespace satchel_macos;
 namespace fs = std::filesystem;
@@ -41,7 +43,7 @@ struct FakeRunner
 
 struct Sandbox
 {
-    fs::path root = fs::temp_directory_path() / ("satchel-uninstall-" + std::to_string(std::rand()));
+    fs::path root = fs::temp_directory_path() / ("satchel-uninstall-" + std::to_string(getpid()) + "-" + std::to_string(std::random_device{}()));
     fs::path app = root / "Applications" / "Satchel.app";
 
     Sandbox()
@@ -49,7 +51,11 @@ struct Sandbox
         fs::create_directories(app / "Contents" / "PlugIns" / "SatchelPreview.appex");
         fs::create_directories(root / "Library" / "Preferences");
     }
-    ~Sandbox() { fs::remove_all(root); }
+    ~Sandbox()
+    {
+        std::error_code ec;
+        fs::remove_all(root, ec);
+    }
     Sandbox(const Sandbox&) = delete;
     Sandbox& operator=(const Sandbox&) = delete;
     Sandbox(Sandbox&&) = delete;
