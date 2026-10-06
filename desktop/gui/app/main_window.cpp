@@ -4,6 +4,7 @@
 
 #include "labels.hpp"
 #include "mac_uninstall.hpp"
+#include "user_data.hpp"
 
 #include "updater.hpp"
 
@@ -37,10 +38,10 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QPushButton>
 #include <QMimeData>
 #include <QProgressBar>
 #include <QProgressDialog>
+#include <QPushButton>
 #include <QSaveFile>
 #include <QSettings>
 #include <QSplitter>
@@ -204,7 +205,7 @@ void MainWindow::build_ui()
     auto* view_menu = menuBar()->addMenu(tr("&View"));
     view_menu->addAction(tree_action_);
     view_menu->addAction(action(tr("Switch to Simple Mode"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [this] { app_.toggle_mode(); }));
-    if ((app_.updater() && app_.updater()->available()) || uninstall_available())
+    if ((app_.updater() && app_.updater()->available()) || uninstall_available() || user_data_cleanup_available())
     {
         auto* help_menu = menuBar()->addMenu(tr("&Help"));
         if (app_.updater() && app_.updater()->available())
@@ -214,6 +215,7 @@ void MainWindow::build_ui()
             connect(check, &QAction::triggered, this, [this] { app_.updater()->check_now(); });
         }
         add_uninstall_action(help_menu, this);
+        add_user_data_cleanup_action(help_menu, this);
     }
 
     model_ = new ArchiveModel(this);

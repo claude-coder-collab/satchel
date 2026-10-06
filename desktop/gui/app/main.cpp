@@ -4,6 +4,7 @@
 #include "mac_services.hpp"
 #include "main_window.hpp"
 #include "settings_store.hpp"
+#include "user_data.hpp"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -80,6 +81,7 @@ int main(int argc, char** argv)
     parser.addPositionalArgument("files", "Zip archives to extract, or files to compress (Simple mode rule)");
     parser.process(qapp);
 
+    PendingCleanup pending_cleanup;
     App app;
     FileOpenFilter filter(app);
     qapp.installEventFilter(&filter);

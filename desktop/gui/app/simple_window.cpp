@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "simple_window.hpp"
 #include "mac_uninstall.hpp"
+#include "user_data.hpp"
 
 #include "app.hpp"
 #include "dialogs.hpp"
@@ -69,8 +70,12 @@ SimpleWindow::SimpleWindow(App& app) :
     auto* to_full = mode_menu->addAction(tr("Switch to Full Mode"));
     to_full->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
     connect(to_full, &QAction::triggered, this, [this] { app_.toggle_mode(); });
-    if (uninstall_available())
-        add_uninstall_action(menu_bar->addMenu(tr("&Help")), this);
+    if (uninstall_available() || user_data_cleanup_available())
+    {
+        auto* help_menu = menu_bar->addMenu(tr("&Help"));
+        add_uninstall_action(help_menu, this);
+        add_user_data_cleanup_action(help_menu, this);
+    }
     layout->setMenuBar(menu_bar);
     pages_ = new QStackedWidget(this);
     layout->addWidget(pages_);

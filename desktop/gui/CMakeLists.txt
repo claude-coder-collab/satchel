@@ -26,6 +26,7 @@ if(ZP_BUILD_GUI AND Qt6_FOUND)
         app/dialogs.cpp
         app/simple_window.cpp
         app/main_window.cpp
+        app/user_data.cpp
     )
     if(APPLE)
         enable_language(OBJCXX)
@@ -36,6 +37,7 @@ if(ZP_BUILD_GUI AND Qt6_FOUND)
         target_link_libraries(satchel_gui_app PUBLIC "-framework AppKit")
     else()
         target_sources(satchel_gui_app PRIVATE app/mac_services_stub.cpp $<IF:$<PLATFORM_ID:Windows>,app/updater_win.cpp,app/updater_null.cpp>)
+        target_compile_definitions(satchel_gui_app PRIVATE ZP_VENDOR_NAME="${ZP_VENDOR}")
         target_compile_definitions(satchel_gui_app PRIVATE ZP_UPDATE_FEED_URL="${ZP_UPDATE_FEED_URL_WINDOWS}" ZP_UPDATE_PUBLIC_KEY="${ZP_UPDATE_PUBLIC_KEY}")
     endif()
     target_include_directories(satchel_gui_app PUBLIC app ${PROJECT_SOURCE_DIR}/desktop/common)
