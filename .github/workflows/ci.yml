@@ -155,12 +155,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          arch: win64_msvc2022_64
+          cache: true
       - name: Configure
         run: cmake --preset msvc -DZP_WARNINGS_AS_ERRORS=ON
       - name: Build
         run: cmake --build build/msvc --config Release
       - name: Test
         run: ctest --test-dir build/msvc -C Release --output-on-failure -j 4
+      - name: Diagnose GUI tests
+        if: failure()
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          f=$(find build/msvc -name satchel_gui_tests.exe | head -1)
+          "$f" -o gui.txt,txt || echo "exit $?"; head -c 8000 gui.txt
       - name: CLI tests
         shell: bash
         run: |

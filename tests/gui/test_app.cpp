@@ -130,7 +130,7 @@ private slots:
         QVERIFY(finished.wait(20000));
         const auto outcome = finished.takeFirst().at(2).value<JobOutcome>();
         QCOMPARE(outcome.status, ZP_OK);
-        QCOMPARE(outcome.output, dir_.filePath("notes.txt.zip"));
+        QCOMPARE(QDir::fromNativeSeparators(outcome.output), dir_.filePath("notes.txt.zip"));
         QVERIFY(QFile::exists(outcome.output));
 
         // Dropping the zip extracts it next to itself.
@@ -139,7 +139,7 @@ private slots:
         const auto extracted = finished.takeFirst().at(2).value<JobOutcome>();
         QCOMPARE(extracted.status, ZP_OK);
         // "notes.txt" exists as a file, so the folder gets a suffix instead of clashing.
-        QCOMPARE(extracted.output, dir_.filePath("notes.txt 2"));
+        QCOMPARE(QDir::fromNativeSeparators(extracted.output), dir_.filePath("notes.txt 2"));
         QVERIFY(QFile::exists(dir_.filePath("notes.txt 2/notes.txt")));
     }
 
@@ -158,7 +158,7 @@ private slots:
         QVERIFY(finished.wait(20000));
         const auto outcome = finished.takeFirst().at(2).value<JobOutcome>();
         QCOMPARE(outcome.status, ZP_OK);
-        QCOMPARE(outcome.output, dir_.filePath("service.txt.zip"));
+        QCOMPARE(QDir::fromNativeSeparators(outcome.output), dir_.filePath("service.txt.zip"));
         QVERIFY(!perform_mac_service(app, "unknownMessage", { input }));
 #else
         QSKIP("macOS only");
@@ -219,9 +219,11 @@ private slots:
         QVERIFY(!QSettings().contains("recent"));
         QCOMPARE(satchel_gui::temp_leftovers(temp.path()).size(), 2);
 
+        const auto leftovers = satchel_gui::temp_leftovers(temp.path());
         const auto all = satchel_gui::clean_user_data(temp.path(), true);
         QVERIFY(all.failed.isEmpty());
-        QCOMPARE(all.removed.size(), 2);
+        for (const auto& path : leftovers)
+            QVERIFY(all.removed.contains(path));
         QVERIFY(satchel_gui::temp_leftovers(temp.path()).isEmpty());
         QVERIFY(dir.exists("keep.txt"));
         QVERIFY(dir.exists("satchel-notes"));
