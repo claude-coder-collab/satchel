@@ -166,6 +166,14 @@ jobs:
         run: cmake --build build/msvc --config Release
       - name: Test
         run: ctest --test-dir build/msvc -C Release --output-on-failure -j 4
+      - name: Diagnose GUI tests
+        if: failure()
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          f=$(find build/msvc -name satchel_gui_tests.exe | head -1)
+          "$f" > gui.txt 2>&1; echo "exit $?"; head -c 6000 gui.txt
       - name: CLI tests
         shell: bash
         run: |
