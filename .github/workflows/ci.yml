@@ -155,6 +155,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          arch: win64_msvc2022_64
+          cache: true
       - name: Configure
         run: cmake --preset msvc -DZP_WARNINGS_AS_ERRORS=ON
       - name: Build
