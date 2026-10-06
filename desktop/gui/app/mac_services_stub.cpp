@@ -8,3 +8,14 @@ bool perform_mac_service(App&, const QString&, const QStringList&)
 {
     return false;
 }
+
+#include "mac_uninstall.hpp"
+
+bool uninstall_available()
+{
+    return false;
+}
+
+void run_uninstall_dialog(QWidget*) {}
+
+void add_uninstall_action(QMenu*, QWidget*) {}

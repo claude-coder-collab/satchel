@@ -25,6 +25,7 @@ struct UninstallOptions
     std::vector<std::filesystem::path> apps;
     bool keep_settings = false;
     bool dry_run = false;
+    bool quit_running = true;
 };
 
 struct UninstallReport
@@ -48,7 +49,7 @@ std::vector<std::filesystem::path> parse_registered_extensions(std::string_view 
 std::vector<std::filesystem::path> default_app_paths(const std::filesystem::path& home);
 std::vector<std::filesystem::path> user_data_paths(const std::filesystem::path& home, std::string_view bundle_id);
 
-// Quits the app, unregisters the Quick Look extension, moves the app to the Trash, deletes settings
+// Quits the app (unless `quit_running` is off, for the app removing itself), unregisters the Quick Look extension, moves the app to the Trash, deletes settings
 // and flushes the Finder services. Only read-only commands run when `dry_run` is set.
 UninstallReport uninstall(const UninstallOptions& options, const Runner& runner);
 

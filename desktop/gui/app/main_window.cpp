@@ -3,6 +3,7 @@
 #include "main_window.hpp"
 
 #include "labels.hpp"
+#include "mac_uninstall.hpp"
 
 #include "updater.hpp"
 
@@ -203,12 +204,16 @@ void MainWindow::build_ui()
     auto* view_menu = menuBar()->addMenu(tr("&View"));
     view_menu->addAction(tree_action_);
     view_menu->addAction(action(tr("Switch to Simple Mode"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [this] { app_.toggle_mode(); }));
-    if (app_.updater() && app_.updater()->available())
+    if ((app_.updater() && app_.updater()->available()) || uninstall_available())
     {
         auto* help_menu = menuBar()->addMenu(tr("&Help"));
-        auto* check = help_menu->addAction(tr("Check for Updates…"));
-        check->setMenuRole(QAction::ApplicationSpecificRole);
-        connect(check, &QAction::triggered, this, [this] { app_.updater()->check_now(); });
+        if (app_.updater() && app_.updater()->available())
+        {
+            auto* check = help_menu->addAction(tr("Check for Updates…"));
+            check->setMenuRole(QAction::ApplicationSpecificRole);
+            connect(check, &QAction::triggered, this, [this] { app_.updater()->check_now(); });
+        }
+        add_uninstall_action(help_menu, this);
     }
 
     model_ = new ArchiveModel(this);
