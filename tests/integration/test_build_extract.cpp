@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "codecs/codec.hpp"
+#include "codecs/deflate.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -251,6 +252,31 @@ TEST_CASE("large entries with compressible headers and trailers but incompressib
     REQUIRE(x.result.status == Status::Ok);
     CHECK(x.files["faststart.mov"].data == wrapped_noise(256u << 10, 8u << 20, 0));
     CHECK(x.files["indexed.mp4"].data == wrapped_noise(256u << 10, 8u << 20, 256u << 10));
+}
+
+TEST_CASE("deflate saving under 20 percent is not worth it", "[integration][deflate]")
+{
+    const auto modest = [](std::size_t blocks) {
+        std::vector<std::uint8_t> data;
+        for (std::size_t i = 0; i < blocks; ++i)
+        {
+            const auto noise = test::random_bytes(900, static_cast<std::uint32_t>(i));
+            data.insert(data.end(), noise.begin(), noise.end());
+            data.insert(data.end(), 100, 0);
+        }
+        return data;
+    };
+    MemoryInputSource in;
+    in.add_file("small.bin", modest(1000));
+    in.add_file("large.bin", modest(9000));
+    auto b = test::build(in);
+    REQUIRE(b.result.status == Status::Ok);
+    const auto& r = b.result.per_entry;
+    REQUIRE(r.size() == 2);
+    CHECK(r[0].method == ZipMethod::Store);
+    CHECK(r[1].method == ZipMethod::Store);
+    const auto deflated = deflate_buffer(modest(1000), 6).value();
+    CHECK(deflated.size() < modest(1000).size() * 95 / 100);
 }
 
 TEST_CASE("non-seekable large entries fall back to a prefix sample", "[integration][deflate]")

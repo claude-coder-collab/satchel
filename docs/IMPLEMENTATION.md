@@ -150,11 +150,11 @@ require the magic; anything else is a foreign comment (`nullopt`).
 - Method choice for `GENERAL` entries (main spec 6.1):
   - empty files are stored;
   - entries up to `small_entry_threshold` (4 MiB) are one segment: the worker deflates the whole
-    entry and keeps the result only if it saves at least 2 % (`min_deflate_saving`), otherwise the
+    entry and keeps the result only if it saves at least 20 % (`min_deflate_saving`), otherwise the
     entry is stored;
   - larger entries: the reader deflates three 128 KiB windows (`sample_window`) centred at 20 %,
     50 % and 80 % of the entry at the plan's level, then seeks back to the start, and picks
-    deflate (1 MiB segments) or store (4 MiB segments) for the whole entry by the same 2 % rule
+    deflate (1 MiB segments) or store (4 MiB segments) for the whole entry by the same 20 % rule
     applied to the summed sizes. Windows are clamped inside the entry and never overlap. The
     interior positions keep compressible headers and trailers (QuickTime `moov` atoms, indexes)
     from deciding the method for an incompressible body (issue #53). A non-seekable input falls
