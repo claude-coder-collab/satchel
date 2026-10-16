@@ -86,6 +86,23 @@ inline Input input_from_paths(const std::vector<std::string>& paths)
     return Input(not_null(zp_input_from_paths(raw.data(), raw.size())));
 }
 
+inline void set_excludes(const Input& input, const std::vector<std::string>& patterns)
+{
+    std::vector<const char*> raw;
+    raw.reserve(patterns.size());
+    for (const auto& p : patterns)
+        raw.push_back(p.c_str());
+    check(zp_input_set_excludes(input.get(), raw.data(), raw.size()));
+}
+
+inline std::vector<std::string> exclude_preset(int preset)
+{
+    std::vector<std::string> out;
+    for (std::size_t i = 0; const char* p = zp_exclude_preset_pattern(preset, i); ++i)
+        out.emplace_back(p);
+    return out;
+}
+
 struct PlanEntry
 {
     std::size_t index = 0;
@@ -149,6 +166,25 @@ inline std::vector<Warning> plan_warnings(const zp_plan_t* plan)
     {
         check(zp_plan_get_warning(plan, i, &w));
         out.push_back({ w.kind, str(w.source_path), str(w.detail) });
+    }
+    return out;
+}
+
+struct Excluded
+{
+    std::string source_path;
+    std::string archive_path;
+    int kind = ZP_KIND_FILE;
+};
+
+inline std::vector<Excluded> plan_excluded(const zp_plan_t* plan)
+{
+    std::vector<Excluded> out;
+    zp_excluded_t e{};
+    for (std::size_t i = 0; i < zp_plan_excluded_count(plan); ++i)
+    {
+        check(zp_plan_get_excluded(plan, i, &e));
+        out.push_back({ str(e.source_path), str(e.archive_path), e.kind });
     }
     return out;
 }

@@ -83,7 +83,8 @@ public:
     {
     }
 
-    Result<std::vector<InputItem>> enumerate() override
+protected:
+    Result<std::vector<InputItem>> list_items() override
     {
         InputItem item;
         item.source_path = "generated:" + name_;
@@ -94,6 +95,7 @@ public:
         return std::vector<InputItem>{ item };
     }
 
+public:
     std::unique_ptr<IChunkedStream> open() const { return std::make_unique<GeneratedStream>(size_, head_, gen_); }
 
 private:

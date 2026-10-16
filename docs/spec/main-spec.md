@@ -159,6 +159,14 @@ Maximum compatibility is the governing requirement. Archives must extract correc
 - **Extraction** of third-party archives containing symlink entries: the entries are skipped and reported as warnings.
 - **Path safety** (all extraction paths): reject entries whose paths escape the destination (`..`, absolute paths).
 
+### 6.3.1 Excluded Files
+
+- An input can carry **exclude patterns**: names of files and folders to leave out. A pattern matches a single name (not a path), case-insensitively after NFC normalization: `*` any run, `?` one character, `[a-z]`/`[!a-z]` a set, `\` escapes. A trailing `/` restricts it to folders; nothing below an excluded folder is read.
+- Items the user chose directly (top-level inputs) are never excluded.
+- The plan reports each excluded item, and an excluded folder once, not its contents. Excluded items are not in sizes, progress or the archive.
+- Presets: **system** (OS clutter: `.DS_Store`, `._*`, `__MACOSX/`, `.Spotlight-V100/`, `.Trashes/`, `.fseventsd/`, `.TemporaryItems/`, `.DocumentRevisions-V100/`, `Icon\r`, `Thumbs.db`, `ehthumbs.db`, `desktop.ini`, `$RECYCLE.BIN/`, `System Volume Information/`, `~$*`, `.~lock.*#`) and **DAW caches** (regenerable waveform/analysis files: `WaveCache.wfm`, `*.asd`, `*.reapeaks`, `*.pkf`, `*.gpk`, `*.sfk`).
+- The library excludes nothing by default. The CLI and the desktop app apply the system preset by default.
+
 ### 6.4 Archive Metadata (EOCD Comment)
 
 ```

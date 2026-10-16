@@ -6,7 +6,10 @@
 #include <filesystem>
 #include <format>
 #include <memory>
+#include <optional>
+#include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -65,7 +68,7 @@ InputItem make_fs_item(const std::filesystem::path& p, std::string archive_path,
     return item;
 }
 
-VoidResult walk(const std::filesystem::path& dir, const std::string& prefix, std::vector<InputItem>& out)
+VoidResult walk(const std::filesystem::path& dir, const std::string& prefix, const ExcludeFilter& exclude, std::vector<InputItem>& out)
 {
     std::error_code ec;
     std::vector<std::pair<std::string, std::filesystem::path>> children;
@@ -86,9 +89,9 @@ VoidResult walk(const std::filesystem::path& dir, const std::string& prefix, std
         archive_path += '/';
         archive_path += name;
         out.push_back(make_fs_item(child, archive_path, *st));
-        if (st->kind == ItemKind::Directory)
+        if (st->kind == ItemKind::Directory && !exclude.matches(name, true))
         {
-            if (auto r = walk(child, archive_path, out); !r)
+            if (auto r = walk(child, archive_path, exclude, out); !r)
                 return r;
         }
     }
@@ -97,7 +100,52 @@ VoidResult walk(const std::filesystem::path& dir, const std::string& prefix, std
 
 }
 
-Result<std::vector<InputItem>> FilesystemInputSource::enumerate()
+Result<std::vector<InputItem>> InputSource::enumerate()
+{
+    excluded_.clear();
+    auto items = list_items();
+    if (!items || exclude_.empty())
+        return items;
+    std::set<std::string, std::less<>> seen;
+    std::vector<InputItem> kept;
+    kept.reserve(items->size());
+    for (auto& item : *items)
+    {
+        const std::string_view path = item.archive_path;
+        std::optional<std::size_t> cut;
+        bool root = true;
+        for (std::size_t start = 0; start < path.size() && !cut;)
+        {
+            auto end = path.find('/', start);
+            if (end == std::string_view::npos)
+                end = path.size();
+            const auto name = path.substr(start, end - start);
+            if (!name.empty())
+            {
+                const bool last = end == path.size();
+                if (!root && exclude_.matches(name, !last || item.kind == ItemKind::Directory))
+                    cut = end;
+                root = false;
+            }
+            start = end + 1;
+        }
+        if (!cut)
+        {
+            kept.push_back(std::move(item));
+            continue;
+        }
+        const auto top = path.substr(0, *cut);
+        if (!seen.insert(std::string(top)).second)
+            continue;
+        if (*cut == path.size())
+            excluded_.push_back({ item.source_path, item.archive_path, item.kind });
+        else
+            excluded_.push_back({ {}, std::string(top), ItemKind::Directory });
+    }
+    return kept;
+}
+
+Result<std::vector<InputItem>> FilesystemInputSource::list_items()
 {
     std::vector<InputItem> items;
     for (const auto& raw_root : roots_)
@@ -117,7 +165,7 @@ Result<std::vector<InputItem>> FilesystemInputSource::enumerate()
         items.push_back(make_fs_item(root, name, *st));
         if (st->kind == ItemKind::Directory)
         {
-            if (auto r = walk(root, name, items); !r)
+            if (auto r = walk(root, name, exclude(), items); !r)
                 return std::unexpected(r.error());
         }
     }
@@ -153,7 +201,7 @@ void MemoryInputSource::replace_data(const std::string& archive_path, std::vecto
     }
 }
 
-Result<std::vector<InputItem>> MemoryInputSource::enumerate()
+Result<std::vector<InputItem>> MemoryInputSource::list_items()
 {
     std::vector<InputItem> items;
     items.reserve(entries_.size());

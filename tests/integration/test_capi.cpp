@@ -311,3 +311,43 @@ TEST_CASE("C API callback input and sink, and JSON descriptions", "[capi]")
     zp_plan_free(plan);
     zp_input_free(in);
 }
+
+TEST_CASE("C API exclude patterns and presets", "[capi][exclude]")
+{
+    Ctx c;
+    zp_input_t* in = zp_input_memory();
+    const std::string x = "x";
+    for (const auto* name : { "d/keep.txt", "d/.DS_Store", "d/cache.asd" })
+        REQUIRE(zp_input_memory_add_file(in, name, reinterpret_cast<const std::uint8_t*>(x.data()), x.size(), 0, 0644) == ZP_OK);
+
+    const char* bad[] = { "a/b" };
+    CHECK(zp_input_set_excludes(in, bad, 1) == ZP_INVALID_ARGUMENT);
+    CHECK(std::string(zp_last_error()).find("a/b") != std::string::npos);
+
+    std::vector<const char*> patterns;
+    for (const int preset : { ZP_EXCLUDE_PRESET_SYSTEM, ZP_EXCLUDE_PRESET_DAW_CACHES })
+    {
+        for (std::size_t i = 0; const char* p = zp_exclude_preset_pattern(preset, i); ++i)
+            patterns.push_back(p);
+    }
+    CHECK(zp_exclude_preset_pattern(99, 0) == nullptr);
+    REQUIRE(zp_input_set_excludes(in, patterns.data(), patterns.size()) == ZP_OK);
+
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, nullptr);
+    REQUIRE(plan);
+    CHECK(zp_plan_entry_count(plan) == 1);
+    REQUIRE(zp_plan_excluded_count(plan) == 2);
+    zp_excluded_t e{};
+    REQUIRE(zp_plan_get_excluded(plan, 0, &e) == ZP_OK);
+    CHECK(std::string(e.archive_path) == "d/.DS_Store");
+    CHECK(e.kind == ZP_KIND_FILE);
+    CHECK(zp_plan_get_excluded(plan, 2, &e) == ZP_INVALID_ARGUMENT);
+    zp_plan_free(plan);
+
+    REQUIRE(zp_input_set_excludes(in, nullptr, 0) == ZP_OK);
+    plan = zp_plan_create(c.ctx, in, nullptr);
+    CHECK(zp_plan_entry_count(plan) == 3);
+    CHECK(zp_plan_excluded_count(plan) == 0);
+    zp_plan_free(plan);
+    zp_input_free(in);
+}

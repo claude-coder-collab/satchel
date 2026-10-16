@@ -43,6 +43,10 @@ enum {
     ZP_WARNING_FLAC_FALLBACK = 1
 };
 enum {
+    ZP_EXCLUDE_PRESET_SYSTEM = 0,
+    ZP_EXCLUDE_PRESET_DAW_CACHES = 1
+};
+enum {
     ZP_RESOLVE_RENAME = 0,
     ZP_RESOLVE_SKIP = 1,
     ZP_RESOLVE_DISABLE_FLAC = 2
@@ -120,6 +124,8 @@ typedef struct zp_input_item
 typedef int64_t (*zp_read_fn)(void* user, size_t item, uint64_t offset, uint8_t* buf, size_t len);
 zp_input_t* zp_input_from_callbacks(const zp_input_item_t* items, size_t count, zp_read_fn read, void* user);
 void zp_input_free(zp_input_t* input);
+int zp_input_set_excludes(zp_input_t* input, const char* const* patterns, size_t count);
+const char* zp_exclude_preset_pattern(int preset, size_t i);
 typedef struct zp_plan_options
 {
     int flac_enabled;
@@ -158,6 +164,12 @@ typedef struct zp_warning
     const char* source_path;
     const char* detail;
 } zp_warning_t;
+typedef struct zp_excluded
+{
+    const char* source_path;
+    const char* archive_path;
+    int kind;
+} zp_excluded_t;
 typedef struct zp_resolution
 {
     size_t entry;
@@ -171,6 +183,8 @@ size_t zp_plan_conflict_count(const zp_plan_t* plan);
 int zp_plan_get_conflict(const zp_plan_t* plan, size_t i, zp_conflict_t* out);
 size_t zp_plan_warning_count(const zp_plan_t* plan);
 int zp_plan_get_warning(const zp_plan_t* plan, size_t i, zp_warning_t* out);
+size_t zp_plan_excluded_count(const zp_plan_t* plan);
+int zp_plan_get_excluded(const zp_plan_t* plan, size_t i, zp_excluded_t* out);
 int zp_plan_resolve(zp_plan_t* plan, const zp_resolution_t* resolutions, size_t count);
 int zp_plan_executable(const zp_plan_t* plan);
 uint64_t zp_plan_total_bytes(const zp_plan_t* plan);

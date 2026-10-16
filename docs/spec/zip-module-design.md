@@ -50,7 +50,9 @@ MinizipStreamAdapter            // implements minizip-ng's mz_stream vtable over
 
 ```
 InputSource                     // abstraction over "things to archive"
-    enumerate() -> vector<InputItem>
+    enumerate() -> vector<InputItem>   // minus items matching the exclude filter (main spec 6.3.1)
+    set_exclude(ExcludeFilter)
+    excluded() -> vector<ExcludedItem> // {source_path, archive_path, kind}; topmost excluded paths
 
 InputItem
     source_path: string         // as given by the platform
@@ -62,7 +64,8 @@ InputItem
     open() -> unique_ptr<IChunkedStream>
 
 FilesystemInputSource : InputSource     // native; lstat-based, never follows links;
-                                        // Windows junctions/reparse points reported as SYMLINK
+                                        // Windows junctions/reparse points reported as SYMLINK;
+                                        // does not list the contents of excluded folders
 BrowserFileListInputSource : InputSource // WASM; built from JS File objects; never reports SYMLINK
 ```
 
@@ -124,6 +127,7 @@ Resolution
 Planner rules:
 - If any entry is FLAC or FLAC_MONO, a `README` plan entry (kind GENERATED) is added at the archive root (main spec 6.5), included in collision checks. Its content is rendered at execute time from the template and the final plan.
 - Directories become directory entries; SYMLINK items are dropped and produce `SYMLINK_SKIPPED` warnings.
+- The input's excluded items are copied to `ArchivePlan.excluded`; the editor accumulates those of every `add`.
 - PCM eligibility (WAV, RF64, AIFF, AIFF-C, CAF, Wave64) is decided **conclusively** at plan time by a header-only container walk (seeks, no full read), per main spec 7.2. Execute never changes the decision, so output names are stable.
 - ≤ 8 channels → one `PlanEntry` (`take1.flac`). > 8 channels → one `PlanEntry` per channel (`take1_chNN.flac`) sharing a `group_id`; the group is one unit for skip/rename resolutions.
 - Ineligible PCM files keep their name, use store, and get a `FLAC_FALLBACK` warning with the reason.

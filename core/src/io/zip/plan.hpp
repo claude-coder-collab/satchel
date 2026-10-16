@@ -120,6 +120,8 @@ struct ArchivePlan
     std::vector<PlanEntry> entries;
     std::vector<Conflict> conflicts;
     std::vector<Warning> warnings;
+    // Inputs left out by the input's exclude filter.
+    std::vector<ExcludedItem> excluded;
     PlannerOptions options;
 
     [[nodiscard]] bool executable() const { return conflicts.empty(); }

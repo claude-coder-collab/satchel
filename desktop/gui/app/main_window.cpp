@@ -641,6 +641,7 @@ void MainWindow::edit(const QString& title, const std::function<void(zp_editor_t
         if (!adds.empty())
         {
             input = zpp::input_from_paths(adds);
+            zpp::set_excludes(input, zpp::exclude_preset(ZP_EXCLUDE_PRESET_SYSTEM));
             zpp::check(zp_editor_add(editor.get(), input.get()));
         }
         zpp::Plan view(zpp::not_null(zp_editor_plan(editor.get())));

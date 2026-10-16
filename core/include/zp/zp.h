@@ -87,6 +87,11 @@ enum {
 };
 
 enum {
+    ZP_EXCLUDE_PRESET_SYSTEM = 0, /* .DS_Store, AppleDouble ._ files, Thumbs.db, __MACOSX/, ... */
+    ZP_EXCLUDE_PRESET_DAW_CACHES = 1 /* regenerable waveform/analysis caches of audio software */
+};
+
+enum {
     ZP_RESOLVE_RENAME = 0,
     ZP_RESOLVE_SKIP = 1,
     ZP_RESOLVE_DISABLE_FLAC = 2
@@ -208,6 +213,15 @@ typedef int64_t (*zp_read_fn)(void* user, size_t item, uint64_t offset, uint8_t*
 ZP_API zp_input_t* zp_input_from_callbacks(const zp_input_item_t* items, size_t count, zp_read_fn read, void* user);
 ZP_API void zp_input_free(zp_input_t* input);
 
+/* Name patterns of files and folders to leave out (default: none). Each pattern matches one name,
+ * case-insensitively: '*' any run, '?' one character, '[a-z]' / '[!a-z]' a set, '\\' escapes; a
+ * trailing '/' matches folders only, and nothing below an excluded folder is read. Items given
+ * directly (top-level paths, or names without '/') are never excluded. Replaces earlier patterns;
+ * an invalid pattern fails with ZP_INVALID_ARGUMENT and leaves them unchanged. */
+ZP_API int zp_input_set_excludes(zp_input_t* input, const char* const* patterns, size_t count);
+/* Pattern i of a ZP_EXCLUDE_PRESET_*, or NULL past the end. */
+ZP_API const char* zp_exclude_preset_pattern(int preset, size_t i);
+
 /* ---- planning -------------------------------------------------------------------------- */
 
 typedef struct zp_plan_options
@@ -253,6 +267,13 @@ typedef struct zp_warning
     const char* detail;
 } zp_warning_t;
 
+typedef struct zp_excluded
+{
+    const char* source_path; /* "" for a folder implied by excluded items below it */
+    const char* archive_path;
+    int kind;
+} zp_excluded_t;
+
 typedef struct zp_resolution
 {
     size_t entry;
@@ -267,6 +288,9 @@ ZP_API size_t zp_plan_conflict_count(const zp_plan_t* plan);
 ZP_API int zp_plan_get_conflict(const zp_plan_t* plan, size_t i, zp_conflict_t* out);
 ZP_API size_t zp_plan_warning_count(const zp_plan_t* plan);
 ZP_API int zp_plan_get_warning(const zp_plan_t* plan, size_t i, zp_warning_t* out);
+/* Inputs left out by the exclude patterns; an excluded folder is listed once, not its contents. */
+ZP_API size_t zp_plan_excluded_count(const zp_plan_t* plan);
+ZP_API int zp_plan_get_excluded(const zp_plan_t* plan, size_t i, zp_excluded_t* out);
 /* Applies all resolutions at once (indices refer to the plan before the call). On failure the
  * plan is unchanged. Skipped entries disappear, so indices shift afterwards. */
 ZP_API int zp_plan_resolve(zp_plan_t* plan, const zp_resolution_t* resolutions, size_t count);

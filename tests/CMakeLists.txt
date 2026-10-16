@@ -21,6 +21,7 @@ add_executable(zp_tests
     unit/test_build_sampling.cpp
     unit/test_bytes.cpp
     unit/test_codecs.cpp
+    unit/test_exclude.cpp
     unit/test_flac_format.cpp
     unit/test_hash.cpp
     unit/test_path_policy.cpp
@@ -34,6 +35,7 @@ add_executable(zp_tests
     integration/test_build_extract.cpp
     integration/test_capi.cpp
     integration/test_editor.cpp
+    integration/test_exclude.cpp
     integration/test_extract_plan.cpp
     integration/test_filesystem.cpp
     integration/test_flac.cpp
