@@ -4,6 +4,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -13,7 +14,7 @@ using zp::build::sample_offsets;
 TEST_CASE("sample windows are centred at 20, 50 and 80 percent", "[unit][deflate]")
 {
     constexpr std::size_t w = 128u << 10;
-    constexpr std::uint64_t size = 100ull << 20;
+    constexpr std::uint64_t size = std::uint64_t{ 100 } << 20;
     const auto offsets = sample_offsets(size, w);
     REQUIRE(offsets.size() == 3);
     CHECK(offsets[0] == size / 5 - w / 2);
@@ -26,7 +27,8 @@ TEST_CASE("sample windows are centred at 20, 50 and 80 percent", "[unit][deflate
 TEST_CASE("sample windows stay inside the entry and never overlap", "[unit][deflate]")
 {
     constexpr std::size_t w = 128u << 10;
-    for (const std::uint64_t size : { std::uint64_t{ w }, std::uint64_t{ w } + 1, 2ull * w, 3ull * w - 1, 3ull * w, 4ull << 20, (4ull << 20) + 1, 1ull << 40 })
+    constexpr std::uint64_t ww = w;
+    for (const auto size : std::array<std::uint64_t, 8>{ ww, ww + 1, 2 * ww, 3 * ww - 1, 3 * ww, std::uint64_t{ 4 } << 20, (std::uint64_t{ 4 } << 20) + 1, std::uint64_t{ 1 } << 40 })
     {
         const auto offsets = sample_offsets(size, w);
         REQUIRE_FALSE(offsets.empty());
