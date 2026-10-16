@@ -18,6 +18,7 @@ add_executable(zp_tests
     support/pcm_fixtures.cpp
     support/test_support.cpp
     unit/test_archive_metadata.cpp
+    unit/test_build_sampling.cpp
     unit/test_bytes.cpp
     unit/test_codecs.cpp
     unit/test_flac_format.cpp

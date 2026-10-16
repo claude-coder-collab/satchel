@@ -27,7 +27,7 @@ struct BuilderOptions
     std::uint64_t small_entry_threshold = 4ull << 20;
     std::size_t sample_window = 128u << 10;
     // Deflate is kept only if it saves at least this fraction.
-    double min_deflate_saving = 0.02;
+    double min_deflate_saving = 0.20;
     // Readme template (empty: the default); see readme.hpp for placeholders.
     std::string readme_template;
     // Where multi-mono spill files go (empty: the system temporary directory).

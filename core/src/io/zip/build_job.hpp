@@ -11,6 +11,7 @@
 #include "io/zip/plan.hpp"
 #include "pipeline/context.hpp"
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <filesystem>
@@ -115,5 +116,11 @@ public:
 void read_entries(Job& job);
 
 std::uint64_t deflate_size_hint(std::uint64_t size);
+
+// Store/deflate sampling for large entries: windows centred at these points, kept clear of
+// headers and trailers, which are often compressible even when the body is not.
+inline constexpr std::array<std::uint64_t, 3> sample_positions_percent{ 20, 50, 80 };
+// Start offsets of the non-overlapping sample windows of a seekable entry, ascending.
+std::vector<std::uint64_t> sample_offsets(std::uint64_t size, std::size_t window);
 
 }

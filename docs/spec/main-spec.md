@@ -50,7 +50,7 @@ flowchart TD
     IN["Input file"] --> SL{"Symlink?"}
     SL -- yes --> SK["Skip and warn user"]
     SL -- no --> EL{"Eligible PCM?"}
-    EL -- no --> GP["General path<br/>deflate, or store if &lt;2% saving"]
+    EL -- no --> GP["General path<br/>deflate, or store if &lt;20% saving"]
     EL -- yes --> CH{"≤ 8 channels?"}
     CH -- yes --> FC["Multichannel FLAC<br/>take1.flac"]
     CH -- no --> MM["Mono FLAC per channel<br/>take1_ch01.flac …"]
@@ -142,7 +142,7 @@ Maximum compatibility is the governing requirement. Archives must extract correc
 
 - Deflate via **zlib-ng** (faster than stock zlib, fully standard deflate output), default level 6, configurable.
 - Multithreaded: independent entries compress in parallel. Large single entries use pigz-style parallel deflate (independent blocks, output is a single valid deflate stream).
-- Store heuristic: compress a sample of the first blocks; if the ratio is below a threshold (default: < 2% saving), store the entry instead. Already-compressed media then costs almost nothing.
+- Store heuristic: compress samples taken from the interior of the file (away from headers and trailers, which are often compressible even in compressed media); if the ratio is below a threshold (default: < 20% saving; storing is preferred for speed when deflate gains little), store the entry instead. Already-compressed media then costs almost nothing.
 - zlib-ng version, build options and parallel block size are pinned so output is deterministic across platforms. Its output bytes differ from stock zlib's, so stock zlib must never be substituted.
 
 ### 6.2 Entry Naming and Collisions
