@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <format>
+#include <memory>
 #include <vector>
 
 using namespace zp;
@@ -190,6 +191,89 @@ TEST_CASE("deflate is chosen only when it pays off", "[integration][deflate]")
     CHECK(r[3].method == ZipMethod::Store);
     CHECK(r[4].method == ZipMethod::Store);
     CHECK(r[5].method == ZipMethod::Store);
+    auto x = test::extract_all(b.zip);
+    REQUIRE(x.result.status == Status::Ok);
+    CHECK(x.files["big-text.txt"].data == test::text_like(9u << 20, 3));
+    CHECK(x.files["big-noise.bin"].data == test::random_bytes(9u << 20, 4));
+}
+
+namespace
+{
+
+// A compressible header and trailer around an incompressible body, like a QuickTime file with
+// its moov atom at the front (faststart) or an MP4 with an index at the end.
+std::vector<std::uint8_t> wrapped_noise(std::size_t header, std::size_t body, std::size_t trailer)
+{
+    auto data = test::text_like(header, 21);
+    const auto noise = test::random_bytes(body, 22);
+    const auto tail = test::text_like(trailer, 23);
+    data.insert(data.end(), noise.begin(), noise.end());
+    data.insert(data.end(), tail.begin(), tail.end());
+    return data;
+}
+
+class OwningNonSeekableStream final : public IChunkedStream
+{
+public:
+    explicit OwningNonSeekableStream(std::unique_ptr<IChunkedStream> inner) :
+        inner_(std::move(inner))
+    {
+    }
+    using IChunkedStream::read;
+    Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override { return inner_->read(buf, len); }
+    [[nodiscard]] std::uint64_t tell() const override { return inner_->tell(); }
+
+private:
+    std::unique_ptr<IChunkedStream> inner_;
+};
+
+}
+
+TEST_CASE("large entries with compressible headers and trailers but incompressible bodies are stored", "[integration][deflate]")
+{
+    MemoryInputSource in;
+    in.add_file("faststart.mov", wrapped_noise(256u << 10, 8u << 20, 0));
+    in.add_file("indexed.mp4", wrapped_noise(256u << 10, 8u << 20, 256u << 10));
+    in.add_file("text-body.bin", [] {
+        auto data = test::random_bytes(256u << 10, 24);
+        const auto text = test::text_like(8u << 20, 25);
+        data.insert(data.end(), text.begin(), text.end());
+        return data;
+    }());
+    auto b = test::build(in);
+    REQUIRE(b.result.status == Status::Ok);
+    const auto& r = b.result.per_entry;
+    REQUIRE(r.size() == 3);
+    CHECK(r[0].method == ZipMethod::Store);
+    CHECK(r[1].method == ZipMethod::Store);
+    CHECK(r[2].method == ZipMethod::Deflate);
+    auto x = test::extract_all(b.zip);
+    REQUIRE(x.result.status == Status::Ok);
+    CHECK(x.files["faststart.mov"].data == wrapped_noise(256u << 10, 8u << 20, 0));
+    CHECK(x.files["indexed.mp4"].data == wrapped_noise(256u << 10, 8u << 20, 256u << 10));
+}
+
+TEST_CASE("non-seekable large entries fall back to a prefix sample", "[integration][deflate]")
+{
+    MemoryInputSource in;
+    in.add_file("big-text.txt", test::text_like(9u << 20, 3));
+    in.add_file("big-noise.bin", test::random_bytes(9u << 20, 4));
+    auto plan = ArchivePlanner({}).plan(in).value();
+    for (auto& e : plan.entries)
+    {
+        e.item.opener = [open = e.item.opener]() -> Result<std::unique_ptr<IChunkedStream>> {
+            auto s = open();
+            if (!s)
+                return std::unexpected(s.error());
+            return std::make_unique<OwningNonSeekableStream>(std::move(*s));
+        };
+    }
+    auto b = test::build(plan);
+    REQUIRE(b.result.status == Status::Ok);
+    const auto& r = b.result.per_entry;
+    REQUIRE(r.size() == 2);
+    CHECK(r[0].method == ZipMethod::Deflate);
+    CHECK(r[1].method == ZipMethod::Store);
     auto x = test::extract_all(b.zip);
     REQUIRE(x.result.status == Status::Ok);
     CHECK(x.files["big-text.txt"].data == test::text_like(9u << 20, 3));

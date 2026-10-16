@@ -10,7 +10,9 @@
 #include <algorithm>
 #include <cstring>
 #include <format>
+#include <optional>
 #include <span>
+#include <vector>
 
 namespace zp::build
 {
@@ -24,6 +26,26 @@ bool deflate_pays_off(std::size_t compressed, std::size_t original, double min_s
 {
     return original > 0 && static_cast<double>(compressed) <= static_cast<double>(original) * (1.0 - min_saving);
 }
+
+}
+
+std::vector<std::uint64_t> sample_offsets(std::uint64_t size, std::size_t window)
+{
+    std::vector<std::uint64_t> offsets;
+    if (size <= window)
+        return { 0 };
+    for (const auto percent : sample_positions_percent)
+    {
+        const auto centre = size / 100 * percent + size % 100 * percent / 100;
+        const auto start = std::min(centre - std::min<std::uint64_t>(centre, window / 2), size - window);
+        if (offsets.empty() || start >= offsets.back() + window)
+            offsets.push_back(start);
+    }
+    return offsets;
+}
+
+namespace
+{
 
 enum class EntryMode : std::uint8_t {
     Fixed, // method chosen by the reader
@@ -89,14 +111,40 @@ void Reader::general(std::size_t i, IChunkedStream& stream, std::uint64_t size, 
     }
     else if (!force_store && size > 0)
     {
-        prefix.resize(static_cast<std::size_t>(std::min<std::uint64_t>(job_.options.sample_window, size)));
-        auto got = stream.read_full(prefix);
-        if (!got || *got != prefix.size())
-            return fatal(i, got ? change : got.error());
-        auto sample = deflate_buffer(prefix, job_.plan.options.deflate_level);
-        if (!sample)
-            return fatal(i, sample.error());
-        if (deflate_pays_off(sample->size(), prefix.size(), job_.options.min_deflate_saving))
+        std::size_t sampled = 0;
+        std::size_t compressed = 0;
+        const auto sample_at = [&](std::vector<std::uint8_t>& window) -> std::optional<Error> {
+            auto got = stream.read_full(window);
+            if (!got || *got != window.size())
+                return got ? change : got.error();
+            auto sample = deflate_buffer(window, job_.plan.options.deflate_level);
+            if (!sample)
+                return sample.error();
+            sampled += window.size();
+            compressed += sample->size();
+            return std::nullopt;
+        };
+        const auto window_size = static_cast<std::size_t>(std::min<std::uint64_t>(job_.options.sample_window, size));
+        if (stream.seekable())
+        {
+            std::vector<std::uint8_t> window(window_size);
+            for (const auto offset : sample_offsets(size, window_size))
+            {
+                if (auto s = stream.seek(offset); !s)
+                    return fatal(i, s.error());
+                if (auto e = sample_at(window))
+                    return fatal(i, std::move(*e));
+            }
+            if (auto s = stream.seek(0); !s)
+                return fatal(i, s.error());
+        }
+        else
+        {
+            prefix.resize(window_size);
+            if (auto e = sample_at(prefix))
+                return fatal(i, std::move(*e));
+        }
+        if (deflate_pays_off(compressed, sampled, job_.options.min_deflate_saving))
             encoder = job_.deflate.get();
         seg_size = encoder->segment_size();
     }

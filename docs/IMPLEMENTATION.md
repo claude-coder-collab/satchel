@@ -152,9 +152,13 @@ require the magic; anything else is a foreign comment (`nullopt`).
   - entries up to `small_entry_threshold` (4 MiB) are one segment: the worker deflates the whole
     entry and keeps the result only if it saves at least 2 % (`min_deflate_saving`), otherwise the
     entry is stored;
-  - larger entries: the reader deflates the first 128 KiB (`sample_window`) at the plan's level and
-    picks deflate (1 MiB segments) or store (4 MiB segments) for the whole entry by the same 2 %
-    rule.
+  - larger entries: the reader deflates three 128 KiB windows (`sample_window`) centred at 20 %,
+    50 % and 80 % of the entry at the plan's level, then seeks back to the start, and picks
+    deflate (1 MiB segments) or store (4 MiB segments) for the whole entry by the same 2 % rule
+    applied to the summed sizes. Windows are clamped inside the entry and never overlap. The
+    interior positions keep compressible headers and trailers (QuickTime `moov` atoms, indexes)
+    from deciding the method for an incompressible body (issue #53). A non-seekable input falls
+    back to sampling the first window, which is then reused as the start of the first segment.
   This is `small_entry_threshold`'s meaning here; the design doc gives only its default.
 - Deflate output is pinned by the zlib-ng version and settings (raw deflate, window 15, memLevel 8,
   default strategy). A golden test checks the CRC-32 of the compressed bytes of a fixed input at
