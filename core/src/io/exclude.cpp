@@ -4,6 +4,7 @@
 
 #include <utf8proc.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <format>
@@ -241,12 +242,7 @@ bool ExcludeFilter::matches(std::string_view name, bool directory) const
     if (patterns_.empty())
         return false;
     const auto folded = fold(name);
-    for (const auto& p : patterns_)
-    {
-        if ((directory || !p.directories_only) && glob_match(p.glob, folded))
-            return true;
-    }
-    return false;
+    return std::ranges::any_of(patterns_, [&](const Pattern& p) { return (directory || !p.directories_only) && glob_match(p.glob, folded); });
 }
 
 }
