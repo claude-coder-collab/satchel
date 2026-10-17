@@ -2,12 +2,15 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "logic.hpp"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <set>
+#include <utility>
+#include <vector>
 
 using namespace satchel_gui;
 namespace fs = std::filesystem;
@@ -178,4 +181,27 @@ TEST_CASE("copy as CLI command", "[gui]")
     e.overwrite = Overwrite::Replace;
     CHECK(cli_extract_command(e, "a.zip", "out") == "satchel extract --keep-flac --include-readme --overwrite replace a.zip -d out");
     CHECK(savings_text(4200000000, 2300000000) == "4.2 GB → 2.3 GB, 45% smaller");
+}
+
+TEST_CASE("secondary text keeps readable contrast", "[gui]")
+{
+    constexpr Rgb white{ 255, 255, 255 };
+    constexpr Rgb black{ 0, 0, 0 };
+    CHECK(contrast_ratio(white, black) == Catch::Approx(21.0));
+    CHECK(contrast_ratio(black, white) == Catch::Approx(21.0));
+    CHECK(contrast_ratio(white, white) == Catch::Approx(1.0));
+    const std::vector<std::pair<Rgb, Rgb>> themes{
+        { white, black },
+        { black, white },
+        { { 223, 223, 223 }, { 30, 30, 30 } },
+        { { 30, 30, 30 }, { 236, 236, 236 } },
+    };
+    for (const auto& [text, base] : themes)
+    {
+        const auto dim = secondary_text(text, base);
+        CHECK(contrast_ratio(dim, base) >= 4.5);
+        CHECK(contrast_ratio(dim, base) < contrast_ratio(text, base));
+    }
+    constexpr Rgb grey{ 128, 128, 128 };
+    CHECK(secondary_text(grey, black, 7.0) == grey);
 }

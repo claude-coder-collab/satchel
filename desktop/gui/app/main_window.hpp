@@ -40,6 +40,7 @@ protected:
     void dragEnterEvent(QDragEnterEvent* e) override;
     void dropEvent(QDropEvent* e) override;
     void closeEvent(QCloseEvent* e) override;
+    void changeEvent(QEvent* e) override;
 
 private:
     void build_ui();

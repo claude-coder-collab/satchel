@@ -8,6 +8,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>%1 → %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>%1 → %2, %3% smaller</source>
         <translation type="unfinished"></translation>
     </message>
@@ -60,6 +64,33 @@
     </message>
     <message>
         <source>Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ExcludeEditor</name>
+    <message>
+        <source>Leave out system files (.DS_Store, ._*, Thumbs.db, …)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Leave out waveform and analysis caches of audio software</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exclude patterns</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Names to leave out: * any text, ? one character, [a-z] one of a set; end with / for folders only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Pattern</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -149,15 +180,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Main</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>New Archive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -194,14 +217,6 @@
     </message>
     <message>
         <source>Tree View</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Simple Mode</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -319,7 +334,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>&lt;p style=&apos;color:gray&apos;&gt;Select an entry to see its details.&lt;/p&gt;</source>
+        <source>&amp;File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Settings…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an entry to see its details.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -459,7 +490,40 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Choose files for the new archive</source>
+        <source>Create blank archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zip archives (*.zip)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot create archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>How do you want to start the new archive?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Blank archive: create an empty archive, then add files to it.
+Compress a folder: choose a folder and review how it will be compressed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Blank Archive…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Compress a Folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose a folder to compress</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -609,6 +673,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Leave out</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Archive file</source>
         <translation type="unfinished"></translation>
     </message>
@@ -664,6 +732,13 @@
         <source>%1 file(s), %2 · %3 FLAC, %4 deflate or store, %5 stored</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <source> · %n item(s) left out</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
     <message>
         <source>Name collision: %1</source>
         <translation type="unfinished"></translation>
@@ -698,6 +773,10 @@
     </message>
     <message>
         <source>Stored as is: %1 — %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Left out: %1%2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -745,6 +824,68 @@
     </message>
     <message>
         <source>Archive updated</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete Settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete Satchel&apos;s settings and quit?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Settings, recent files and the saved window layout are reset. Your archives are not touched.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete Settings and Temporary Files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete Settings Only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete Settings and Temporary Files…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>These could not be deleted:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Uninstall Satchel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove Satchel, its Quick Look extension and Finder services?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The app is moved to the Trash. Your archives are not touched.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Uninstall and Delete Settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Uninstall and Keep Settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Uninstall incomplete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>These steps failed:
+%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Uninstall Satchel…</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -862,6 +1003,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Leave out</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Integration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -873,11 +1018,27 @@
         <source>Copy as CLI command</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Invalid exclude pattern</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>SimpleWindow</name>
     <message>
         <source>Satchel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;View</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Switch to Full Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

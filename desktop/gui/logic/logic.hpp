@@ -147,4 +147,21 @@ std::string human_size(std::uint64_t bytes);
 // "4.2 GB → 2.3 GB, 45% smaller"
 std::string savings_text(std::uint64_t input, std::uint64_t output);
 
+// ---- Colors ----------------------------------------------------------------------------------
+
+struct Rgb
+{
+    std::uint8_t r = 0;
+    std::uint8_t g = 0;
+    std::uint8_t b = 0;
+
+    bool operator==(const Rgb&) const = default;
+};
+
+// WCAG 2 contrast ratio, 1 to 21.
+double contrast_ratio(Rgb a, Rgb b);
+// A dimmer text color for secondary labels: `text` blended toward `base`, but never below
+// `min_contrast` against `base` (WCAG AA for body text by default).
+Rgb secondary_text(Rgb text, Rgb base, double min_contrast = 4.5);
+
 }
