@@ -104,7 +104,7 @@ std::string fallback_name(int reason)
     return reason >= 0 && static_cast<std::size_t>(reason) < names.size() ? names[static_cast<std::size_t>(reason)] : "";
 }
 
-nlohmann::json plan_json(const std::vector<zpp::PlanEntry>& entries, const std::vector<zpp::Conflict>& conflicts, const std::vector<zpp::Warning>& warnings)
+nlohmann::json plan_json(const std::vector<zpp::PlanEntry>& entries, const std::vector<zpp::Conflict>& conflicts, const std::vector<zpp::Warning>& warnings, const std::vector<zpp::Excluded>& excluded)
 {
     nlohmann::json j;
     j["entries"] = nlohmann::json::array();
@@ -125,6 +125,14 @@ nlohmann::json plan_json(const std::vector<zpp::PlanEntry>& entries, const std::
             names.push_back(entries[i].output_name);
         j["conflicts"].push_back({ { "kind", c.kind == ZP_CONFLICT_COLLISION ? "collision" : "invalid-name" }, { "key", c.key }, { "detail", c.detail }, { "entries", c.entries }, { "names", names } });
     }
+    j["excluded"] = nlohmann::json::array();
+    for (const auto& x : excluded)
+    {
+        nlohmann::json jx{ { "path", x.archive_path }, { "kind", x.kind == ZP_KIND_DIRECTORY ? "directory" : "file" } };
+        if (!x.source_path.empty())
+            jx["source"] = x.source_path;
+        j["excluded"].push_back(std::move(jx));
+    }
     j["warnings"] = nlohmann::json::array();
     for (const auto& w : warnings)
         j["warnings"].push_back({ { "kind", w.kind == ZP_WARNING_SYMLINK_SKIPPED ? "symlink-skipped" : "flac-fallback" }, { "source", w.source_path }, { "detail", w.detail } });
@@ -139,10 +147,11 @@ std::int64_t write_stdout(void*, const std::uint8_t* buf, std::size_t len)
 
 }
 
-int run_create(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& paths, bool no_flac, int deflate_level, int flac_level, const std::vector<std::string>& renames, const std::vector<std::string>& skips, const std::vector<std::string>& store_unconverted, const std::string& resolutions_file, bool dry_run, const std::string& readme_template_file, const std::string& temp_dir)
+int run_create(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& paths, bool no_flac, int deflate_level, int flac_level, const std::vector<std::string>& renames, const std::vector<std::string>& skips, const std::vector<std::string>& store_unconverted, const std::string& resolutions_file, bool dry_run, const std::string& readme_template_file, const std::string& temp_dir, const ExcludeOptions& excludes)
 {
     auto ctx = make_context(g);
     auto input = zpp::input_from_paths(paths);
+    apply_excludes(input, excludes);
     zp_plan_options_t options{};
     zp_plan_options_init(&options);
     options.flac_enabled = no_flac ? 0 : 1;
@@ -168,12 +177,13 @@ int run_create(const GlobalOptions& g, const std::string& archive, const std::ve
     const auto entries = zpp::plan_entries(plan.get());
     const auto conflicts = zpp::plan_conflicts(plan.get());
     const auto warnings = zpp::plan_warnings(plan.get());
+    const auto excluded = zpp::plan_excluded(plan.get());
 
     if (!conflicts.empty())
     {
         if (g.json)
         {
-            auto j = plan_json(entries, conflicts, warnings);
+            auto j = plan_json(entries, conflicts, warnings, excluded);
             j["status"] = "CONFLICTS_UNRESOLVED";
             print_json(j);
         }
@@ -212,11 +222,13 @@ int run_create(const GlobalOptions& g, const std::string& archive, const std::ve
     if (dry_run)
     {
         if (g.json)
-            print_json(plan_json(entries, conflicts, warnings));
+            print_json(plan_json(entries, conflicts, warnings, excluded));
         else
         {
             for (const auto& e : entries)
                 std::cout << std::format("{:<10} {}{}\n", codec_name(e.codec), e.output_name, e.restored_name.empty() ? "" : "  -> " + e.restored_name);
+            for (const auto& x : excluded)
+                std::cout << std::format("{:<10} {}{}\n", "excluded", x.archive_path, x.kind == ZP_KIND_DIRECTORY ? "/" : "");
         }
         return exit_ok;
     }
@@ -280,7 +292,7 @@ int run_create(const GlobalOptions& g, const std::string& archive, const std::ve
 
     if (g.json)
     {
-        auto j = plan_json(entries, conflicts, warnings);
+        auto j = plan_json(entries, conflicts, warnings, excluded);
         j["status"] = zp_status_name(status);
         j["results"] = results;
         j["input_bytes"] = in_total;
@@ -303,7 +315,8 @@ int run_create(const GlobalOptions& g, const std::string& archive, const std::ve
         {
             const auto saved = in_total > 0 ? 100.0 * (1.0 - static_cast<double>(out_total) / static_cast<double>(in_total)) : 0.0;
             const auto change = saved >= 0 ? std::format("{:.0f}% smaller", saved) : std::format("{:.0f}% larger", -saved);
-            std::cerr << std::format("{} entries, {} -> {} ({})\n", results.size(), human_size(in_total), human_size(out_total), change);
+            const auto left_out = excluded.empty() ? std::string{} : std::format(", {} excluded", excluded.size());
+            std::cerr << std::format("{} entries{}, {} -> {} ({})\n", results.size(), left_out, human_size(in_total), human_size(out_total), change);
         }
     }
     if (status == ZP_CANCELLED)

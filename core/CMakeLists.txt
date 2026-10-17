@@ -17,6 +17,7 @@ add_library(zp_core STATIC
     src/codecs/pcm/pcm_container.cpp
     src/codecs/pcm/tags.cpp
     src/crypto/hash.cpp
+    src/io/exclude.cpp
     src/io/file_system.cpp
     src/io/input_source.cpp
     src/io/stream.cpp

@@ -278,7 +278,8 @@ public:
         }
     }
 
-    Result<std::vector<InputItem>> enumerate() override { return items_; }
+protected:
+    Result<std::vector<InputItem>> list_items() override { return items_; }
 
 private:
     zp_read_fn read_;
@@ -841,6 +842,36 @@ zp_input_t* zp_input_from_callbacks(const zp_input_item_t* items, size_t count, 
     );
 }
 
+int zp_input_set_excludes(zp_input_t* input, const char* const* patterns, size_t count)
+{
+    ZP_REQUIRE(input && (patterns || count == 0), ZP_INVALID_ARGUMENT);
+    return guarded(
+        [&]() -> int {
+            std::vector<std::string> list;
+            for (size_t i = 0; i < count; ++i)
+            {
+                if (!patterns[i])
+                    return set_error(Status::InvalidArgument, "NULL exclude pattern");
+                list.emplace_back(patterns[i]);
+            }
+            auto filter = ExcludeFilter::parse(list);
+            if (!filter)
+                return set_error(filter.error());
+            input->source->set_exclude(std::move(*filter));
+            return ZP_OK;
+        },
+        ZP_INTERNAL
+    );
+}
+
+const char* zp_exclude_preset_pattern(int preset, size_t i)
+{
+    if (preset != ZP_EXCLUDE_PRESET_SYSTEM && preset != ZP_EXCLUDE_PRESET_DAW_CACHES)
+        return nullptr;
+    const auto list = exclude_preset(static_cast<ExcludePreset>(preset));
+    return i < list.size() ? list[i].data() : nullptr;
+}
+
 zp_input_t* zp_input_memory(void)
 {
     return guarded(
@@ -985,6 +1016,21 @@ int zp_plan_get_warning(const zp_plan_t* plan, size_t i, zp_warning_t* out)
     out->kind = static_cast<int>(w.kind);
     out->source_path = w.source_path.c_str();
     out->detail = w.detail.c_str();
+    return ZP_OK;
+}
+
+size_t zp_plan_excluded_count(const zp_plan_t* plan)
+{
+    return plan ? plan->plan.excluded.size() : 0;
+}
+
+int zp_plan_get_excluded(const zp_plan_t* plan, size_t i, zp_excluded_t* out)
+{
+    ZP_REQUIRE(plan && out && i < plan->plan.excluded.size(), ZP_INVALID_ARGUMENT);
+    const auto& e = plan->plan.excluded[i];
+    out->source_path = e.source_path.c_str();
+    out->archive_path = e.archive_path.c_str();
+    out->kind = static_cast<int>(e.kind);
     return ZP_OK;
 }
 

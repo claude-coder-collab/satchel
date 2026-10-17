@@ -81,6 +81,7 @@ VoidResult ArchiveEditor::add(InputSource& input)
         return std::unexpected(added.error());
     for (auto& e : *added)
         entries_.push_back(std::move(e));
+    excluded_.insert(excluded_.end(), input.excluded().begin(), input.excluded().end());
     return {};
 }
 
@@ -127,6 +128,7 @@ ArchivePlan ArchiveEditor::plan() const
     p.options = options_;
     p.entries = entries_;
     p.warnings = warnings_;
+    p.excluded = excluded_;
     ArchivePlanner::ensure_readme(p);
     ArchivePlanner::check(p);
     return p;

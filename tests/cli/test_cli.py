@@ -94,6 +94,45 @@ def test_create_list_verify_extract(tmp_path: Path, session: Path) -> None:
     assert (tmp_path / "flac" / "README - How to restore original audio.txt").exists()
 
 
+def test_excludes(tmp_path: Path) -> None:
+    src = tmp_path / "proj"
+    (src / "__MACOSX").mkdir(parents=True)
+    (src / "__MACOSX" / "x").write_text("x")
+    (src / ".DS_Store").write_text("x")
+    (src / "kick.wav.asd").write_text("x")
+    (src / "song.tmp").write_text("x")
+    (src / "song.txt").write_text("song")
+    lone = tmp_path / ".DS_Store"
+    lone.write_text("chosen")
+
+    def planned(*flags: str) -> tuple[set[str], set[str]]:
+        r = run("create", "--dry-run", "--json", *flags, str(tmp_path / "out.zip"), str(src), str(lone))
+        assert r.returncode == 0, r.stderr
+        j = json.loads(r.stdout)
+        return {e["name"] for e in j["entries"]}, {x["path"] for x in j["excluded"]}
+
+    names, excluded = planned()
+    assert names == {"proj", "proj/kick.wav.asd", "proj/song.tmp", "proj/song.txt", ".DS_Store"}
+    assert excluded == {"proj/__MACOSX", "proj/.DS_Store"}
+
+    names, excluded = planned("--exclude-daw-caches", "--exclude", "*.TMP")
+    assert names == {"proj", "proj/song.txt", ".DS_Store"}
+    assert excluded == {"proj/__MACOSX", "proj/.DS_Store", "proj/kick.wav.asd", "proj/song.tmp"}
+
+    names, excluded = planned("--no-default-excludes")
+    assert "proj/__MACOSX/x" in names and "proj/.DS_Store" in names and not excluded
+
+    archive = tmp_path / "real.zip"
+    r = run("create", str(archive), str(src))
+    assert r.returncode == 0, r.stderr
+    assert b"2 excluded" in r.stderr
+    with zipfile.ZipFile(archive) as z:
+        assert "proj/.DS_Store" not in z.namelist()
+
+    r = run("create", "--dry-run", "--exclude", "a/b", str(tmp_path / "x.zip"), str(src))
+    assert r.returncode != 0 and b"a/b" in r.stderr
+
+
 def test_conflicts_exit_code_and_resolutions(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()

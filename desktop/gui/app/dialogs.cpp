@@ -80,6 +80,7 @@ std::shared_ptr<zpp::Plan> PlanReviewDialog::make_plan(const QStringList& inputs
     for (const auto& i : inputs)
         paths.push_back(i.toStdString());
     auto input = zpp::input_from_paths(paths);
+    zpp::set_excludes(input, zpp::exclude_preset(ZP_EXCLUDE_PRESET_SYSTEM));
     zp_plan_options_t options{};
     zp_plan_options_init(&options);
     options.flac_enabled = settings.flac ? 1 : 0;
@@ -254,12 +255,14 @@ void PlanReviewDialog::refresh()
         model_->appendRow({ new QStandardItem(qs(e.output_name)), size, new QStandardItem(method_text(e)), new QStandardItem(reason_text(e)) });
     }
     table_->resizeColumnsToContents();
+    const auto excluded = zp_plan_excluded_count(plan_->get());
     totals_->setText(tr("%1 file(s), %2 · %3 FLAC, %4 deflate or store, %5 stored")
-            .arg(files)
-            .arg(qs(satchel_gui::human_size(zp_plan_total_bytes(plan_->get()))))
-            .arg(flac)
-            .arg(deflate)
-            .arg(stored));
+                         .arg(files)
+                         .arg(qs(satchel_gui::human_size(zp_plan_total_bytes(plan_->get()))))
+                         .arg(flac)
+                         .arg(deflate)
+                         .arg(stored)
+        + (excluded > 0 ? tr(" · %n system file(s) left out", nullptr, static_cast<int>(excluded)) : QString()));
 
     for (const auto& c : conflicts)
     {

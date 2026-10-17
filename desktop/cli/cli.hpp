@@ -36,6 +36,13 @@ struct GlobalOptions
     std::uint64_t memory_mb = 0;
 };
 
+struct ExcludeOptions
+{
+    std::vector<std::string> patterns;
+    bool daw_caches = false;
+    bool no_defaults = false;
+};
+
 extern std::atomic<bool> interrupted;
 
 bool stdin_is_tty();
@@ -74,12 +81,13 @@ std::string method_name(int method);
 std::string_view codec_name(int codec);
 void print_json(const nlohmann::json& j);
 void print_error(const std::string& message);
+void apply_excludes(const zpp::Input& input, const ExcludeOptions& options);
 
-int run_create(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& paths, bool no_flac, int deflate_level, int flac_level, const std::vector<std::string>& renames, const std::vector<std::string>& skips, const std::vector<std::string>& store_unconverted, const std::string& resolutions_file, bool dry_run, const std::string& readme_template_file, const std::string& temp_dir);
+int run_create(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& paths, bool no_flac, int deflate_level, int flac_level, const std::vector<std::string>& renames, const std::vector<std::string>& skips, const std::vector<std::string>& store_unconverted, const std::string& resolutions_file, bool dry_run, const std::string& readme_template_file, const std::string& temp_dir, const ExcludeOptions& excludes);
 int run_extract(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& names, const std::string& destination, bool keep_flac, bool include_readme, const std::string& overwrite);
 int run_list(const GlobalOptions& g, const std::string& archive);
 int run_verify(const GlobalOptions& g, const std::string& archive);
-int run_edit(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& adds, const std::vector<std::string>& removes, const std::vector<std::string>& renames, const std::vector<std::string>& replaces, const std::string& output);
+int run_edit(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& adds, const std::vector<std::string>& removes, const std::vector<std::string>& renames, const std::vector<std::string>& replaces, const std::string& output, const ExcludeOptions& excludes);
 int run_restore(const GlobalOptions& g, const std::string& file, const std::string& output);
 int run_preview(const std::string& file, bool html);
 #ifdef __APPLE__

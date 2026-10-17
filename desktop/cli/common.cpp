@@ -161,4 +161,18 @@ void print_error(const std::string& message)
     std::cerr << "satchel: " << message << '\n';
 }
 
+void apply_excludes(const zpp::Input& input, const ExcludeOptions& options)
+{
+    std::vector<std::string> patterns;
+    if (!options.no_defaults)
+        patterns = zpp::exclude_preset(ZP_EXCLUDE_PRESET_SYSTEM);
+    if (options.daw_caches)
+    {
+        const auto daw = zpp::exclude_preset(ZP_EXCLUDE_PRESET_DAW_CACHES);
+        patterns.insert(patterns.end(), daw.begin(), daw.end());
+    }
+    patterns.insert(patterns.end(), options.patterns.begin(), options.patterns.end());
+    zpp::set_excludes(input, patterns);
+}
+
 }

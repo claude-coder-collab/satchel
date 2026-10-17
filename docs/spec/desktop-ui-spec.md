@@ -51,6 +51,7 @@ Drop files on the window (or the app icon) and the job starts immediately: zips 
 - Name collisions inside the archive (main spec 6.2): a compact resolution sheet, defaulting to "rename with suffix".
 - Extraction: unsafe paths, incomplete multi-mono groups, hash mismatches are reported as errors on the result card.
 - Skipped symlinks and FLAC fallbacks don't stop the job; they're listed on the result card.
+- System clutter (main spec 6.3.1, system preset) is left out of new archives and of files added to an archive; the plan review shows how many items were left out.
 
 **Window states**
 

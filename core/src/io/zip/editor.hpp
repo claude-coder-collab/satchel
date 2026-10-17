@@ -43,6 +43,7 @@ private:
     std::unique_ptr<ArchiveReader> reader_;
     std::vector<PlanEntry> entries_;
     std::vector<Warning> warnings_;
+    std::vector<ExcludedItem> excluded_;
 };
 
 }

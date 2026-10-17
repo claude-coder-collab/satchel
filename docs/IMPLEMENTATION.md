@@ -125,6 +125,16 @@ require the magic; anything else is a foreign comment (`nullopt`).
   children by their UTF-8 names (byte order) so output is deterministic. `lstat` on POSIX;
   `GetFileAttributesExW` on Windows, where any reparse point (symlink, junction) is a symlink.
   Non-regular files (devices, FIFOs) are ignored.
+- Exclude patterns (main spec 6.3.1, issue #52) live on the input, not in `PlannerOptions`, so the
+  C ABI of `zp_plan_options_t` is unchanged and the planner and the editor share one mechanism.
+  `InputSource::enumerate()` is a non-virtual wrapper around `list_items()`: it drops every item
+  with an excluded name below the top level, also when the excluded folder has no item of its own
+  (callback and memory inputs), and records the topmost excluded paths. `FilesystemInputSource`
+  additionally does not list excluded folders, so unreadable system folders such as `.Trashes`
+  on a volume root no longer fail the walk. Matching folds case and composes (NFC) with
+  utf8proc and compares code points; names that are not UTF-8 are compared byte-wise with ASCII
+  case folding. Negation patterns were left out, so pattern order never matters. Cubase/Nuendo
+  peak files were left out of the DAW preset because their extension could not be confirmed.
 - Conflict kinds (extension of the design doc's `Conflict`):
   - `Collision`: equal `collision_key` (NFC + case fold), or a file name that another entry uses as
     a folder (`a` and `a/b`).
@@ -452,12 +462,12 @@ which the GUI will reuse.
 
 | Command | Purpose |
 |---|---|
-| `create ARCHIVE PATH...` | Plan and build. `ARCHIVE` `-` writes a streamed zip to stdout. `--no-flac`, `--deflate-level`, `--flac-level`, `--rename NAME=NEW`, `--skip NAME`, `--store-unconverted NAME`, `--resolutions FILE.json`, `--dry-run`, `--readme-template FILE`, `--temp-dir DIR` |
+| `create ARCHIVE PATH...` | Plan and build. `ARCHIVE` `-` writes a streamed zip to stdout. `--no-flac`, `--deflate-level`, `--flac-level`, `--rename NAME=NEW`, `--skip NAME`, `--store-unconverted NAME`, `--resolutions FILE.json`, `--dry-run`, `--readme-template FILE`, `--temp-dir DIR`, excludes (below) |
 | `extract ARCHIVE [ENTRY...]` | `-d DIR` (default `.`), `--keep-flac`, `--include-readme`, `--overwrite ask\|skip\|replace` |
 | `list ARCHIVE` | Table or JSON: name, sizes, method (store/deflate/flac/flac-mono), restores-to, channel, mtime, creator |
 | `preview FILE [--html]` | `zp_preview` summary of a zip or FLAC file as JSON or HTML (exit 1 if neither) |
 | `verify ARCHIVE` | Extraction to the null sink: CRC-32 plus full restore and SHA-256 for FLAC; nothing is written |
-| `edit ARCHIVE` | `--add PATH`, `--remove NAME`, `--rename NAME=NEW`, `--replace NAME=PATH`, `-o OUT` (default: replace in place atomically) |
+| `edit ARCHIVE` | `--add PATH`, `--remove NAME`, `--rename NAME=NEW`, `--replace NAME=PATH`, `-o OUT` (default: replace in place atomically), excludes (below) for `--add` |
 | `restore FILE.flac` | Rebuild the original from a standalone FLAC (ours or `flac --keep-foreign-metadata`), `-o OUT` |
 
 - Every command takes `--json` (machine-readable result on stdout), `-q/--quiet`,
@@ -465,6 +475,10 @@ which the GUI will reuse.
 - A resolution `NAME` can be a planned output name, the original (restored) name, the source
   path or `#index`. The JSON file holds `[{"entry": NAME|INDEX, "action":
   rename|skip|store-unconverted, "new_name": ...}]`.
+- Excludes: the system preset applies unless `--no-default-excludes`; `--exclude-daw-caches` adds
+  the DAW preset; `--exclude PATTERN` (repeatable, one value each) adds patterns. The summary line
+  counts excluded items; `--dry-run` lists them as `excluded`; JSON output has an `excluded` array
+  of `{path, kind, source?}`.
 - Skipped symlinks: an interactive run asks; a non-interactive run without `--yes` stops with
   exit 4. FLAC fallbacks are printed as warnings and never stop the run.
 - Existing files on extraction with `--overwrite ask`: asked per file when interactive, else exit 4.
@@ -487,6 +501,9 @@ which the GUI will reuse.
 defaults and "Copy as CLI command".
 
 **App** (`desktop/gui/app`, library `satchel_gui_app` plus `Satchel` executable):
+- New archives and files added in Full mode use the system exclude preset; the plan review's
+  totals line shows how many items were left out. Preferences for the patterns are pending
+  (issue #52, second milestone).
 - `App` owns one `JobQueue` (a single background thread running jobs in order: compress,
   extract, verify, edit) shared by both modes, the Settings (QSettings) and both windows. The
   last mode is remembered.
@@ -558,7 +575,8 @@ Publishing the appcasts to the feed URLs is a manual release step for now.
 file + commit, memory, callbacks), input constructors (paths, memory), option initializers,
 `zp_plan_executable`, `zp_plan_total_bytes`, build result accessors, extraction issue/item/outcome
 accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status_name`,
-`zp_version`, `zp_preview`. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
+`zp_version`, `zp_preview`, `zp_input_set_excludes`, `zp_exclude_preset_pattern`,
+`zp_plan_excluded_count`/`zp_plan_get_excluded`. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
 
 ### 4.15 Packaging and releases (main spec 12.3)
 

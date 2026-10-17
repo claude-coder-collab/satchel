@@ -46,6 +46,13 @@ int main(int argc, char** argv)
         sub->add_option("--memory", g.memory_mb, "Memory budget in MB (0 = default)");
     };
 
+    ExcludeOptions excludes;
+    const auto add_excludes = [&](CLI::App* sub) {
+        sub->add_option("--exclude", excludes.patterns, "Leave out files and folders whose name matches PATTERN (*, ?, [..]; trailing / for folders only)")->allow_extra_args(false);
+        sub->add_flag("--exclude-daw-caches", excludes.daw_caches, "Also leave out waveform and analysis caches of audio software");
+        sub->add_flag("--no-default-excludes", excludes.no_defaults, "Keep .DS_Store, ._*, Thumbs.db and other system files");
+    };
+
     std::string archive;
     std::vector<std::string> paths;
     bool no_flac = false;
@@ -71,6 +78,7 @@ int main(int argc, char** argv)
     create->add_flag("--dry-run", dry_run, "Show the plan without writing");
     create->add_option("--readme-template", readme_template, "Template for the generated readme");
     create->add_option("--temp-dir", temp_dir, "Folder for temporary files (multi-channel audio)");
+    add_excludes(create);
     add_globals(create);
 
     std::vector<std::string> entries;
@@ -107,6 +115,7 @@ int main(int argc, char** argv)
     edit->add_option("--rename", edit_renames, "Rename an entry: NAME=NEW_NAME");
     edit->add_option("--replace", replaces, "Replace an entry's content: NAME=PATH");
     edit->add_option("-o,--output", output, "Write to another file instead of replacing the archive");
+    add_excludes(edit);
     add_globals(edit);
 
     std::string flac_file;
@@ -145,7 +154,7 @@ int main(int argc, char** argv)
     try
     {
         if (*create)
-            return run_create(g, archive, paths, no_flac, deflate_level, flac_level, renames, skips, store_unconverted, resolutions, dry_run, readme_template, temp_dir);
+            return run_create(g, archive, paths, no_flac, deflate_level, flac_level, renames, skips, store_unconverted, resolutions, dry_run, readme_template, temp_dir, excludes);
         if (*extract)
             return run_extract(g, archive, entries, destination, keep_flac, include_readme, overwrite);
         if (*list)
@@ -153,7 +162,7 @@ int main(int argc, char** argv)
         if (*verify)
             return run_verify(g, archive);
         if (*edit)
-            return run_edit(g, archive, adds, removes, edit_renames, replaces, output);
+            return run_edit(g, archive, adds, removes, edit_renames, replaces, output, excludes);
         if (*preview)
             return run_preview(preview_file, preview_html);
 #ifdef __APPLE__

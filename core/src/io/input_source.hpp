@@ -3,6 +3,7 @@
 #pragma once
 
 #include "common/status.hpp"
+#include "io/exclude.hpp"
 #include "io/file_system.hpp"
 #include "io/stream.hpp"
 
@@ -43,6 +44,13 @@ struct InputItem
     [[nodiscard]] std::int64_t mtime_seconds() const;
 };
 
+struct ExcludedItem
+{
+    std::string source_path;
+    std::string archive_path;
+    ItemKind kind = ItemKind::File;
+};
+
 class InputSource
 {
 public:
@@ -53,7 +61,21 @@ public:
     InputSource& operator=(InputSource&&) = delete;
     virtual ~InputSource() = default;
 
-    virtual Result<std::vector<InputItem>> enumerate() = 0;
+    // Items whose name matches the exclude filter, and everything below an excluded folder, are
+    // left out and reported by excluded(). Top-level items were chosen explicitly and are kept.
+    Result<std::vector<InputItem>> enumerate();
+    void set_exclude(ExcludeFilter filter) { exclude_ = std::move(filter); }
+    [[nodiscard]] const ExcludeFilter& exclude() const { return exclude_; }
+    // Topmost excluded paths of the last enumerate(), in input order.
+    [[nodiscard]] const std::vector<ExcludedItem>& excluded() const { return excluded_; }
+
+protected:
+    // Sources may consult exclude() to avoid listing excluded folders; enumerate() filters anyway.
+    virtual Result<std::vector<InputItem>> list_items() = 0;
+
+private:
+    ExcludeFilter exclude_;
+    std::vector<ExcludedItem> excluded_;
 };
 
 // Each root becomes a top-level entry named after its last path component; directories are
@@ -66,7 +88,8 @@ public:
     {
     }
 
-    Result<std::vector<InputItem>> enumerate() override;
+protected:
+    Result<std::vector<InputItem>> list_items() override;
 
 private:
     std::vector<std::filesystem::path> roots_;
@@ -82,7 +105,8 @@ public:
     // Changes a file's content after planning (to provoke SOURCE_CHANGED in tests).
     void replace_data(const std::string& archive_path, std::vector<std::uint8_t> data, std::int64_t mtime_ns);
 
-    Result<std::vector<InputItem>> enumerate() override;
+protected:
+    Result<std::vector<InputItem>> list_items() override;
 
 private:
     struct Entry

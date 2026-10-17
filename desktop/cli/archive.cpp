@@ -270,7 +270,7 @@ int run_restore(const GlobalOptions& g, const std::string& file, const std::stri
     return exit_ok;
 }
 
-int run_edit(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& adds, const std::vector<std::string>& removes, const std::vector<std::string>& renames, const std::vector<std::string>& replaces, const std::string& output)
+int run_edit(const GlobalOptions& g, const std::string& archive, const std::vector<std::string>& adds, const std::vector<std::string>& removes, const std::vector<std::string>& renames, const std::vector<std::string>& replaces, const std::string& output, const ExcludeOptions& excludes)
 {
     auto ctx = make_context(g);
     zpp::Stream in(zpp::not_null(zp_stream_open_file(archive.c_str())));
@@ -309,6 +309,7 @@ int run_edit(const GlobalOptions& g, const std::string& archive, const std::vect
     if (!adds.empty())
     {
         inputs.push_back(zpp::input_from_paths(adds));
+        apply_excludes(inputs.back(), excludes);
         zpp::check(zp_editor_add(editor.get(), inputs.back().get()));
     }
 

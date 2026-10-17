@@ -242,6 +242,7 @@ Result<ArchivePlan> ArchivePlanner::plan(InputSource& input) const
     if (!entries)
         return std::unexpected(entries.error());
     plan.entries = std::move(*entries);
+    plan.excluded = input.excluded();
     ensure_readme(plan);
     check(plan);
     return plan;
