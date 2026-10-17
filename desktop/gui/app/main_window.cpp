@@ -106,9 +106,15 @@ QString size_text(std::uint64_t n)
     return qs(satchel_gui::human_size(n));
 }
 
-QString row_html(const QString& k, const QString& v)
+satchel_gui::Rgb rgb(const QColor& c)
 {
-    return QString("<tr><td style='color:palette(mid);padding-right:12px'>%1</td><td>%2</td></tr>").arg(esc(k), esc(v));
+    return { static_cast<std::uint8_t>(c.red()), static_cast<std::uint8_t>(c.green()), static_cast<std::uint8_t>(c.blue()) };
+}
+
+QString secondary_color(const QPalette& p)
+{
+    const auto c = satchel_gui::secondary_text(rgb(p.color(QPalette::Text)), rgb(p.color(QPalette::Base)));
+    return QColor(c.r, c.g, c.b).name();
 }
 
 }
@@ -435,15 +441,26 @@ std::vector<std::size_t> MainWindow::selected_entries() const
     return out;
 }
 
+void MainWindow::changeEvent(QEvent* e)
+{
+    QMainWindow::changeEvent(e);
+    if (e->type() == QEvent::PaletteChange && inspector_ && !inspector_->document()->isEmpty())
+        update_inspector();
+}
+
 void MainWindow::update_inspector()
 {
     if (!reader_)
         return;
+    const auto key_color = secondary_color(inspector_->palette());
+    const auto row_html = [&key_color](const QString& k, const QString& v) {
+        return QString("<tr><td style='color:%1;padding-right:12px'>%2</td><td>%3</td></tr>").arg(key_color, esc(k), esc(v));
+    };
     const auto rows = view_->selectionModel()->selectedRows();
     const auto ids = selected_entries();
     if (ids.empty())
     {
-        inspector_->setHtml(tr("<p style='color:gray'>Select an entry to see its details.</p>"));
+        inspector_->setHtml(QString("<p style='color:%1'>%2</p>").arg(key_color, esc(tr("Select an entry to see its details."))));
         return;
     }
     if (rows.size() > 1)

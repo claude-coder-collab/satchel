@@ -109,6 +109,8 @@ The right-hand panel shows everything known about the selected entry, read witho
 
 Multiple selection shows combined totals (count, size, packed, savings).
 
+Field labels use a secondary text color: the text color blended up to 40% toward the background, as far as the result keeps a WCAG contrast ratio of at least 4.5:1 against the background. It follows the current light or dark palette and updates when the system appearance changes.
+
 ## Creating archives
 
 In Full mode every build goes through a plan review, so the user sees exactly what will happen before any data is written.

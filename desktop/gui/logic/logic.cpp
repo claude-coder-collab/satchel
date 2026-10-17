@@ -343,4 +343,46 @@ std::string savings_text(std::uint64_t input, std::uint64_t output)
     return std::format("{} → {}, {}% {}", human_size(input), human_size(output), std::abs(saved), saved >= 0 ? "smaller" : "larger");
 }
 
+namespace
+{
+
+double luminance(Rgb c)
+{
+    const auto channel = [](std::uint8_t v) {
+        const auto x = v / 255.0;
+        return x <= 0.04045 ? x / 12.92 : std::pow((x + 0.055) / 1.055, 2.4);
+    };
+    return (0.2126 * channel(c.r)) + (0.7152 * channel(c.g)) + (0.0722 * channel(c.b));
+}
+
+Rgb blend(Rgb from, Rgb to, double t)
+{
+    const auto mix = [t](std::uint8_t a, std::uint8_t b) {
+        return static_cast<std::uint8_t>(std::lround(a + ((b - a) * t)));
+    };
+    return { mix(from.r, to.r), mix(from.g, to.g), mix(from.b, to.b) };
+}
+
+}
+
+double contrast_ratio(Rgb a, Rgb b)
+{
+    const auto la = luminance(a);
+    const auto lb = luminance(b);
+    return (std::max(la, lb) + 0.05) / (std::min(la, lb) + 0.05);
+}
+
+Rgb secondary_text(Rgb text, Rgb base, double min_contrast)
+{
+    constexpr double max_blend = 0.4;
+    constexpr int steps = 40;
+    for (int i = steps; i > 0; --i)
+    {
+        const auto candidate = blend(text, base, max_blend * i / steps);
+        if (contrast_ratio(candidate, base) >= min_contrast)
+            return candidate;
+    }
+    return text;
+}
+
 }
