@@ -59,12 +59,11 @@ LAYERS: list[tuple[Shape, Color]] = [
 ]
 
 
-def render(size: int, samples: int = 4) -> bytes:
-    """Returns straight-alpha RGBA rows for a `size`-pixel square icon."""
+def rgba(size: int, samples: int = 4) -> bytes:
+    """Returns straight-alpha RGBA pixels, row by row, for a `size`-pixel square icon."""
     out = bytearray()
     step = 1.0 / (size * samples)
     for py in range(size):
-        out.append(0)
         for px in range(size):
             acc = [0.0, 0.0, 0.0, 0.0]
             for sy in range(samples):
@@ -89,6 +88,13 @@ def render(size: int, samples: int = 4) -> bytes:
     return bytes(out)
 
 
+def render(size: int, samples: int = 4) -> bytes:
+    """Returns PNG scanlines (filter byte 0, then RGBA) for a `size`-pixel square icon."""
+    pixels = rgba(size, samples)
+    stride = size * 4
+    return b"".join(b"\0" + pixels[y * stride : (y + 1) * stride] for y in range(size))
+
+
 def png(size: int) -> bytes:
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
@@ -110,11 +116,46 @@ def ico(images: dict[int, bytes]) -> bytes:
     return head + entries + body
 
 
-ICNS_TYPES = {16: b"icp4", 32: b"icp5", 64: b"icp6", 128: b"ic07", 256: b"ic08", 512: b"ic09", 1024: b"ic10"}
+def icns_rle(channel: bytes) -> bytes:
+    """Compresses one channel with the ICNS run-length scheme: a byte below 0x80 is followed by
+    that many plus one literal bytes, a byte from 0x80 repeats the next byte (it minus 0x7D) times."""
+    out = bytearray()
+    i = 0
+    n = len(channel)
+    while i < n:
+        run = 1
+        while i + run < n and run < 130 and channel[i + run] == channel[i]:
+            run += 1
+        if run >= 3:
+            out += bytes((0x80 + run - 3, channel[i]))
+            i += run
+            continue
+        start = i
+        while i < n and i - start < 128:
+            if i + 2 < n and channel[i] == channel[i + 1] == channel[i + 2]:
+                break
+            i += 1
+        out.append(i - start - 1)
+        out += channel[start:i]
+    return bytes(out)
 
 
-def icns(images: dict[int, bytes]) -> bytes:
-    body = b"".join(ICNS_TYPES[s] + struct.pack(">I", 8 + len(images[s])) + images[s] for s in sorted(images) if s in ICNS_TYPES)
+def argb(pixels: bytes) -> bytes:
+    """The 'ic04'/'ic05' payload: 'ARGB', then the A, R, G and B planes, each run-length encoded."""
+    return b"ARGB" + b"".join(icns_rle(pixels[c::4]) for c in (3, 0, 1, 2))
+
+
+# Type codes iconutil writes, by point size and scale. 16 and 32 points at 1x are raw ARGB:
+# Finder renders PNG data in the 'icp4'/'icp5' slots as noise (issue #55).
+ICNS_PNG_TYPES = {(16, 2): b"ic11", (32, 2): b"ic12", (128, 1): b"ic07", (128, 2): b"ic13", (256, 1): b"ic08", (256, 2): b"ic14", (512, 1): b"ic09", (512, 2): b"ic10"}
+ICNS_ARGB_TYPES = {16: b"ic04", 32: b"ic05"}
+
+
+def icns(pngs: dict[int, bytes], pixels: dict[int, bytes]) -> bytes:
+    """Builds an ICNS file from PNGs keyed by pixel size and raw RGBA pixels of the 16 and 32 px icons."""
+    chunks = [(ICNS_ARGB_TYPES[s], argb(pixels[s])) for s in sorted(ICNS_ARGB_TYPES)]
+    chunks += [(tag, pngs[points * scale]) for (points, scale), tag in ICNS_PNG_TYPES.items()]
+    body = b"".join(tag + struct.pack(">I", 8 + len(data)) + data for tag, data in chunks)
     return b"icns" + struct.pack(">I", 8 + len(body)) + body
 
 
@@ -126,7 +167,7 @@ def write_all(out_dir: Path) -> list[Path]:
         "satchel.png": images[256],
         "satchel-512.png": images[512],
         "satchel.ico": ico({s: images[s] for s in (16, 32, 48, 64, 128, 256)}),
-        "satchel.icns": icns(images),
+        "satchel.icns": icns(images, {s: rgba(s) for s in ICNS_ARGB_TYPES}),
     }
     paths = []
     for name, data in files.items():

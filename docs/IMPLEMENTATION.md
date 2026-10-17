@@ -22,7 +22,7 @@ first public release.
 | EOCD comment magic | `STCH` (0x53544348) | Big-endian in the binary record |
 | FLAC APPLICATION ID | `Stch` | Must be registered with Xiph |
 | Copyright holder | Venn Audio Ltd. | SPDX: `AGPL-3.0-only OR LicenseRef-Commercial` |
-| App icon | `packaging/icons/*` | Drawn by `tools/make_icons.py` (PNG, ICO, ICNS; no dependencies) |
+| App icon | `packaging/icons/*` | Drawn by `tools/make_icons.py` (PNG, ICO, ICNS; no dependencies). The ICNS uses `iconutil`'s type codes: 16 and 32 px at 1x as run-length-encoded `ic04`/`ic05` ARGB (straight alpha), the rest as PNG `ic07`–`ic14`. Finder drew PNG data in `icp4`/`icp5` as noise (#55) |
 | macOS bundle ID | `com.vennaudio.satchel` | `ZP_BUNDLE_ID` in `cmake/Packaging.cmake` |
 | WiX upgrade code | `C228FD8D-4C42-4523-90CC-05246E0FF58B` | Must never change once an MSI ships |
 | Debian maintainer | `Venn Audio Ltd. <packages@example.invalid>` | `ZP_PACKAGE_CONTACT` |
