@@ -507,6 +507,9 @@ char* zp_plan_describe(const zp_plan_t* plan)
             j.end_array().key("warnings").begin_array();
             for (const auto& w : plan->plan.warnings)
                 j.begin_object().field("kind", w.kind == WarningKind::SymlinkSkipped ? "symlink_skipped" : "flac_fallback").field("source_path", w.source_path).field("detail", w.detail).end_object();
+            j.end_array().key("excluded").begin_array();
+            for (const auto& x : plan->plan.excluded)
+                j.begin_object().field("source_path", x.source_path).field("archive_path", x.archive_path).field("kind", kind_name(x.kind)).end_object();
             j.end_array().end_object();
             return dup_string(j.str());
         },

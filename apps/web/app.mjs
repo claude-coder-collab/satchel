@@ -294,8 +294,36 @@ async function planFrom(items) {
     await replan();
 }
 
+const EXCLUDE_KEY = 'satchel.excludes';
+
+function loadExcludeSettings() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(EXCLUDE_KEY) ?? 'null');
+        if (saved) {
+            $('opt-exclude-system').checked = saved.system !== false;
+            $('opt-exclude-daw').checked = Boolean(saved.dawCaches);
+            $('opt-exclude').value = saved.patterns ?? '';
+        }
+    } catch {
+        // storage unavailable: keep the defaults
+    }
+}
+
+function saveExcludeSettings() {
+    try {
+        localStorage.setItem(EXCLUDE_KEY, JSON.stringify({ system: $('opt-exclude-system').checked, dawCaches: $('opt-exclude-daw').checked, patterns: $('opt-exclude').value }));
+    } catch {
+        // storage unavailable: the choice lasts for this page only
+    }
+}
+
 async function replan() {
-    const options = { flac: $('opt-flac').checked };
+    const options = {
+        flac: $('opt-flac').checked,
+        excludeSystem: $('opt-exclude-system').checked,
+        excludeDawCaches: $('opt-exclude-daw').checked,
+        excludePatterns: $('opt-exclude').value.split(',').map((p) => p.trim()).filter(Boolean),
+    };
     const info = await runJob('Planning', () => call('plan', { items: planItems, options }));
     if (info) {
         renderPlan(info);
@@ -318,7 +346,8 @@ function renderPlan(info) {
         counts[e.codec] = (counts[e.codec] ?? 0) + 1;
     }
     const files = info.entries.filter((e) => e.kind === 'file' && e.codec !== 'generated').length;
-    $('plan-summary').textContent = `${files} file(s), ${size(info.total_bytes)}` + (counts.flac || counts.flac_mono ? ` · ${(counts.flac ?? 0) + (counts.flac_mono ?? 0)} FLAC entr${(counts.flac ?? 0) + (counts.flac_mono ?? 0) === 1 ? 'y' : 'ies'}` : '');
+    $('plan-summary').textContent = `${files} file(s), ${size(info.total_bytes)}` + (counts.flac || counts.flac_mono ? ` · ${(counts.flac ?? 0) + (counts.flac_mono ?? 0)} FLAC entr${(counts.flac ?? 0) + (counts.flac_mono ?? 0) === 1 ? 'y' : 'ies'}` : '')
+        + (info.excluded.length ? ` · ${info.excluded.length} left out` : '');
 
     const issues = [];
     for (const c of info.conflicts) {
@@ -338,6 +367,10 @@ function renderPlan(info) {
     }
     for (const w of info.warnings) {
         issues.push(el('div', { class: 'warning' }, `${w.kind === 'symlink_skipped' ? 'Skipped' : 'Stored as is'}: ${w.source_path} — ${w.detail}`));
+    }
+    if (info.excluded.length) {
+        issues.push(el('details', { class: 'excluded' }, el('summary', {}, `Left out (${info.excluded.length})`),
+            ...info.excluded.map((x) => el('div', {}, el('code', {}, x.archive_path + (x.kind === 'directory' ? '/' : ''))))));
     }
     $('issues').replaceChildren(...issues);
     $('plan-entries').tBodies[0].replaceChildren(...info.entries.map((e) => el('tr', {},
@@ -415,6 +448,15 @@ $('open-input').addEventListener('change', (e) => e.target.files.length && openA
 $('create-input').addEventListener('change', (e) => planFrom(itemsFromFiles(e.target.files)));
 $('create-folder').addEventListener('change', (e) => planFrom(itemsFromFiles(e.target.files)));
 $('opt-flac').addEventListener('change', () => planItems.length && replan());
+loadExcludeSettings();
+for (const id of ['opt-exclude-system', 'opt-exclude-daw', 'opt-exclude']) {
+    $(id).addEventListener('change', () => {
+        saveExcludeSettings();
+        if (planItems.length) {
+            replan();
+        }
+    });
+}
 $('extract').addEventListener('click', extractAll);
 $('verify').addEventListener('click', verifyArchive);
 $('build').addEventListener('click', build);

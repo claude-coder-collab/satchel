@@ -86,7 +86,12 @@ const ops = {
 
     plan({ items, options }) {
         plan?.free();
-        plan = satchel.plan(items, options);
+        const excludes = [
+            ...(options.excludeSystem ? satchel.excludePreset('system') : []),
+            ...(options.excludeDawCaches ? satchel.excludePreset('daw-caches') : []),
+            ...(options.excludePatterns ?? []),
+        ];
+        plan = satchel.plan(items, { ...options, excludes });
         return plan.describe();
     },
 

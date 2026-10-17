@@ -218,6 +218,32 @@ def test_conflict_resolution_ui(page) -> None:
     assert "take1.wav" in page.inner_text("#plan-entries")
 
 
+def test_folder_excludes(page, tmp_path: Path) -> None:
+    folder = tmp_path / "proj"
+    (folder / "__MACOSX").mkdir(parents=True)
+    (folder / "__MACOSX" / "x").write_text("x")
+    (folder / ".DS_Store").write_text("x")
+    (folder / "kick.wav.asd").write_text("x")
+    (folder / "song.txt").write_text("song")
+    page.set_input_files("#create-folder", str(folder))
+    page.wait_for_selector("#plan-entries tbody tr")
+    names = page.inner_text("#plan-entries")
+    assert "song.txt" in names and "kick.wav.asd" in names and ".DS_Store" not in names and "__MACOSX" not in names
+    assert "2 left out" in page.inner_text("#plan-summary")
+
+    page.check("#opt-exclude-daw")
+    page.wait_for_selector("#plan-summary:has-text('3 left out')")
+    page.fill("#opt-exclude", "song.*")
+    page.dispatch_event("#opt-exclude", "change")
+    page.wait_for_selector("#plan-summary:has-text('4 left out')")
+    assert "song.txt" not in page.inner_text("#plan-entries")
+
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]", timeout=30000)
+    assert page.is_checked("#opt-exclude-daw")
+    assert page.input_value("#opt-exclude") == "song.*"
+
+
 def test_missing_isolation_shows_a_specific_error(browser) -> None:
     server, url = serve(False)
     context = browser.new_context(service_workers="block")

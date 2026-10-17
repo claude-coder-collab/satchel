@@ -57,7 +57,7 @@ private:
     void update_recent();
     void show_empty();
     // Applies an editor operation and rewrites the archive in place as a job.
-    void edit(const QString& title, const std::function<void(zp_editor_t*, const std::function<std::size_t(const std::string&)>&)>& op, const QStringList& add_inputs = {});
+    void edit(const QString& title, const std::function<void(zp_editor_t*, const std::function<std::size_t(const std::string&)>&)>& op, const QStringList& add_inputs = {}, const std::vector<std::string>& add_excludes = {});
     std::vector<std::size_t> selected_entries() const;
     QString extract_to_temp(const std::vector<std::size_t>& entries);
 

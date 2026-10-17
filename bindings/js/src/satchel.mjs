@@ -9,6 +9,7 @@ const ZP_KIND_FILE = 0;
 const ZP_KIND_DIRECTORY = 1;
 const ACTIONS = { rename: 0, skip: 1, disable_flac: 2 };
 const OVERWRITE = { ask: 0, skip: 1, replace: 2 };
+const EXCLUDE_PRESETS = { system: 0, 'daw-caches': 1 };
 
 export class SatchelError extends Error {
     constructor(status, name, message) {
@@ -103,7 +104,35 @@ export class Satchel {
         return { fn, release: () => this.m.removeFunction(fn) };
     }
 
+    // Patterns of a preset: 'system' (.DS_Store, ._*, Thumbs.db, ...) or 'daw-caches'.
+    excludePreset(name) {
+        const preset = EXCLUDE_PRESETS[name];
+        if (preset === undefined) {
+            throw new Error(`unknown exclude preset '${name}'`);
+        }
+        const out = [];
+        for (let i = 0; ; i++) {
+            const p = this.m._zp_exclude_preset_pattern(preset, i);
+            if (!p) {
+                return out;
+            }
+            out.push(this.m.UTF8ToString(p));
+        }
+    }
+
+    _setExcludes(input, patterns) {
+        const m = this.m;
+        const array = m._malloc(Math.max(1, patterns.length) * 4);
+        const strings = patterns.map((p) => this._string(p));
+        strings.forEach((p, i) => m.setValue(array + i * 4, p, '*'));
+        const status = m._zp_input_set_excludes(input, array, patterns.length);
+        m._free(array);
+        strings.forEach((p) => m._free(p));
+        return status;
+    }
+
     // items: [{ path, data: Uint8Array|Blob|File, lastModified (ms), mode }, { path, directory: true }]
+    // options: { flac, deflateLevel, flacLevel, excludes: [pattern, ...] }
     plan(items, options = {}) {
         const m = this.m;
         const sources = [];
@@ -137,6 +166,14 @@ export class Satchel {
         m._free(array);
         strings.forEach((p) => m._free(p));
         this._notNull(input);
+        if (options.excludes?.length) {
+            const status = this._setExcludes(input, options.excludes);
+            if (status !== 0) {
+                m._zp_input_free(input);
+                m.removeFunction(read);
+                this._check(status);
+            }
+        }
         const opts = m._malloc(12);
         m._zp_plan_options_init(opts);
         if (options.flac === false) {
@@ -273,6 +310,11 @@ export class Plan {
 
     get warnings() {
         return this.describe().warnings;
+    }
+
+    // Inputs left out by the exclude patterns: [{ source_path, archive_path, kind }]
+    get excluded() {
+        return this.describe().excluded;
     }
 
     get executable() {

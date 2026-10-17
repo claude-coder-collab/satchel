@@ -298,6 +298,12 @@ std::string cli_create_command(const Settings& s, const std::filesystem::path& a
     cmd += common_options(s);
     if (s.temp_folder)
         cmd += " --temp-dir " + path_arg(*s.temp_folder);
+    if (!s.exclude_system)
+        cmd += " --no-default-excludes";
+    if (s.exclude_daw_caches)
+        cmd += " --exclude-daw-caches";
+    for (const auto& p : s.exclude_patterns)
+        cmd += " --exclude " + shell_quote(p);
     cmd += " " + path_arg(archive);
     for (const auto& i : inputs)
         cmd += " " + path_arg(i);

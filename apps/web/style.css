@@ -69,6 +69,9 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .issue .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
 .issue input[type=text] { flex: 1; min-width: 160px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .warning { color: var(--muted); font-size: 13px; }
+.excluded { color: var(--muted); font-size: 13px; margin: 4px 0; }
+.excluded summary { cursor: pointer; }
+.excluded div { margin-left: 16px; overflow-wrap: anywhere; }
 .job { margin-top: 16px; }
 .job progress { width: 100%; }
 .job-detail { color: var(--muted); font-size: 13px; }

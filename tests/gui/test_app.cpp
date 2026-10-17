@@ -4,9 +4,12 @@
 // archive opens within the target, and a Simple-mode drop compresses end to end.
 #include "app.hpp"
 #include "archive_model.hpp"
+#include "dialogs.hpp"
+#include "jobs.hpp"
 #include "mac_services.hpp"
 #include "mac_uninstall.hpp"
 #include "main_window.hpp"
+#include "settings_store.hpp"
 #include "simple_window.hpp"
 #include "user_data.hpp"
 #include <QAction>
@@ -141,6 +144,55 @@ private slots:
         // "notes.txt" exists as a file, so the folder gets a suffix instead of clashing.
         QCOMPARE(QDir::fromNativeSeparators(extracted.output), dir_.filePath("notes.txt 2"));
         QVERIFY(QFile::exists(dir_.filePath("notes.txt 2/notes.txt")));
+    }
+
+    void excludes_follow_the_settings()
+    {
+        QVERIFY(QDir(dir_.path()).mkpath("proj/sub"));
+        for (const auto* name : { "proj/.DS_Store", "proj/kick.wav.asd", "proj/sub/keep.txt" })
+        {
+            QFile f(dir_.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("x");
+        }
+        const QStringList inputs{ dir_.filePath("proj") };
+        const auto excluded = [&](const satchel_gui::Settings& s) {
+            QStringList out;
+            for (const auto& x : zpp::plan_excluded(PlanReviewDialog::make_plan(inputs, s)->get()))
+                out << QString::fromStdString(x.archive_path);
+            return out;
+        };
+        satchel_gui::Settings s;
+        QCOMPARE(excluded(s), QStringList{ "proj/.DS_Store" });
+        s.exclude_daw_caches = true;
+        QCOMPARE(excluded(s), (QStringList{ "proj/.DS_Store", "proj/kick.wav.asd" }));
+        s.exclude_system = false;
+        s.exclude_daw_caches = false;
+        s.exclude_patterns = { "sub/" };
+        QCOMPARE(excluded(s), QStringList{ "proj/sub" });
+        QVERIFY(exclude_pattern_error({ "a/b" }).contains("a/b"));
+        QVERIFY(exclude_pattern_error(exclude_patterns(s)).isEmpty());
+    }
+
+    void exclude_settings_persist_and_edit()
+    {
+        satchel_gui::Settings s;
+        s.exclude_system = false;
+        s.exclude_daw_caches = true;
+        s.exclude_patterns = { "*.tmp", "Old Takes/" };
+        save_settings(s);
+        const auto loaded = load_settings();
+        QCOMPARE(loaded.exclude_system, false);
+        QCOMPARE(loaded.exclude_daw_caches, true);
+        QVERIFY(loaded.exclude_patterns == s.exclude_patterns);
+        save_settings({});
+
+        ExcludeEditor editor(s);
+        satchel_gui::Settings round;
+        editor.apply_to(round);
+        QCOMPARE(round.exclude_system, false);
+        QCOMPARE(round.exclude_daw_caches, true);
+        QVERIFY(round.exclude_patterns == s.exclude_patterns);
     }
 
     void finder_service_compresses_files()
