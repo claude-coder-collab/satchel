@@ -52,6 +52,9 @@
                 <div id="issues"></div>
                 <div class="options">
                     <label><input type="checkbox" id="opt-flac" checked> Convert PCM audio to FLAC</label>
+                    <label><input type="checkbox" id="opt-exclude-system" checked> Leave out system files (.DS_Store, ._*, Thumbs.db, …)</label>
+                    <label><input type="checkbox" id="opt-exclude-daw"> Leave out audio software caches (.asd, .reapeaks, WaveCache.wfm, …)</label>
+                    <label>Also leave out <input type="text" id="opt-exclude" placeholder="*.tmp, Old takes/" title="Names separated by commas: * any text, ? one character; end with / for folders only"></label>
                     <label>Archive name <input type="text" id="archive-name" value="archive.zip"></label>
                 </div>
                 <div class="actions"><button id="build" class="primary">Create archive</button></div>

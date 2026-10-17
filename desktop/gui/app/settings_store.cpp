@@ -3,6 +3,7 @@
 #include "settings_store.hpp"
 
 #include <QSettings>
+#include <QStringList>
 
 using satchel_gui::Overwrite;
 using satchel_gui::Settings;
@@ -40,6 +41,10 @@ Settings load_settings()
     s.include_readme = q.value("extraction/includeReadme", s.include_readme).toBool();
     s.overwrite = static_cast<Overwrite>(q.value("extraction/overwrite", static_cast<int>(s.overwrite)).toInt());
     s.verify_after_build = q.value("verification/afterBuild", s.verify_after_build).toBool();
+    s.exclude_system = q.value("excludes/system", s.exclude_system).toBool();
+    s.exclude_daw_caches = q.value("excludes/dawCaches", s.exclude_daw_caches).toBool();
+    for (const auto& p : q.value("excludes/patterns").toStringList())
+        s.exclude_patterns.push_back(p.toStdString());
     s.associate_zip = q.value("integration/associateZip", s.associate_zip).toBool();
     s.check_updates = q.value("updates/check", s.check_updates).toBool();
     return s;
@@ -59,6 +64,12 @@ void save_settings(const Settings& s)
     q.setValue("extraction/includeReadme", s.include_readme);
     q.setValue("extraction/overwrite", static_cast<int>(s.overwrite));
     q.setValue("verification/afterBuild", s.verify_after_build);
+    q.setValue("excludes/system", s.exclude_system);
+    q.setValue("excludes/dawCaches", s.exclude_daw_caches);
+    QStringList patterns;
+    for (const auto& p : s.exclude_patterns)
+        patterns << QString::fromStdString(p);
+    q.setValue("excludes/patterns", patterns);
     q.setValue("integration/associateZip", s.associate_zip);
     q.setValue("updates/check", s.check_updates);
 }

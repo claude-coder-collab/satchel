@@ -387,8 +387,10 @@ callbacks directly.
   output, filesystem extraction sink and multi-mono spill files.
 
 **JavaScript binding** (`bindings/js/src/satchel.mjs`, synchronous, worker-side):
-- `Satchel.load()`, `plan(items)` (items are `{path, data|file, lastModified}` or
-  `{path, directory: true}`).
+- `Satchel.load()`, `plan(items, {flac, deflateLevel, flacLevel, excludes})` (items are
+  `{path, data|file, lastModified}` or `{path, directory: true}`), `excludePreset('system' |
+  'daw-caches')`. `Plan.excluded` lists what the patterns left out (`zp_plan_describe` has an
+  `excluded` array).
 - `Plan`: `describe`, `resolve`, `build(writer)`, `buildToPath`, `buildBytes`.
 - `Archive`: `describe`, `extract(sinkCallbacks)`, `extractToPath`, `extractToMemory`, `verify`.
 - Blobs are read with `FileReaderSync`. Writers: `MemoryWriter`, `SyncHandleWriter`.
@@ -401,6 +403,10 @@ callbacks directly.
   to an OPFS folder, then to a folder picked with `showDirectoryPicker` or per-file downloads (links, plus a "Download all" button that clicks each one in turn; folder structure is not preserved).
 - The page plans, shows conflicts with Rename / Skip / Store unconverted, lists warnings, builds
   with progress, opens archives, verifies and extracts.
+- "Leave out" options (system files on, audio software caches off, comma-separated extra
+  patterns) are kept in `localStorage` under `satchel.excludes`; without storage they last for the
+  page. The worker expands presets with `excludePreset`. The summary counts excluded items and a
+  collapsed "Left out" list names them.
 - If OPFS sync access handles are unusable (Playwright's WebKit, some private modes), the worker
   falls back to WasmFS memory and returns Blobs. The footer says "in-memory mode".
 - Cross-origin isolation: `coi-serviceworker.js` (MIT, gzuidhof/coi-serviceworker v0.1.7) adds
@@ -501,9 +507,11 @@ which the GUI will reuse.
 defaults and "Copy as CLI command".
 
 **App** (`desktop/gui/app`, library `satchel_gui_app` plus `Satchel` executable):
-- New archives and files added in Full mode use the system exclude preset; the plan review's
-  totals line shows how many items were left out. Preferences for the patterns are pending
-  (issue #52, second milestone).
+- Exclude settings (`exclude_system`, `exclude_daw_caches`, `exclude_patterns`) are stored under
+  `excludes/` in QSettings. `exclude_patterns(Settings)` in `jobs.cpp` expands them (presets from
+  the C API, then custom patterns) for Simple mode, the plan review and Full-mode additions.
+  `ExcludeEditor` is the shared widget in Settings and in the plan review's Options panel; its
+  pattern list has no reordering because patterns cannot negate one another.
 - `App` owns one `JobQueue` (a single background thread running jobs in order: compress,
   extract, verify, edit) shared by both modes, the Settings (QSettings) and both windows. The
   last mode is remembered.

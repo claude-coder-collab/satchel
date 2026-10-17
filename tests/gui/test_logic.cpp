@@ -167,6 +167,11 @@ TEST_CASE("copy as CLI command", "[gui]")
     s.deflate_level = 9;
     s.threads = 4;
     CHECK(cli_create_command(s, "o.zip", { "i" }) == "satchel create --no-flac --deflate-level 9 --threads 4 o.zip i");
+    Settings x;
+    x.exclude_system = false;
+    x.exclude_daw_caches = true;
+    x.exclude_patterns = { "*.tmp", "old stuff/" };
+    CHECK(cli_create_command(x, "o.zip", { "i" }) == "satchel create --no-default-excludes --exclude-daw-caches --exclude '*.tmp' --exclude 'old stuff/' o.zip i");
     Settings e;
     e.restore_audio = false;
     e.include_readme = true;

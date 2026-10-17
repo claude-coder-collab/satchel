@@ -165,7 +165,7 @@ Maximum compatibility is the governing requirement. Archives must extract correc
 - Items the user chose directly (top-level inputs) are never excluded.
 - The plan reports each excluded item, and an excluded folder once, not its contents. Excluded items are not in sizes, progress or the archive.
 - Presets: **system** (OS clutter: `.DS_Store`, `._*`, `__MACOSX/`, `.Spotlight-V100/`, `.Trashes/`, `.fseventsd/`, `.TemporaryItems/`, `.DocumentRevisions-V100/`, `Icon\r`, `Thumbs.db`, `ehthumbs.db`, `desktop.ini`, `$RECYCLE.BIN/`, `System Volume Information/`, `~$*`, `.~lock.*#`) and **DAW caches** (regenerable waveform/analysis files: `WaveCache.wfm`, `*.asd`, `*.reapeaks`, `*.pkf`, `*.gpk`, `*.sfk`).
-- The library excludes nothing by default. The CLI and the desktop app apply the system preset by default.
+- The library excludes nothing by default. The CLI, the desktop app and the browser app apply the system preset by default; the apps let the user turn presets on or off and add their own patterns, remembered across sessions.
 
 ### 6.4 Archive Metadata (EOCD Comment)
 

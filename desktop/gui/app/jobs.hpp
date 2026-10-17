@@ -78,6 +78,11 @@ Q_DECLARE_METATYPE(JobOutcome)
 // Shared library context for the whole app.
 zp_context_t* app_context();
 
+// The exclude patterns the settings ask for: enabled presets, then the custom patterns.
+std::vector<std::string> exclude_patterns(const satchel_gui::Settings& settings);
+// Empty if every pattern is valid, else the library's message for the first invalid one.
+QString exclude_pattern_error(const std::vector<std::string>& patterns);
+
 // Job bodies.
 JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, const satchel_gui::Settings& settings);
 JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& destination, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, bool replace_existing);

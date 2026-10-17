@@ -51,7 +51,7 @@ Drop files on the window (or the app icon) and the job starts immediately: zips 
 - Name collisions inside the archive (main spec 6.2): a compact resolution sheet, defaulting to "rename with suffix".
 - Extraction: unsafe paths, incomplete multi-mono groups, hash mismatches are reported as errors on the result card.
 - Skipped symlinks and FLAC fallbacks don't stop the job; they're listed on the result card.
-- System clutter (main spec 6.3.1, system preset) is left out of new archives and of files added to an archive; the plan review shows how many items were left out.
+- The "Leave out" settings apply to new archives and to files added to an archive (Simple mode uses them as saved).
 
 **Window states**
 
@@ -158,10 +158,15 @@ Verify checks an archive's integrity without writing any files: CRC32 for every 
 | Extraction | Include generated readme | Off |
 | Extraction | Overwrite policy | Ask |
 | Verification | Verify after build | Off |
+| Leave out | System files (main spec 6.3.1, system preset) | On |
+| Leave out | Waveform and analysis caches of audio software (DAW preset) | Off |
+| Leave out | Custom name patterns (list: add, edit in place, remove) | Empty |
 | Integration | Associate with .zip | Off (offered, never forced) |
 | Updates | Check automatically | On |
 
 "Copy as CLI command" (on the plan review and Settings) produces the equivalent CLI invocation for the current options.
+
+The plan review's Options panel has the same "Leave out" controls as Settings, as a per-archive override that is not saved. Items left out are counted in the totals line and listed below the conflicts ("Left out: …"). Settings refuses to close while a custom pattern is invalid.
 
 ## OS integration
 

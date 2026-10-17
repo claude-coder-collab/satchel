@@ -611,7 +611,7 @@ void MainWindow::new_archive(const QStringList& given)
     });
 }
 
-void MainWindow::edit(const QString& title, const std::function<void(zp_editor_t*, const std::function<std::size_t(const std::string&)>&)>& op, const QStringList& add_inputs)
+void MainWindow::edit(const QString& title, const std::function<void(zp_editor_t*, const std::function<std::size_t(const std::string&)>&)>& op, const QStringList& add_inputs, const std::vector<std::string>& add_excludes)
 {
     if (archive_.isEmpty())
         return;
@@ -622,7 +622,7 @@ void MainWindow::edit(const QString& title, const std::function<void(zp_editor_t
     std::vector<std::string> adds;
     for (const auto& a : add_inputs)
         adds.push_back(a.toStdString());
-    mine_ << app_.jobs().enqueue(title, [path, op, adds](JobContext& jc) {
+    mine_ << app_.jobs().enqueue(title, [path, op, adds, add_excludes](JobContext& jc) {
         JobOutcome o;
         o.output = path;
         zpp::Stream in(zpp::not_null(zp_stream_open_file(path.toStdString().c_str())));
@@ -641,7 +641,7 @@ void MainWindow::edit(const QString& title, const std::function<void(zp_editor_t
         if (!adds.empty())
         {
             input = zpp::input_from_paths(adds);
-            zpp::set_excludes(input, zpp::exclude_preset(ZP_EXCLUDE_PRESET_SYSTEM));
+            zpp::set_excludes(input, add_excludes);
             zpp::check(zp_editor_add(editor.get(), input.get()));
         }
         zpp::Plan view(zpp::not_null(zp_editor_plan(editor.get())));
@@ -685,7 +685,7 @@ void MainWindow::add_files(const QStringList& given)
     review.setWindowTitle(tr("Review the additions"));
     if (review.exec() != QDialog::Accepted)
         return;
-    edit(tr("Adding to %1").arg(QFileInfo(archive_).fileName()), [](zp_editor_t*, const auto&) {}, inputs);
+    edit(tr("Adding to %1").arg(QFileInfo(archive_).fileName()), [](zp_editor_t*, const auto&) {}, inputs, exclude_patterns(review.settings()));
 }
 
 void MainWindow::delete_selected()

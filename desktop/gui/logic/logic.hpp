@@ -128,6 +128,9 @@ struct Settings
     bool include_readme = false;
     Overwrite overwrite = Overwrite::Ask;
     bool verify_after_build = false;
+    bool exclude_system = true; // ZP_EXCLUDE_PRESET_SYSTEM
+    bool exclude_daw_caches = false; // ZP_EXCLUDE_PRESET_DAW_CACHES
+    std::vector<std::string> exclude_patterns;
     bool associate_zip = false;
     bool check_updates = true;
 };

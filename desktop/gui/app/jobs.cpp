@@ -27,6 +27,34 @@ zp_context_t* app_context()
     return ctx.get();
 }
 
+std::vector<std::string> exclude_patterns(const satchel_gui::Settings& settings)
+{
+    std::vector<std::string> out;
+    const auto add = [&](int preset) {
+        const auto list = zpp::exclude_preset(preset);
+        out.insert(out.end(), list.begin(), list.end());
+    };
+    if (settings.exclude_system)
+        add(ZP_EXCLUDE_PRESET_SYSTEM);
+    if (settings.exclude_daw_caches)
+        add(ZP_EXCLUDE_PRESET_DAW_CACHES);
+    out.insert(out.end(), settings.exclude_patterns.begin(), settings.exclude_patterns.end());
+    return out;
+}
+
+QString exclude_pattern_error(const std::vector<std::string>& patterns)
+{
+    try
+    {
+        const zpp::Input probe(zpp::not_null(zp_input_memory()));
+        zpp::set_excludes(probe, patterns);
+    } catch (const zpp::Error& e)
+    {
+        return QString::fromUtf8(e.what());
+    }
+    return {};
+}
+
 JobQueue::JobQueue(QObject* parent) :
     QObject(parent)
 {

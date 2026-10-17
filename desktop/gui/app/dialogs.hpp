@@ -24,6 +24,24 @@ class QVBoxLayout;
 class QStandardItemModel;
 class QWidget;
 
+// Exclude settings: the system and DAW cache presets and an editable list of custom patterns.
+class ExcludeEditor : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit ExcludeEditor(const satchel_gui::Settings& settings, QWidget* parent = nullptr);
+    void apply_to(satchel_gui::Settings& settings) const;
+
+signals:
+    void changed();
+
+private:
+    QCheckBox* system_ = nullptr;
+    QCheckBox* daw_ = nullptr;
+    QListWidget* list_ = nullptr;
+};
+
 // Plans `inputs` and lets the user review names, methods, conflicts and warnings before a build.
 class PlanReviewDialog : public QDialog
 {
@@ -58,6 +76,7 @@ private:
     QCheckBox* flac_ = nullptr;
     QSpinBox* deflate_ = nullptr;
     QSpinBox* flac_level_ = nullptr;
+    ExcludeEditor* excludes_ = nullptr;
     QPushButton* build_ = nullptr;
 };
 
@@ -123,6 +142,7 @@ private:
     QCheckBox* readme_ = nullptr;
     QComboBox* overwrite_ = nullptr;
     QCheckBox* verify_ = nullptr;
+    ExcludeEditor* excludes_ = nullptr;
     QCheckBox* associate_ = nullptr;
     QCheckBox* updates_ = nullptr;
 };

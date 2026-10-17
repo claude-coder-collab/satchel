@@ -72,6 +72,79 @@ QString reason_text(const zpp::PlanEntry& e)
     return {};
 }
 
+QString preset_tooltip(int preset)
+{
+    QStringList names;
+    for (const auto& p : zpp::exclude_preset(preset))
+        names << qs(p).replace('\r', QStringLiteral("\\r"));
+    return names.join(QStringLiteral("  "));
+}
+
+}
+
+ExcludeEditor::ExcludeEditor(const Settings& settings, QWidget* parent) :
+    QWidget(parent)
+{
+    auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    system_ = new QCheckBox(tr("Leave out system files (.DS_Store, ._*, Thumbs.db, …)"), this);
+    system_->setChecked(settings.exclude_system);
+    system_->setToolTip(preset_tooltip(ZP_EXCLUDE_PRESET_SYSTEM));
+    daw_ = new QCheckBox(tr("Leave out waveform and analysis caches of audio software"), this);
+    daw_->setChecked(settings.exclude_daw_caches);
+    daw_->setToolTip(preset_tooltip(ZP_EXCLUDE_PRESET_DAW_CACHES));
+    list_ = new QListWidget(this);
+    list_->setAccessibleName(tr("Exclude patterns"));
+    list_->setToolTip(tr("Names to leave out: * any text, ? one character, [a-z] one of a set; end with / for folders only"));
+    list_->setMaximumHeight(110);
+    for (const auto& p : settings.exclude_patterns)
+    {
+        auto* item = new QListWidgetItem(qs(p), list_);
+        item->setFlags(item->flags() | Qt::ItemIsEditable);
+    }
+    auto* add = new QPushButton(tr("Add Pattern"), this);
+    auto* remove = new QPushButton(tr("Remove"), this);
+    remove->setEnabled(false);
+    auto* buttons = new QHBoxLayout;
+    buttons->addWidget(add);
+    buttons->addWidget(remove);
+    buttons->addStretch(1);
+    layout->addWidget(system_);
+    layout->addWidget(daw_);
+    layout->addWidget(list_);
+    layout->addLayout(buttons);
+
+    connect(system_, &QCheckBox::toggled, this, &ExcludeEditor::changed);
+    connect(daw_, &QCheckBox::toggled, this, &ExcludeEditor::changed);
+    connect(list_, &QListWidget::itemSelectionChanged, this, [this, remove] { remove->setEnabled(!list_->selectedItems().isEmpty()); });
+    connect(list_, &QListWidget::itemChanged, this, [this](QListWidgetItem* item) {
+        if (item->text().trimmed().isEmpty())
+            delete item;
+        emit changed();
+    });
+    connect(add, &QPushButton::clicked, this, [this] {
+        auto* item = new QListWidgetItem(QStringLiteral("*.tmp"), list_);
+        item->setFlags(item->flags() | Qt::ItemIsEditable);
+        list_->setCurrentItem(item);
+        list_->editItem(item);
+    });
+    connect(remove, &QPushButton::clicked, this, [this] {
+        qDeleteAll(list_->selectedItems());
+        emit changed();
+    });
+}
+
+void ExcludeEditor::apply_to(Settings& settings) const
+{
+    settings.exclude_system = system_->isChecked();
+    settings.exclude_daw_caches = daw_->isChecked();
+    settings.exclude_patterns.clear();
+    for (int i = 0; i < list_->count(); ++i)
+    {
+        const auto text = list_->item(i)->text().trimmed();
+        if (!text.isEmpty())
+            settings.exclude_patterns.push_back(text.toStdString());
+    }
 }
 
 std::shared_ptr<zpp::Plan> PlanReviewDialog::make_plan(const QStringList& inputs, const Settings& settings)
@@ -80,7 +153,7 @@ std::shared_ptr<zpp::Plan> PlanReviewDialog::make_plan(const QStringList& inputs
     for (const auto& i : inputs)
         paths.push_back(i.toStdString());
     auto input = zpp::input_from_paths(paths);
-    zpp::set_excludes(input, zpp::exclude_preset(ZP_EXCLUDE_PRESET_SYSTEM));
+    zpp::set_excludes(input, exclude_patterns(settings));
     zp_plan_options_t options{};
     zp_plan_options_init(&options);
     options.flac_enabled = settings.flac ? 1 : 0;
@@ -145,6 +218,9 @@ PlanReviewDialog::PlanReviewDialog(QStringList inputs, const QString& output, Se
     form->addRow(flac_);
     form->addRow(tr("Deflate level"), deflate_);
     form->addRow(tr("FLAC level"), flac_level_);
+    excludes_ = new ExcludeEditor(settings_, options);
+    form->addRow(tr("Leave out"), excludes_);
+    connect(excludes_, &ExcludeEditor::changed, this, &PlanReviewDialog::replan);
     connect(options_toggle, &QToolButton::toggled, this, [options, options_toggle](bool on) {
         options->setVisible(on);
         options_toggle->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
@@ -200,6 +276,7 @@ void PlanReviewDialog::replan()
     settings_.flac = flac_->isChecked();
     settings_.deflate_level = deflate_->value();
     settings_.flac_level = flac_level_->value();
+    excludes_->apply_to(settings_);
     try
     {
         QApplication::setOverrideCursor(Qt::WaitCursor);
@@ -262,7 +339,7 @@ void PlanReviewDialog::refresh()
                          .arg(flac)
                          .arg(deflate)
                          .arg(stored)
-        + (excluded > 0 ? tr(" · %n system file(s) left out", nullptr, static_cast<int>(excluded)) : QString()));
+        + (excluded > 0 ? tr(" · %n item(s) left out", nullptr, static_cast<int>(excluded)) : QString()));
 
     for (const auto& c : conflicts)
     {
@@ -296,6 +373,8 @@ void PlanReviewDialog::refresh()
         issues_layout_->addWidget(new QLabel(tr("No conflicts."), issues_));
     for (const auto& w : zpp::plan_warnings(plan_->get()))
         warnings_->addItem((w.kind == ZP_WARNING_SYMLINK_SKIPPED ? tr("Skipped: %1 — %2") : tr("Stored as is: %1 — %2")).arg(qs(w.source_path), qs(w.detail)));
+    for (const auto& x : zpp::plan_excluded(plan_->get()))
+        warnings_->addItem(tr("Left out: %1%2").arg(qs(x.archive_path), x.kind == ZP_KIND_DIRECTORY ? QStringLiteral("/") : QString()));
     warnings_->setVisible(warnings_->count() > 0);
     build_->setEnabled(zp_plan_executable(plan_->get()) != 0);
 }
@@ -487,6 +566,7 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
     overwrite_->setCurrentIndex(static_cast<int>(base_.overwrite));
     verify_ = new QCheckBox(tr("Verify after every build (re-reads the archive)"), this);
     verify_->setChecked(base_.verify_after_build);
+    excludes_ = new ExcludeEditor(base_, this);
     associate_ = new QCheckBox(tr("Offer to open .zip files"), this);
     associate_->setChecked(base_.associate_zip);
     updates_ = new QCheckBox(tr("Check for updates automatically"), this);
@@ -502,6 +582,7 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
     form->addRow(QString(), readme_);
     form->addRow(tr("Existing files"), overwrite_);
     form->addRow(tr("Verification"), verify_);
+    form->addRow(tr("Leave out"), excludes_);
     form->addRow(tr("Integration"), associate_);
     form->addRow(tr("Updates"), updates_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -509,7 +590,14 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
     connect(copy, &QPushButton::clicked, this, [this] {
         QApplication::clipboard()->setText(QString::fromStdString(satchel_gui::cli_create_command(settings(), "archive.zip", { "files" })));
     });
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::accepted, this, [this] {
+        if (const auto error = exclude_pattern_error(exclude_patterns(settings())); !error.isEmpty())
+        {
+            QMessageBox::warning(this, tr("Invalid exclude pattern"), error);
+            return;
+        }
+        accept();
+    });
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     form->addRow(buttons);
 }
@@ -533,6 +621,7 @@ Settings SettingsDialog::settings() const
     s.include_readme = readme_->isChecked();
     s.overwrite = static_cast<satchel_gui::Overwrite>(overwrite_->currentIndex());
     s.verify_after_build = verify_->isChecked();
+    excludes_->apply_to(s);
     s.associate_zip = associate_->isChecked();
     s.check_updates = updates_->isChecked();
     return s;
