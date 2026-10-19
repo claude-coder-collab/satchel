@@ -271,7 +271,12 @@ void MainWindow::build_ui()
     file_menu->addAction(go_);
     save_as_ = action(tr("Save As…"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S), [this] { save_as(); });
     file_menu->addAction(save_as_);
-    discard_ = action(tr("Discard Changes"), QKeySequence(), [this] { controller_->discard(); });
+    discard_ = action(tr("Discard Changes"), QKeySequence(), [this] {
+        if (snap_ && snap_->is_new)
+            cancel_new();
+        else
+            controller_->discard();
+    });
     file_menu->addAction(discard_);
     file_menu->addSeparator();
     auto* settings = action(tr("Settings…"), QKeySequence::Preferences, [this] {
@@ -429,6 +434,11 @@ void MainWindow::build_ui()
     bar_ = new SessionBar(browser);
     connect(bar_, &SessionBar::go, this, [this] { apply_changes(); });
     connect(bar_, &SessionBar::discard, controller_, &SessionController::discard);
+    connect(bar_, &SessionBar::cancel_new, this, &MainWindow::cancel_new);
+    connect(bar_, &SessionBar::cancel_write, this, [this] {
+        if (commit_job_)
+            app_.jobs().cancel(commit_job_);
+    });
     connect(bar_, &SessionBar::resolve, this, [this](const op::Resolve& r) { controller_->apply({ r }); });
     connect(bar_, &SessionBar::reveal, this, [](const QString& path) { reveal_in_file_manager(path); });
     connect(bar_, &SessionBar::options_changed, this, [this](const satchel_gui::Settings& s, satchel_gui::ExistingEntries e) {
@@ -539,7 +549,8 @@ void MainWindow::update_actions()
         a->setEnabled(ready && has_selection);
     undo_->setEnabled(ready && snap_->can_undo);
     redo_->setEnabled(ready && snap_->can_redo);
-    discard_->setEnabled(ready && snap_->has_changes);
+    discard_->setText(snap_ && snap_->is_new ? tr("Cancel New Archive") : tr("Discard Changes"));
+    discard_->setEnabled(ready && (snap_->is_new || snap_->has_changes));
     go_->setText(snap_ && snap_->is_new ? tr("Create Archive") : tr("Apply Changes"));
     go_->setEnabled(ready && snap_->view.executable && dirty());
     save_as_->setEnabled(ready && snap_->view.executable);
@@ -1208,6 +1219,19 @@ int MainWindow::apply_changes()
     return commit_job_;
 }
 
+void MainWindow::cancel_new()
+{
+    if (!snap_ || !snap_->is_new || controller_->busy())
+        return;
+    if (dirty() && QMessageBox::question(this, tr("Cancel the new archive?"), tr("“%1” will not be created. The files you added are not affected.").arg(QFileInfo(snap_->target).fileName()), QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Discard)
+        return;
+    controller_->close();
+    snap_.reset();
+    show_model({}, {});
+    bar_->show_snapshot(nullptr, false, false);
+    show_empty();
+}
+
 void MainWindow::save_as()
 {
     if (!snap_)
@@ -1539,8 +1563,10 @@ void MainWindow::on_started(int id, const QString& title)
     job_bar_->show();
 }
 
-void MainWindow::on_progress(int, quint64 done, quint64 total)
+void MainWindow::on_progress(int id, quint64 done, quint64 total)
 {
+    if (id == commit_job_)
+        bar_->set_progress(done, total);
     job_bar_->setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
 }
 

@@ -52,6 +52,7 @@ public:
     ~JobQueue() override;
 
     int enqueue(QString title, std::function<JobOutcome(JobContext&)> run);
+    // A queued job is dropped and reported as finished with ZP_CANCELLED; a running one is asked to stop.
     void cancel(int id);
     [[nodiscard]] bool busy() const;
 

@@ -76,6 +76,8 @@ private:
     void move_selected();
     void new_folder();
     void save_as();
+    // Leaves a new archive without creating it.
+    void cancel_new();
     void open_entry(const QModelIndex& index);
     void show_empty();
     void update_recent();

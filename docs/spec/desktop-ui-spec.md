@@ -173,12 +173,13 @@ A bar at the bottom of the browser, visible while the session has pending change
   - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls. The rows involved get a warning badge in the browser.
   - Skipped symlinks and leave-out matches (warning), FLAC fallbacks (info), listed with paths.
 - **Options** button, which opens a popover with FLAC on/off, FLAC level, deflate level, Existing entries and the Leave out controls. These are per-session overrides of Settings and are not saved. OK applies them (an invalid Leave out pattern is shown in the popover and keeps it open); Cancel, Esc or clicking elsewhere discards them. Threads stay a Settings value (one thread pool for the app).
-- **Discard** and the Go button (**Create Archive** / **Apply Changes**, ⌘S). Go is disabled while blocking issues remain or additions are still being planned.
+- **Discard** (all staged changes; for a new archive it reads **Cancel** and leaves it without creating it, asking first if files were added, then shows the start page) and the Go button (**Create Archive** / **Apply Changes**, ⌘S). Go is disabled while blocking issues remain or additions are still being planned.
+- While the archive is written, the bar shows the summary, a progress bar and **Cancel** instead of the other controls.
 
 ### Go
 
 1. Create and Apply need no dialog. For an Edit session, **Save As…** (⌘⇧S) asks for a path and writes a copy, leaving the original untouched.
-2. The job runs in the background queue with per-file and overall progress, throughput, ETA and Cancel. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
+2. The job runs in the background queue, with progress and Cancel in the action bar (and in the Jobs panel). A job cancelled while still queued is reported as cancelled. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
 3. On success: a result card in the action bar (savings, per-method breakdown, warnings, Reveal), and the session reopens the written archive. With "verify after build" on, Verify runs on the written archive.
 4. On failure or Cancel: the original archive is untouched, and the pending changes stay staged so the user can retry.
 

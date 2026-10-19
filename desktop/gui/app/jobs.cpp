@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "jobs.hpp"
 
+#include <algorithm>
+
 #include "labels.hpp"
 
 #include <condition_variable>
@@ -86,10 +88,21 @@ int JobQueue::enqueue(QString title, std::function<JobOutcome(JobContext&)> run)
 
 void JobQueue::cancel(int id)
 {
-    std::lock_guard lock(mutex_);
-    if (running_ == id)
-        cancel_running_ = true;
-    std::erase_if(queue_, [id](const Job& j) { return j.id == id; });
+    QString title;
+    {
+        std::lock_guard lock(mutex_);
+        if (running_ == id)
+            cancel_running_ = true;
+        const auto it = std::ranges::find(queue_, id, &Job::id);
+        if (it == queue_.end())
+            return;
+        title = it->title;
+        queue_.erase(it);
+    }
+    JobOutcome outcome;
+    outcome.status = ZP_CANCELLED;
+    outcome.message = tr("Cancelled");
+    emit finished(id, title, outcome);
 }
 
 bool JobQueue::busy() const

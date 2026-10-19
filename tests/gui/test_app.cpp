@@ -30,7 +30,10 @@
 #include <QTest>
 #include <QTranslator>
 
+#include <atomic>
+#include <chrono>
 #include <format>
+#include <thread>
 
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 constexpr qint64 limit_ms = 15000;
@@ -403,6 +406,58 @@ private slots:
             QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
             QCOMPARE(session.snapshot()->options.flac, button == QDialogButtonBox::Cancel);
         }
+    }
+
+    void new_archive_and_writing_can_be_cancelled()
+    {
+        QFile source(dir_.filePath("cancel-src.txt"));
+        QVERIFY(source.open(QIODevice::WriteOnly));
+        source.write("data");
+        source.close();
+        App app;
+        app.show_full();
+        auto* w = app.full();
+        auto& session = w->session();
+        const auto settled = [&] { return !session.busy() && session.snapshot(); };
+        auto* bar = w->findChild<SessionBar*>();
+        const auto button = [bar](const QString& text) {
+            for (auto* b : bar->findChildren<QPushButton*>())
+            {
+                if (b->text() == text && b->isVisibleTo(bar))
+                    return b;
+            }
+            return static_cast<QPushButton*>(nullptr);
+        };
+
+        w->start_new_archive(dir_.filePath("never.zip"));
+        QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
+        QVERIFY(button("Cancel"));
+        button("Cancel")->click();
+        QVERIFY(!session.active());
+        QVERIFY(!w->isWindowModified());
+
+        // A write still waiting in the queue is cancelled and the staged files stay.
+        std::atomic<bool> release{ false };
+        app.jobs().enqueue("blocker", [&release](JobContext&) {
+            while (!release)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            return JobOutcome{};
+        });
+        const auto target = dir_.filePath("cancelled.zip");
+        w->start_new_archive(target, { source.fileName() });
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->view.summary.added == 1, 20000);
+        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        QVERIFY(w->apply_changes() != 0);
+        QTRY_VERIFY(button("Cancel"));
+        button("Cancel")->click();
+        QTRY_VERIFY(!finished.isEmpty());
+        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_CANCELLED);
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.committing(), 20000);
+        QVERIFY(session.snapshot()->is_new);
+        QCOMPARE(session.snapshot()->view.summary.added, std::size_t{ 1 });
+        QVERIFY(!QFile::exists(target));
+        release = true;
+        QVERIFY(finished.wait(20000));
     }
 
     void translations_are_embedded()

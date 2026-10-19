@@ -59,6 +59,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Apply rewrites in place; Save As writes a copy and switches to it; result card with Reveal
 - [ ] Close the window / open another archive / New with staged changes: Apply / Discard / Cancel
 - [ ] Apply with a failure midway (disk full, cancel) keeps the original intact and the changes staged
+- [ ] Cancel a new archive (with and without added files) returns to the start page; Cancel in the action bar while writing, also while the write waits behind another job
 - [ ] Extract / Verify / double-click with staged changes act on the archive on disk; double-click on an added file opens the source
 - [ ] Archive open in the app is modified or deleted by another program
 - [ ] Recent archives list: missing file, moved file

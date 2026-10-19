@@ -217,6 +217,13 @@
     </message>
 </context>
 <context>
+    <name>JobQueue</name>
+    <message>
+        <source>Cancelled</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <source>Satchel</source>
@@ -473,6 +480,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Cancel New Archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Create Archive</source>
         <translation type="unfinished"></translation>
     </message>
@@ -582,6 +593,14 @@
     </message>
     <message>
         <source>Applying changes to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel the new archive?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>“%1” will not be created. The files you added are not affected.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -935,6 +954,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Writing progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel writing the archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Reveal</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1014,6 +1045,14 @@
     </message>
     <message>
         <source>Apply Changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Leave without creating the archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Undo all staged changes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -17,6 +17,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollArea>
@@ -89,6 +90,12 @@ SessionBar::SessionBar(QWidget* parent) :
     discard_ = new QPushButton(tr("Discard"), this);
     go_ = new QPushButton(this);
     go_->setDefault(true);
+    progress_ = new QProgressBar(this);
+    progress_->setRange(0, 1000);
+    progress_->setMaximumWidth(220);
+    progress_->setAccessibleName(tr("Writing progress"));
+    cancel_write_ = new QPushButton(tr("Cancel"), this);
+    cancel_write_->setAccessibleName(tr("Cancel writing the archive"));
     result_ = new QLabel(this);
     reveal_ = new QPushButton(tr("Reveal"), this);
     layout->addWidget(result_);
@@ -98,11 +105,22 @@ SessionBar::SessionBar(QWidget* parent) :
     layout->addWidget(options_);
     layout->addWidget(discard_);
     layout->addWidget(go_);
+    layout->addWidget(progress_);
+    layout->addWidget(cancel_write_);
     result_->hide();
     reveal_->hide();
 
     connect(go_, &QPushButton::clicked, this, &SessionBar::go);
-    connect(discard_, &QPushButton::clicked, this, &SessionBar::discard);
+    connect(discard_, &QPushButton::clicked, this, [this] {
+        if (snapshot_ && snapshot_->is_new)
+            emit cancel_new();
+        else
+            emit discard();
+    });
+    connect(cancel_write_, &QPushButton::clicked, this, [this] {
+        cancel_write_->setEnabled(false);
+        emit cancel_write();
+    });
     connect(issues_, &QPushButton::clicked, this, &SessionBar::open_issues);
     connect(options_, &QPushButton::clicked, this, &SessionBar::open_options);
     connect(reveal_, &QPushButton::clicked, this, [this] { emit reveal(result_output_); });
@@ -118,6 +136,12 @@ void SessionBar::set_options(const satchel_gui::Settings& settings, ExistingEntr
 void SessionBar::show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, bool busy, bool committing)
 {
     snapshot_ = std::move(snapshot);
+    if (committing && !committing_)
+    {
+        progress_->setValue(0);
+        cancel_write_->setEnabled(true);
+    }
+    committing_ = committing;
     if (!snapshot_)
     {
         summary_->setText(busy ? tr("Reading…") : QString());
@@ -168,11 +192,18 @@ void SessionBar::show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, 
     go_->setText(snapshot_->is_new ? tr("Create Archive") : tr("Apply Changes"));
     const bool has_work = snapshot_->has_changes;
     go_->setEnabled(!busy && v.executable && has_work);
-    discard_->setEnabled(!busy && snapshot_->has_changes);
+    discard_->setText(snapshot_->is_new ? tr("Cancel") : tr("Discard"));
+    discard_->setToolTip(snapshot_->is_new ? tr("Leave without creating the archive") : tr("Undo all staged changes"));
+    discard_->setEnabled(!busy && (snapshot_->is_new || snapshot_->has_changes));
     options_->setEnabled(!busy);
     if (snapshot_->has_changes)
         clear_result();
     update_visibility();
+}
+
+void SessionBar::set_progress(std::uint64_t done, std::uint64_t total)
+{
+    progress_->setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
 }
 
 void SessionBar::show_result(const QString& text, const QString& output)
@@ -195,10 +226,13 @@ void SessionBar::update_visibility()
 {
     const auto* v = snapshot_ ? &snapshot_->view : nullptr;
     const bool staged = v && (snapshot_->is_new || snapshot_->has_changes || !v->conflicts.empty() || !v->problems.empty());
-    for (auto* w : std::initializer_list<QWidget*>{ summary_, options_, discard_, go_ })
-        w->setVisible(staged);
-    issues_->setVisible(staged && (!v->conflicts.empty() || !v->warnings.empty() || !v->excluded.empty() || !v->problems.empty()));
-    setVisible(staged || !result_output_.isEmpty() || !result_->isHidden());
+    summary_->setVisible(staged || committing_);
+    for (auto* w : std::initializer_list<QWidget*>{ options_, discard_, go_ })
+        w->setVisible(staged && !committing_);
+    progress_->setVisible(committing_);
+    cancel_write_->setVisible(committing_);
+    issues_->setVisible(staged && !committing_ && (!v->conflicts.empty() || !v->warnings.empty() || !v->excluded.empty() || !v->problems.empty()));
+    setVisible(staged || committing_ || !result_output_.isEmpty() || !result_->isHidden());
 }
 
 void SessionBar::open_issues()
