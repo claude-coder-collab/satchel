@@ -18,7 +18,7 @@ The app opens in the mode last used; first launch opens Simple mode.
 | --- | --- | --- |
 | Purpose | Compress or extract in one drop | Browse, inspect, edit, verify |
 | Window | Small drop window | Main window with browser and inspector |
-| Decisions | Only when the core requires one | Full plan review before every build |
+| Decisions | Only when the core requires one | Changes are staged and reviewed in the browser, then written in one step |
 | Settings used | Defaults from Settings | Defaults, overridable per job |
 
 - Switch via View menu, keyboard shortcut, or a "Open in Full mode" link on any Simple-mode result.
@@ -68,7 +68,7 @@ One window: archive browser on the left, Inspector on the right, archive summary
 
 &#91;embedded content: Full mode main window · browser, inspector, status bar\]
 
-Selecting a row fills the Inspector; a multi-mono set is one row that expands to its channel files. With no archive open, the browser area shows a drop zone and recent archives.
+Selecting a row fills the Inspector; a multi-mono set is one row that expands to its channel files. With no archive open, the browser area shows a drop zone and recent archives. Dropping one zip there opens it. Dropping anything else asks for a name and location, as New does (the default name follows the Simple-mode output rule, e.g. `<item>.zip` next to the items), then starts a new archive with those items added (see Building and editing archives).
 
 ## Archive browser
 
@@ -111,20 +111,86 @@ Multiple selection shows combined totals (count, size, packed, savings).
 
 Field labels use a secondary text color: the text color blended up to 40% toward the background, as far as the result keeps a WCAG contrast ratio of at least 4.5:1 against the background. It follows the current light or dark palette and updates when the system appearance changes.
 
-## Creating archives
+## Building and editing archives
 
-In Full mode every build goes through a plan review, so the user sees exactly what will happen before any data is written.
+Full mode works like a desktop archive manager (e.g. GNOME File Roller), except that nothing is written right away: changes are staged in the window, the browser shows the result they will have, and one Go action writes the archive. Creating a new archive and editing an existing one use the same staging model and differ only in their starting point and Go action.
 
-1. **Add**: New Archive asks whether to create a blank archive (choose a location; an empty zip opens, then drag in files/folders or use Add) or to compress a folder (choose the folder, then review the plan and choose output name and location).
-2. **Plan review** (sheet over the window): one row per planned entry with output name, chosen method, and reason ("FLAC: 24-bit, 6 ch", "Stored: 32-bit float", "Deflate"). Totals at the top: file count, input size, entries per method.
-3. **Issues panel** in the same sheet:
-   - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls; Build stays disabled until all are resolved.
-   - Skipped symlinks (warning) and FLAC fallbacks (info), listed with paths.
-4. **Options** (collapsed by default): FLAC on/off, deflate level, FLAC level, threads.
-5. **Build**: progress per file and overall, throughput (MB/s), ETA, Cancel. Runs in the background job queue; the window stays usable.
-6. **Result**: savings, per-method breakdown, warnings, Reveal, Open archive.
+### Sessions
 
-Adding files to an archive that is already open uses the same review sheet, then the editor's rewrite-and-swap.
+The window holds one **session** at a time: a base archive (none for a new archive), a list of pending changes and per-session options.
+
+| | New archive | Edit archive |
+| --- | --- | --- |
+| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
+| Browser shows | Only the staged additions | The archive's entries with pending changes overlaid |
+| Go action | **Create Archive** | **Apply Changes** (also **Save As…**) |
+| Writes | A new zip at the path chosen at the start | Rewrites the archive in place (temp file, then atomic swap), or writes a copy for Save As |
+| Afterwards | The window opens the new archive as an Edit session with no pending changes | Same archive reopened, no pending changes |
+
+- The window title shows the archive name and the platform's edited marker (macOS: dot in the close button; elsewhere: `*`) while there are pending changes. A new archive's title is its chosen name, marked as edited from the start.
+- **Save As…** (⌘⇧S) on a new archive changes its target path, still without writing anything.
+- If a file appears at a new archive's target path before Go, Create asks whether to replace it.
+- Closing the window, quitting, starting New, or opening another archive with pending changes asks **Apply / Discard / Cancel** (new archives: **Create / Discard / Cancel**).
+- A new archive with no additions is discarded silently.
+
+### Staging changes
+
+| Change | How |
+| --- | --- |
+| Add files / folders | Archive ▸ Add Files (⌘⇧A), or drag from Finder/Explorer onto the browser. They go into the folder being viewed in flat view, or the folder row they are dropped on in tree view |
+| New folder | Archive ▸ New Folder (⌘⇧N), named in place |
+| Rename | F2 / Enter on macOS, edited in place; works on folders, which renames everything below them |
+| Move | Drag rows onto a folder row inside the browser (stored as a rename of every moved entry) |
+| Delete | Delete key; no confirmation, because it is only staged and can be undone |
+| Replace | Drop a single file onto a file row with the same name and confirm "Replace *name*?" |
+
+- Dropping a single zip onto an open archive asks **Add to This Archive** or **Open** (default Open).
+- **Existing entries** (session option, Options popover; default Ask): what happens when an added file has the same archive path as an entry already there. Ask shows it as a collision in the Issues panel. Replace and Keep apply to every match. Replace if Newer replaces only where the source's modification time is later than the entry's and keeps the rest. Replacements are staged as Replace changes.
+- **Undo / Redo** (⌘Z / ⌘⇧Z) step through pending changes. **Discard Changes** clears them all.
+- Additions are planned in the background with the same planner and session options as a build. While they are planned, the rows show "Scanning…" and Go stays disabled.
+- **Leave out** patterns (Settings defaults, overridable per session) apply when files are added. Changing them re-plans every pending addition.
+
+### How pending changes look
+
+| Row state | Display |
+| --- | --- |
+| Added | "New" badge; Size from the source file; Packed blank; Method and **Reason** from the plan ("FLAC: 24-bit, 6 ch", "Stored: 32-bit float", "Deflate") |
+| Renamed / moved | New name, with the old name in the tooltip and Inspector |
+| Replaced | "Replaced" badge; columns show the new source |
+| Deleted | Struck through and dimmed; View ▸ Show Deleted (on by default) hides them |
+| Unchanged | As today |
+
+- The Reason column is shown only while there are additions.
+- The Inspector shows the plan for an added entry (source path, method, reason) instead of archive metadata. For a deleted or replaced entry it still shows the archive metadata.
+- Extract, Open and Verify act on the archive as stored on disk: they ignore staged additions (and are disabled when the selection contains only additions), and still include entries staged for deletion.
+
+### Action bar
+
+A bar at the bottom of the browser, visible while the session has pending changes (always visible for a new archive):
+
+- Summary: "+12 files (4.2 GB) · −3 · 2 renamed". New archive: file count, input size, entries per method.
+- **Issues** button with a count, which opens the issues panel (a popover over the bar):
+  - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls. The rows involved get a warning badge in the browser.
+  - Skipped symlinks and leave-out matches (warning), FLAC fallbacks (info), listed with paths.
+- **Options** button, which opens a popover with FLAC on/off, FLAC level, deflate level, threads, Existing entries and the Leave out controls. These are per-session overrides of Settings and are not saved. "Copy as CLI command" lives here.
+- **Discard** and the Go button (**Create Archive** / **Apply Changes**, ⌘S). Go is disabled while blocking issues remain or additions are still being planned.
+
+### Go
+
+1. Create and Apply need no dialog. For an Edit session, **Save As…** (⌘⇧S) asks for a path and writes a copy, leaving the original untouched.
+2. The job runs in the background queue with per-file and overall progress, throughput, ETA and Cancel. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
+3. On success: a result card in the action bar (savings, per-method breakdown, warnings, Reveal), and the session reopens the written archive. With "verify after build" on, Verify runs on the written archive.
+4. On failure or Cancel: the original archive is untouched, and the pending changes stay staged so the user can retry.
+
+### Implementation model
+
+- The session keeps the base archive path plus an ordered list of operations keyed by entry name, not index: add(paths, folder prefix), new-folder, rename(from, to), remove(name), replace(name, path).
+- After every change (and on undo/redo) the session opens a fresh `ArchiveEditor` on the base archive (an empty zip in memory for a new archive), replays the list and calls `plan()`. The browser model and action bar are rebuilt from that merged plan, so they always show exactly what Go will write. Replays run off the UI thread; directory scans and FLAC probes of earlier additions are cached by path and mtime, so a replay does not rescan unchanged sources.
+- Go commits the same replayed editor to the output stream. Apply's output is a temp file next to the archive, swapped into place (zip module design, Section 10).
+- The base archive's reader stays open for browsing and is released only for the swap.
+- The session logic lives in `desktop/gui/logic` and has no widgets, so it is unit-tested directly (main spec, Section 11).
+
+**Core addition:** `zp_input_set_prefix(zp_input_t*, const char* folder)` places every item of a path input under an archive folder, so files can be added into the folder being viewed.
 
 ## Extracting
 
@@ -202,6 +268,10 @@ Each platform gets a native previewer and context-menu entries; these are separa
 | New archive | ⌘N | Ctrl+N |
 | Open archive | ⌘O | Ctrl+O |
 | Add files | ⌘⇧A | Ctrl+Shift+A |
+| New folder | ⌘⇧N | Ctrl+Shift+N |
+| Create archive / Apply changes | ⌘S | Ctrl+S |
+| Save as | ⌘⇧S | Ctrl+Shift+S |
+| Undo / Redo | ⌘Z / ⌘⇧Z | Ctrl+Z / Ctrl+Shift+Z |
 | Extract selected | ⌘E | Ctrl+E |
 | Verify | ⌘⇧V | Ctrl+Shift+V |
 | Find | ⌘F | Ctrl+F |
