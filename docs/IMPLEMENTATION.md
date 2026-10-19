@@ -660,6 +660,13 @@ Results with 256 MiB inputs (MiB/s; build = input bytes per second; Apple M-seri
 | text, deflate 1 | 294–333 | 1420–1800 | 720 | 36.1% |
 | random (stored) | 1460–2030 | 2480–2710 | 5800–6900 | 100% |
 
+**FLAC level default (5).** Kept after measuring real music (2026-10-19): 18 min of 16-bit stereo
+decoded from AAC ringtones (186 MB), `satchel create` on an M-series Mac. Size as % of the WAV /
+CPU seconds on 1 thread / on all threads: level 0 33.5% / 1.4 / 1.7, level 3 29.4% / 1.5 / 1.9,
+level 5 27.2% / 1.8 / 2.5, level 8 25.6% / 3.3 / 5.2. Elapsed time was about 1 s at every level
+(reading, hashing and writing dominate). Noisy material (high noise floor) shrinks about equally
+at every level, which is why a user's test showed little difference.
+
 SHA-256 1.1–1.3 GiB/s with the CPU instructions, MD5 630 MiB/s. Before this work the hasher ran
 portable SHA-256 (207 MiB/s) and MD5 (236 MiB/s) back to back on one thread, which capped FLAC
 builds at about 106 MiB/s at any thread count; spec 8.6's warning was right.
