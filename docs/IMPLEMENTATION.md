@@ -751,8 +751,9 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   `satchel_macos_uninstall`; no Python or other runtime needed). The dmg also holds
   `Uninstall Satchel.command`, a two-line `sh` wrapper that runs the CLI of the `Satchel.app` beside it;
   an installed copy is `/Applications/Satchel.app/Contents/Helpers/satchel uninstall`. Steps: quit the app
-  (`osascript`, only if running), `pluginkit -r` for the bundled and every registered
-  `<bundle id>.preview` extension, `lsregister -u`, move each `Satchel.app` (`/Applications`,
+  (`osascript`, only if running), `pluginkit -r` for every registered `<bundle id>.preview` extension
+  (only those: unregistering one that is not registered fails; the bundled extension is tried only
+  if `pluginkit -m` cannot be run), `lsregister -u`, move each `Satchel.app` (`/Applications`,
   `~/Applications`, `--app`) to `~/.Trash`, `defaults delete` the preferences domain, remove
   `~/Library` data (Preferences, Application Support, Caches, HTTPStorages, Saved Application State,
   Logs; skipped by `--keep-settings`), then `pbs -flush` so the Finder services disappear. The bundle
@@ -761,12 +762,18 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   `-y` it asks for confirmation (declined exit code 4 when stdin is not a terminal). Commands go through
   an injectable `Runner`; `tests/macos/test_uninstall.cpp` (Catch2, `satchel_uninstall_tests`) drives it
   with a fake runner in a temporary home. Not yet run against a real dmg install.
-  The apps also offer **Satchel > Uninstall Satchel…** (Help menu action with
-  `ApplicationSpecificRole`, in both Simple and Full mode; `desktop/gui/app/mac_uninstall.cpp`, stubbed
-  elsewhere). It asks "Uninstall and Delete Settings" / "Uninstall and Keep Settings" / Cancel, runs the
-  same `uninstall()` with `quit_running` off and the running bundle added to the app list, shows any
-  failed steps, and otherwise quits. No background daemon: considered and rejected as unusual for this
-  kind of app.
+  The apps also offer **Satchel > Uninstall Satchel…** (`ApplicationSpecificRole`;
+  `desktop/gui/app/mac_uninstall.cpp`, stubbed elsewhere). Qt adds one application-menu item per menu
+  bar that holds such an action and never removes it, so the action is added once per process, from
+  the first window (Simple and Full mode each have a menu bar). It asks "Uninstall and Delete
+  Settings" / "Uninstall and Keep Settings" / Cancel. Removing the app while it runs does not work
+  (it writes its settings while quitting, after they were deleted), so it starts its own executable
+  detached as a helper, `Satchel --uninstall-after <pid> --app <bundle> [--keep-settings]`, and quits.
+  `main` checks for that before creating any Qt application; the helper polls the pid (up to two
+  minutes), runs the same `uninstall()` with `quit_running` off, and shows failed steps in an
+  `osascript` alert, since the app is gone by then. A bundle on a read-only volume (running from the
+  dmg) is refused up front with a hint to eject instead. No background daemon: considered and
+  rejected as unusual for this kind of app.
 - User-data cleanup (Windows and Linux; `desktop/gui/app/user_data.{hpp,cpp}`): the Windows MSI and the
   `.deb` leave per-user data behind, so Help has **Delete Settings and Temporary Files…** (not on macOS,
   where the uninstaller covers it). What the app leaves per user: the `QSettings` store (organisation

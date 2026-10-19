@@ -327,6 +327,8 @@ void SessionBar::open_options()
     auto* deflate = new QSpinBox(pop);
     deflate->setRange(1, 9);
     deflate->setValue(settings_.deflate_level);
+    pad_spin_box(flac_level);
+    pad_spin_box(deflate);
     auto* existing = new QComboBox(pop);
     existing->addItem(tr("Ask"), static_cast<int>(ExistingEntries::Ask));
     existing->addItem(tr("Replace"), static_cast<int>(ExistingEntries::Replace));

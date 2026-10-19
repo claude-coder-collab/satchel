@@ -9,7 +9,10 @@
 #include <QClipboard>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFileDialog>
+#include <QFileIconProvider>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -20,6 +23,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStandardItemModel>
 #include <QTableView>
@@ -41,14 +45,84 @@ std::filesystem::path to_path(const QString& s)
     return { s.toStdU16String() };
 }
 
+// Rich text, so Qt wraps the tooltip instead of showing one long line.
+QString wrapped(const QString& text)
+{
+    return QStringLiteral("<p>%1</p>").arg(text.toHtmlEscaped());
+}
+
 QString preset_tooltip(int preset)
 {
     QStringList names;
     for (const auto& p : zpp::exclude_preset(preset))
         names << qs(p).replace('\r', QStringLiteral("\\r"));
-    return names.join(QStringLiteral("  "));
+    return wrapped(QObject::tr("Leaves out: %1").arg(names.join(QStringLiteral(", "))));
 }
 
+}
+
+void pad_spin_box(QAbstractSpinBox* spin)
+{
+    if (auto* edit = spin->findChild<QLineEdit*>())
+        edit->setTextMargins(4, 0, 0, 0);
+    spin->setMinimumWidth(spin->sizeHint().width() + 4);
+}
+
+FolderChoice::FolderChoice(const QString& default_text, QString dialog_title, std::optional<std::filesystem::path> folder, QWidget* parent) :
+    QComboBox(parent),
+    default_text_(default_text),
+    dialog_title_(std::move(dialog_title)),
+    folder_(std::move(folder))
+{
+    setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    rebuild();
+    setCurrentIndex(folder_ ? 1 : 0);
+    previous_ = currentIndex();
+    connect(this, &QComboBox::activated, this, [this](int index) {
+        if (index != count() - 1)
+        {
+            previous_ = index;
+            return;
+        }
+        const auto start = folder_ ? QString::fromStdU16String(folder_->u16string()) : QString();
+        const auto chosen = QFileDialog::getExistingDirectory(this, dialog_title_, start);
+        if (chosen.isEmpty())
+        {
+            setCurrentIndex(previous_);
+            return;
+        }
+        set_folder(to_path(chosen));
+    });
+}
+
+std::optional<std::filesystem::path> FolderChoice::folder() const
+{
+    if (folder_ && currentIndex() == 1)
+        return folder_;
+    return std::nullopt;
+}
+
+void FolderChoice::set_folder(std::optional<std::filesystem::path> folder)
+{
+    folder_ = std::move(folder);
+    rebuild();
+    setCurrentIndex(folder_ ? 1 : 0);
+    previous_ = currentIndex();
+}
+
+void FolderChoice::rebuild()
+{
+    const QSignalBlocker block(this);
+    clear();
+    addItem(default_text_);
+    if (folder_)
+    {
+        const auto path = QDir::toNativeSeparators(QString::fromStdU16String(folder_->u16string()));
+        addItem(QFileIconProvider().icon(QFileIconProvider::Folder), QFileInfo(path).fileName().isEmpty() ? path : QFileInfo(path).fileName());
+        setItemData(1, path, Qt::ToolTipRole);
+    }
+    insertSeparator(count());
+    addItem(tr("Choose Folder…"));
 }
 
 ExcludeEditor::ExcludeEditor(const Settings& settings, QWidget* parent) :
@@ -64,7 +138,7 @@ ExcludeEditor::ExcludeEditor(const Settings& settings, QWidget* parent) :
     daw_->setToolTip(preset_tooltip(ZP_EXCLUDE_PRESET_DAW_CACHES));
     list_ = new QListWidget(this);
     list_->setAccessibleName(tr("Exclude patterns"));
-    list_->setToolTip(tr("Names to leave out: * any text, ? one character, [a-z] one of a set; end with / for folders only"));
+    list_->setToolTip(wrapped(tr("Names to leave out. * matches any text, ? one character, [a-z] one character of a set. End a pattern with / to match folders only.")));
     list_->setMaximumHeight(110);
     for (const auto& p : settings.exclude_patterns)
     {
@@ -275,11 +349,9 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
 {
     setWindowTitle(tr("Settings"));
     auto* form = new QFormLayout(this);
-    const auto path_text = [](const std::optional<std::filesystem::path>& p) { return p ? QString::fromStdU16String(p->u16string()) : QString(); };
     last_mode_ = new QCheckBox(tr("Start in the mode used last"), this);
     last_mode_->setChecked(base_.start_in_last_mode);
-    simple_output_ = new QLineEdit(path_text(base_.simple_output_folder), this);
-    simple_output_->setPlaceholderText(tr("Next to the source"));
+    simple_output_ = new FolderChoice(tr("Next to the source"), tr("Folder for Simple mode output"), base_.simple_output_folder, this);
     flac_ = new QCheckBox(tr("Convert PCM audio to FLAC"), this);
     flac_->setChecked(base_.flac);
     flac_level_ = new QSpinBox(this);
@@ -292,8 +364,12 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
     threads_->setRange(0, 256);
     threads_->setSpecialValueText(tr("All cores"));
     threads_->setValue(base_.threads);
-    temp_ = new QLineEdit(path_text(base_.temp_folder), this);
-    temp_->setPlaceholderText(tr("System temporary folder"));
+    threads_->setMinimumWidth(threads_->fontMetrics().horizontalAdvance(tr("All cores")) + 52);
+    pad_spin_box(flac_level_);
+    pad_spin_box(deflate_);
+    if (auto* edit = threads_->findChild<QLineEdit*>())
+        edit->setTextMargins(4, 0, 0, 0);
+    temp_ = new FolderChoice(tr("System temporary folder"), tr("Folder for temporary files"), base_.temp_folder, this);
     restore_ = new QCheckBox(tr("Restore original audio"), this);
     restore_->setChecked(base_.restore_audio);
     readme_ = new QCheckBox(tr("Include the generated readme"), this);
@@ -342,18 +418,13 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
 Settings SettingsDialog::settings() const
 {
     Settings s = base_;
-    const auto opt_path = [](const QLineEdit* e) -> std::optional<std::filesystem::path> {
-        if (e->text().trimmed().isEmpty())
-            return std::nullopt;
-        return to_path(e->text().trimmed());
-    };
     s.start_in_last_mode = last_mode_->isChecked();
-    s.simple_output_folder = opt_path(simple_output_);
+    s.simple_output_folder = simple_output_->folder();
     s.flac = flac_->isChecked();
     s.flac_level = flac_level_->value();
     s.deflate_level = deflate_->value();
     s.threads = threads_->value();
-    s.temp_folder = opt_path(temp_);
+    s.temp_folder = temp_->folder();
     s.restore_audio = restore_->isChecked();
     s.include_readme = readme_->isChecked();
     s.overwrite = static_cast<satchel_gui::Overwrite>(overwrite_->currentIndex());

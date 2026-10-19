@@ -5,13 +5,16 @@
 #include "logic.hpp"
 #include "zp_cpp.hpp"
 
+#include <QComboBox>
 #include <QDialog>
 #include <QStringList>
 
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <vector>
 
+class QAbstractSpinBox;
 class QCheckBox;
 class QComboBox;
 class QLabel;
@@ -23,6 +26,30 @@ class QTableView;
 class QVBoxLayout;
 class QStandardItemModel;
 class QWidget;
+
+// Gives a spin box's text some room from the frame (macOS draws it against the left edge).
+void pad_spin_box(QAbstractSpinBox* spin);
+
+// A folder setting that has a default: a dropdown of the default ("Next to the source"), the
+// chosen folder, and "Choose Folder…", which asks for one.
+class FolderChoice : public QComboBox
+{
+    Q_OBJECT
+
+public:
+    FolderChoice(const QString& default_text, QString dialog_title, std::optional<std::filesystem::path> folder, QWidget* parent = nullptr);
+    // Empty when the default is selected.
+    [[nodiscard]] std::optional<std::filesystem::path> folder() const;
+    void set_folder(std::optional<std::filesystem::path> folder);
+
+private:
+    void rebuild();
+
+    QString default_text_;
+    QString dialog_title_;
+    std::optional<std::filesystem::path> folder_;
+    int previous_ = 0;
+};
 
 // Exclude settings: the system and DAW cache presets and an editable list of custom patterns.
 class ExcludeEditor : public QWidget
@@ -94,12 +121,12 @@ public:
 private:
     satchel_gui::Settings base_;
     QCheckBox* last_mode_ = nullptr;
-    QLineEdit* simple_output_ = nullptr;
+    FolderChoice* simple_output_ = nullptr;
     QCheckBox* flac_ = nullptr;
     QSpinBox* flac_level_ = nullptr;
     QSpinBox* deflate_ = nullptr;
     QSpinBox* threads_ = nullptr;
-    QLineEdit* temp_ = nullptr;
+    FolderChoice* temp_ = nullptr;
     QCheckBox* restore_ = nullptr;
     QCheckBox* readme_ = nullptr;
     QComboBox* overwrite_ = nullptr;

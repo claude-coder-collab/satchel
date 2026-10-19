@@ -20,6 +20,7 @@
 #include <QDir>
 #include <QPushButton>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTemporaryDir>
 
 #include <QElapsedTimer>
@@ -495,6 +496,33 @@ private slots:
         QVERIFY(!QFile::exists(target));
         release = true;
         QVERIFY(finished.wait(20000));
+    }
+
+    void folder_settings_are_dropdowns()
+    {
+        satchel_gui::Settings s;
+        s.simple_output_folder = std::filesystem::path(dir_.path().toStdU16String());
+        SettingsDialog dialog(s);
+        const auto choices = dialog.findChildren<FolderChoice*>();
+        QCOMPARE(choices.size(), 2);
+        QCOMPARE(dialog.settings().simple_output_folder, s.simple_output_folder);
+        QCOMPARE(dialog.settings().temp_folder, std::optional<std::filesystem::path>{});
+        for (auto* c : choices)
+        {
+            if (c->folder())
+            {
+                c->setCurrentIndex(0);
+                QVERIFY(!c->folder());
+                c->setCurrentIndex(1);
+                QCOMPARE(c->folder(), s.simple_output_folder);
+                QCOMPARE(c->itemText(c->count() - 1), QString("Choose Folder…"));
+            }
+        }
+        for (auto* spin : dialog.findChildren<QSpinBox*>())
+        {
+            if (spin->specialValueText() == "All cores")
+                QVERIFY(spin->minimumWidth() > spin->fontMetrics().horizontalAdvance("All cores"));
+        }
     }
 
     void translations_are_embedded()

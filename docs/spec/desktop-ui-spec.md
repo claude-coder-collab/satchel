@@ -235,6 +235,8 @@ Verify checks an archive's integrity without writing any files: CRC32 for every 
 | Integration | Associate with .zip | Off (offered, never forced) |
 | Updates | Check automatically | On |
 
+Folder settings (Simple mode output location, temp location) are dropdowns: the default, the chosen folder, and "Choose Folder…".
+
 "Copy as CLI command" (in Settings) produces the equivalent CLI invocation for the current options.
 
 Full mode's Options popover has the same "Leave out" controls as Settings, as a per-archive override that is not saved. Items left out are counted in the action bar and listed in its Issues popover ("Left out: …"). Settings refuses to close while a custom pattern is invalid.

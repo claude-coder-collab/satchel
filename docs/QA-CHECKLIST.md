@@ -66,6 +66,8 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Verify whole archive and selection, with injected CRC error, hash mismatch, incomplete multi-mono group
 - [ ] Verify after build setting
 
+- [ ] Settings: Simple mode output and Temporary files dropdowns (default, chosen folder, Choose Folder…, cancel keeps the previous choice); Threads shows "All cores" in full; spin box text clear of the frame; Leave out tooltips wrap
+
 ## 5. Extraction
 
 - [ ] Extract All, Extract Selected, drag-out to the file manager, double-click to open with default app
@@ -98,6 +100,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] `--compress` / `--extract` flags: quits when clean; stays open on warnings, failure, cancel or changed source; never quits after drag-and-drop or when Full mode is open or another job is running
 - [ ] File association for `.zip` is off by default; enabling and disabling it works and reverts cleanly
 - [ ] Uninstall removes services, associations and shell extensions
+- [ ] macOS: Satchel > Uninstall Satchel… appears once with both modes opened; it quits, then the app is in the Trash and (Delete Settings) the preferences are gone and stay gone; running from the dmg it explains instead
 
 ## 8. Previewers
 

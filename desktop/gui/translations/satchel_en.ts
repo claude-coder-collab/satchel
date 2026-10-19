@@ -32,7 +32,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Deflate, or Store if it does not shrink</source>
+        <source>Already compressed: deflate would save under 20%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Compressible: deflate saves 20% or more</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -125,7 +129,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Names to leave out: * any text, ? one character, [a-z] one of a set; end with / for folders only</source>
+        <source>Names to leave out. * matches any text, ? one character, [a-z] one character of a set. End a pattern with / to match folders only.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -213,6 +217,13 @@
     </message>
     <message>
         <source>Cannot extract</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>FolderChoice</name>
+    <message>
+        <source>Choose Folder…</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -887,11 +898,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Satchel is running from a disk image or another read-only location, so there is nothing to uninstall here. Quit Satchel and eject the disk image instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Remove Satchel, its Quick Look extension and Finder services?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The app is moved to the Trash. Your archives are not touched.</source>
+        <source>Satchel quits, then it is moved to the Trash. Your archives are not touched.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot uninstall</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The uninstaller could not be started. You can also run `satchel uninstall` in Terminal.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -903,20 +926,15 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Uninstall incomplete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>These steps failed:
-%1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Uninstall Satchel…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Archive updated (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Leaves out: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -986,7 +1004,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <source>%n file(s), %1 · %2 FLAC, %3 other</source>
+        <source>%n file(s), %1 · %2 FLAC, %3 deflate, %4 store</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -1175,6 +1193,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Folder for Simple mode output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Convert PCM audio to FLAC</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1184,6 +1206,10 @@
     </message>
     <message>
         <source>System temporary folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder for temporary files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
