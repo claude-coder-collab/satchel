@@ -378,3 +378,20 @@ TEST_CASE("adding a folder that already exists merges into it", "[session]")
     CHECK(s.view().conflicts.empty());
     CHECK(row(s, "docs/c.txt").state == RowState::Added);
 }
+
+TEST_CASE("added files that will not shrink are predicted as stored", "[session]")
+{
+    Fixture f;
+    std::vector<std::uint8_t> noise(300000);
+    std::mt19937 rng(5);
+    for (auto& b : noise)
+        b = static_cast<std::uint8_t>(rng());
+    const auto video = f.write("media/clip.mp4", noise);
+    const auto text = f.write("media/notes.txt", std::string(300000, 'a'));
+    auto s = Session::create(f.ctx, f.path("m.zip"));
+    s.apply({ op::Add{ { video, text }, "" } });
+    CHECK(row(s, "clip.mp4").stored);
+    CHECK_FALSE(row(s, "notes.txt").stored);
+    s.set_options({ .deflate_level = 9 });
+    CHECK(row(s, "clip.mp4").stored);
+}

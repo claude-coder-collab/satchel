@@ -10,6 +10,7 @@
 #include "io/file_system.hpp"
 #include "io/input_source.hpp"
 #include "io/preview.hpp"
+#include "io/zip/build_job.hpp"
 #include "io/zip/builder.hpp"
 #include "io/zip/editor.hpp"
 #include "io/zip/extractor.hpp"
@@ -1107,6 +1108,31 @@ int zp_plan_resolve(zp_plan_t* plan, const zp_resolution_t* resolutions, size_t 
             if (!next)
                 return set_error(next.error());
             plan->plan = std::move(*next);
+            return ZP_OK;
+        },
+        ZP_INTERNAL
+    );
+}
+
+int zp_plan_predict_store(const zp_plan_t* plan, size_t i, int* store)
+{
+    ZP_REQUIRE(plan && store && i < plan->plan.entries.size(), ZP_INVALID_ARGUMENT);
+    return guarded(
+        [&]() -> int {
+            const auto& e = plan->plan.entries[i];
+            *store = e.flac_fallback_reason ? 1 : 0;
+            if (e.flac_fallback_reason || e.codec != PlanCodec::General || e.item.kind != ItemKind::File || e.item.size == 0)
+                return ZP_OK;
+            auto stream = e.item.open();
+            if (!stream)
+                return set_error(stream.error());
+            if (!(*stream)->seekable())
+                return ZP_OK;
+            const BuilderOptions defaults;
+            auto pays = build::sample_pays_off(**stream, e.item.size, defaults.sample_window, plan->plan.options.deflate_level, defaults.min_deflate_saving);
+            if (!pays)
+                return set_error(pays.error());
+            *store = *pays ? 0 : 1;
             return ZP_OK;
         },
         ZP_INTERNAL

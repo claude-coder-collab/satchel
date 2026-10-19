@@ -299,6 +299,11 @@ ZP_API int zp_plan_get_excluded(const zp_plan_t* plan, size_t i, zp_excluded_t* 
 /* Applies all resolutions at once (indices refer to the plan before the call). On failure the
  * plan is unchanged. Skipped entries disappear, so indices shift afterwards. */
 ZP_API int zp_plan_resolve(zp_plan_t* plan, const zp_resolution_t* resolutions, size_t count);
+/* Whether entry i will be stored rather than deflated, using the sampling the build uses (reads
+ * up to three 128 KiB windows of the source). Only general entries are sampled; FLAC, kept,
+ * folder and readme entries give 0, and a FLAC fallback gives 1. The build decides files up to
+ * 4 MiB on their whole content, so for those this is an estimate. */
+ZP_API int zp_plan_predict_store(const zp_plan_t* plan, size_t i, int* store);
 ZP_API int zp_plan_executable(const zp_plan_t* plan);
 ZP_API uint64_t zp_plan_total_bytes(const zp_plan_t* plan);
 ZP_API void zp_plan_free(zp_plan_t* plan);

@@ -44,6 +44,30 @@ std::vector<std::uint64_t> sample_offsets(std::uint64_t size, std::size_t window
     return offsets;
 }
 
+Result<bool> sample_pays_off(IChunkedStream& stream, std::uint64_t size, std::size_t window, int level, double min_saving)
+{
+    const auto window_size = static_cast<std::size_t>(std::min<std::uint64_t>(window, size));
+    std::vector<std::uint8_t> buf(window_size);
+    std::size_t sampled = 0;
+    std::size_t compressed = 0;
+    for (const auto offset : sample_offsets(size, window_size))
+    {
+        if (auto s = stream.seek(offset); !s)
+            return std::unexpected(s.error());
+        auto got = stream.read_full(buf);
+        if (!got)
+            return std::unexpected(got.error());
+        if (*got != buf.size())
+            return fail(Status::SourceChanged, "the source is shorter than planned");
+        auto sample = deflate_buffer(buf, level);
+        if (!sample)
+            return std::unexpected(sample.error());
+        sampled += buf.size();
+        compressed += sample->size();
+    }
+    return deflate_pays_off(compressed, sampled, min_saving);
+}
+
 namespace
 {
 
@@ -125,16 +149,13 @@ void Reader::general(std::size_t i, IChunkedStream& stream, std::uint64_t size, 
             return std::nullopt;
         };
         const auto window_size = static_cast<std::size_t>(std::min<std::uint64_t>(job_.options.sample_window, size));
+        bool pays_off = false;
         if (stream.seekable())
         {
-            std::vector<std::uint8_t> window(window_size);
-            for (const auto offset : sample_offsets(size, window_size))
-            {
-                if (auto s = stream.seek(offset); !s)
-                    return fatal(i, s.error());
-                if (auto e = sample_at(window))
-                    return fatal(i, std::move(*e));
-            }
+            auto r = sample_pays_off(stream, size, window_size, job_.plan.options.deflate_level, job_.options.min_deflate_saving);
+            if (!r)
+                return fatal(i, r.error().status == Status::SourceChanged ? change : r.error());
+            pays_off = *r;
             if (auto s = stream.seek(0); !s)
                 return fatal(i, s.error());
         }
@@ -143,8 +164,9 @@ void Reader::general(std::size_t i, IChunkedStream& stream, std::uint64_t size, 
             prefix.resize(window_size);
             if (auto e = sample_at(prefix))
                 return fatal(i, std::move(*e));
+            pays_off = deflate_pays_off(compressed, sampled, job_.options.min_deflate_saving);
         }
-        if (deflate_pays_off(compressed, sampled, job_.options.min_deflate_saving))
+        if (pays_off)
             encoder = job_.deflate.get();
         seg_size = encoder->segment_size();
     }

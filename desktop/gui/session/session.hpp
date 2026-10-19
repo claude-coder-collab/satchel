@@ -11,8 +11,10 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <variant>
 #include <vector>
 
@@ -122,6 +124,7 @@ struct SessionRow
     std::optional<zpp::PlanEntry> plan; // empty for Deleted
     std::optional<std::size_t> base_index; // index into base_entries() (kept and deleted entries)
     bool generated = false; // the readme the library writes for converted audio
+    bool stored = false; // added file the build will store, not deflate (sampled like the build)
     bool conflicted = false;
 };
 
@@ -234,6 +237,8 @@ private:
     zpp::Editor editor_;
     std::vector<zpp::Input> inputs_;
     SessionView view_;
+    // Store predictions by source, size, mtime and deflate level, so replays do not resample.
+    std::map<std::tuple<std::string, std::uint64_t, std::int64_t, int>, bool> stored_;
 };
 
 }

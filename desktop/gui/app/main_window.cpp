@@ -139,7 +139,7 @@ QString secondary_color(const QPalette& p)
     return QColor(c.r, c.g, c.b).name();
 }
 
-std::string plan_method_key(const zpp::PlanEntry& e)
+std::string plan_method_key(const zpp::PlanEntry& e, bool stored)
 {
     switch (e.codec)
     {
@@ -148,7 +148,7 @@ std::string plan_method_key(const zpp::PlanEntry& e)
         case ZP_CODEC_FLAC_MONO:
             return "FLAC multi-mono";
         default:
-            return e.fallback_reason >= 0 ? "Store" : "Deflate";
+            return e.fallback_reason >= 0 || stored ? "Store" : "Deflate";
     }
 }
 
@@ -833,7 +833,7 @@ void MainWindow::on_session_updated()
                 l.name = p.output_name;
                 l.directory = p.kind == ZP_KIND_DIRECTORY;
                 l.size = p.size;
-                l.method = l.directory ? std::string{} : plan_method_key(p);
+                l.method = l.directory ? std::string{} : plan_method_key(p, r.stored);
                 l.restores_to = p.restored_name.empty() ? std::string{} : qs(p.restored_name).section('/', -1).toStdString();
                 l.mtime = p.mtime;
                 if (p.codec == ZP_CODEC_FLAC_MONO)
@@ -846,7 +846,7 @@ void MainWindow::on_session_updated()
                 if (p.codec == ZP_CODEC_FLAC || p.codec == ZP_CODEC_FLAC_MONO)
                     l.original_size = p.size;
                 be.pending = true;
-                be.reason = labels::plan_reason(p);
+                be.reason = labels::plan_reason(p, r.stored);
             }
             else
                 be.listed.name = r.key.name;
@@ -1315,8 +1315,8 @@ void MainWindow::update_inspector()
         if (p.kind != ZP_KIND_DIRECTORY)
         {
             html += row_html(tr("Size"), size_text(p.size));
-            html += row_html(tr("Method"), labels::plan_method(p));
-            html += row_html(tr("Reason"), labels::plan_reason(p));
+            html += row_html(tr("Method"), labels::plan_method(p, srow->stored));
+            html += row_html(tr("Reason"), labels::plan_reason(p, srow->stored));
         }
         if (!p.restored_name.empty())
             html += row_html(tr("Restores to"), qs(p.restored_name));

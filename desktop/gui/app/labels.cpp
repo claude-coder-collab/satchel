@@ -69,7 +69,7 @@ QString savings(std::uint64_t input, std::uint64_t output, bool ratio_known)
                       : QCoreApplication::translate("Archive", "%1 → %2, %3% larger").arg(size_text(input), size_text(output)).arg(std::abs(saved));
 }
 
-QString plan_method(const zpp::PlanEntry& e)
+QString plan_method(const zpp::PlanEntry& e, bool stored)
 {
     switch (e.codec)
     {
@@ -86,12 +86,12 @@ QString plan_method(const zpp::PlanEntry& e)
     }
     if (e.kind == ZP_KIND_DIRECTORY)
         return QCoreApplication::translate("Method", "Folder");
-    if (e.fallback_reason >= 0)
+    if (e.fallback_reason >= 0 || stored)
         return QCoreApplication::translate("Method", "Store");
     return QCoreApplication::translate("Method", "Deflate");
 }
 
-QString plan_reason(const zpp::PlanEntry& e)
+QString plan_reason(const zpp::PlanEntry& e, bool stored)
 {
     if (e.kind == ZP_KIND_DIRECTORY)
         return {};
@@ -101,8 +101,10 @@ QString plan_reason(const zpp::PlanEntry& e)
         return QCoreApplication::translate("Archive", "PCM audio; restores to %1").arg(QString::fromStdString(e.restored_name).section('/', -1));
     if (e.codec == ZP_CODEC_GENERATED)
         return QCoreApplication::translate("Archive", "Explains how to restore the audio");
+    if (e.codec == ZP_CODEC_GENERAL && stored)
+        return QCoreApplication::translate("Archive", "Already compressed: deflate would save under 20%");
     if (e.codec == ZP_CODEC_GENERAL)
-        return QCoreApplication::translate("Archive", "Deflate, or Store if it does not shrink");
+        return QCoreApplication::translate("Archive", "Compressible: deflate saves 20% or more");
     return {};
 }
 

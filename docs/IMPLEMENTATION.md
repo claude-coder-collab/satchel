@@ -606,7 +606,7 @@ file + commit, memory, callbacks), input constructors (paths, memory), option in
 `zp_plan_executable`, `zp_plan_total_bytes`, build result accessors, extraction issue/item/outcome
 accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status_name`,
 `zp_version`, `zp_preview`, `zp_input_set_excludes`, `zp_exclude_preset_pattern`,
-`zp_plan_excluded_count`/`zp_plan_get_excluded`, `zp_input_set_prefix`. The editor additions
+`zp_plan_excluded_count`/`zp_plan_get_excluded`, `zp_input_set_prefix`, `zp_plan_predict_store` (shares `build::sample_pays_off` with the reader, so the prediction and the build agree; files up to 4 MiB are decided on their whole content at build time, so for them it is an estimate). The editor additions
 (`zp_editor_open_with_options`, `zp_editor_resolve`, `zp_editor_commit_with_options`) are in the
 design doc. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
 

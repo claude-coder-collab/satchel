@@ -25,9 +25,10 @@ QString row_name(const satchel_gui::Row& row);
 QString group_label(const QString& name, int channels);
 // "4.2 GB → 2.3 GB, 45% smaller".
 QString savings(std::uint64_t input, std::uint64_t output, bool ratio_known = true);
-// Planned method of an entry about to be written: "FLAC", "Deflate", "Stored", "Readme", "Folder".
-QString plan_method(const zpp::PlanEntry& e);
+// Planned method of an entry about to be written: "FLAC", "Deflate", "Store", "Readme", "Folder".
+// `stored`: sampling predicts the build will store this general entry.
+QString plan_method(const zpp::PlanEntry& e, bool stored = false);
 // Why the planner chose it.
-QString plan_reason(const zpp::PlanEntry& e);
+QString plan_reason(const zpp::PlanEntry& e, bool stored = false);
 
 }

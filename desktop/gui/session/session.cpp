@@ -418,7 +418,22 @@ void Session::refresh_view()
             }
         }
         else
+        {
             row.state = RowState::Added;
+            if (e.kind == ZP_KIND_FILE && (e.codec == ZP_CODEC_GENERAL || e.fallback_reason >= 0))
+            {
+                const auto key = std::tuple{ e.source_path, e.size, e.mtime, options_.deflate_level };
+                auto it = stored_.find(key);
+                if (it == stored_.end())
+                {
+                    int store = 0;
+                    if (zp_plan_predict_store(plan.get(), e.index, &store) != ZP_OK)
+                        store = 0;
+                    it = stored_.emplace(key, store != 0).first;
+                }
+                row.stored = it->second;
+            }
+        }
         view_.rows.push_back(std::move(row));
     }
 

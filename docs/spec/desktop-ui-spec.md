@@ -154,7 +154,7 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | Row state | Display |
 | --- | --- |
-| Added | "New" badge; Size from the source file; Packed blank; Method and **Reason** from the plan ("FLAC: 24-bit, 6 ch", "Stored: 32-bit float", "Deflate") |
+| Added | "New" badge; Size from the source file; Packed blank; Method and **Reason** from the plan. For files that are not converted to FLAC, Store or Deflate is predicted by the build's own sampling (`zp_plan_predict_store`), so already-compressed media shows Store before anything is written |
 | Renamed / moved | New name, with the old name in the tooltip and Inspector |
 | Replaced | "Replaced" badge; columns show the new source |
 | Deleted | Struck through and dimmed; View ▸ Show Deleted (on by default) hides them |

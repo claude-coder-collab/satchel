@@ -159,15 +159,17 @@ void SessionBar::show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, 
     else if (snapshot_->is_new)
     {
         std::size_t flac = 0;
-        std::size_t other = 0;
+        std::size_t deflate = 0;
+        std::size_t store = 0;
         for (const auto& r : v.rows)
         {
             if (!r.plan || r.generated || r.plan->kind != ZP_KIND_FILE)
                 continue;
-            (r.plan->codec == ZP_CODEC_FLAC || r.plan->codec == ZP_CODEC_FLAC_MONO ? flac : other) += 1;
+            (r.plan->codec == ZP_CODEC_FLAC || r.plan->codec == ZP_CODEC_FLAC_MONO ? flac : r.stored || r.plan->fallback_reason >= 0 ? store
+                                                                                                                                     : deflate) += 1;
         }
         text = sum.added == 0 ? tr("Add files or folders, or drop them here.")
-                              : tr("%n file(s), %1 · %2 FLAC, %3 other", nullptr, static_cast<int>(sum.added)).arg(qs(satchel_gui::human_size(sum.added_bytes))).arg(flac).arg(other);
+                              : tr("%n file(s), %1 · %2 FLAC, %3 deflate, %4 store", nullptr, static_cast<int>(sum.added)).arg(qs(satchel_gui::human_size(sum.added_bytes))).arg(flac).arg(deflate).arg(store);
     }
     else
     {
