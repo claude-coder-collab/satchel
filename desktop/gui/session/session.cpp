@@ -491,19 +491,31 @@ void Session::refresh_view()
     view_.summary.input_bytes = zp_plan_total_bytes(plan.get());
 }
 
-void Session::commit(const std::filesystem::path& output, const zp_build_options_t* build_options, const CommitProgress& progress)
+std::vector<std::string> Session::commit(const std::filesystem::path& output, const zp_build_options_t* build_options, const CommitProgress& progress)
 {
     if (!view_.executable)
         throw zpp::Error(ZP_CONFLICTS_UNRESOLVED, "resolve the conflicts first");
     zpp::Stream out(zpp::not_null(zp_stream_create_file(utf8(output).c_str())));
     zpp::ProgressAdapter adapter{ progress };
-    zpp::check(zp_editor_commit_with_options(editor_.get(), out.get(), build_options, zpp::ProgressAdapter::call, &adapter));
+    zp_build_result_t* raw = nullptr;
+    const auto status = zp_editor_commit_with_options(editor_.get(), out.get(), build_options, zpp::ProgressAdapter::call, &adapter, &raw);
+    const zpp::BuildResult result(raw);
+    if (status != ZP_SOURCE_CHANGED)
+        zpp::check(status);
+    std::vector<std::string> left_out;
+    for (std::size_t i = 0; result && i < zp_build_result_entry_count(result.get()); ++i)
+    {
+        zp_entry_result_t r{};
+        zpp::check(zp_build_result_get_entry(result.get(), i, &r));
+        if (r.status != ZP_OK)
+            left_out.push_back(std::string(r.name ? r.name : "") + ": " + (r.message ? r.message : ""));
+    }
     editor_.reset();
     base_stream_.reset();
     inputs_.clear();
-    if (const auto status = zp_stream_commit(out.get()); status != ZP_OK)
+    if (const auto committed = zp_stream_commit(out.get()); committed != ZP_OK)
     {
-        const auto error = zpp::last_error(status);
+        const auto error = zpp::last_error(committed);
         rebuild();
         throw zpp::Error(error.status(), error.what());
     }
@@ -514,6 +526,7 @@ void Session::commit(const std::filesystem::path& output, const zp_build_options
     applied_ = 0;
     view_.problems.clear();
     load_base();
+    return left_out;
 }
 
 }

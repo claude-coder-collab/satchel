@@ -116,6 +116,22 @@ TEST_CASE("a new session stages additions and writes nothing until commit", "[se
     CHECK(s.base_entries().size() == 2);
 }
 
+TEST_CASE("files that change after they are added are left out and the archive is still written", "[session]")
+{
+    Fixture f;
+    const auto target = f.path("out.zip");
+    auto s = Session::create(f.ctx, target);
+    s.apply({ op::Add{ { f.write("in/one.txt", "1"), f.write("in/two.txt", "2") }, "" } });
+    f.write("in/two.txt", "changed after it was added");
+
+    const auto left_out = s.commit(target);
+    REQUIRE(left_out.size() == 1);
+    CHECK(left_out.front().starts_with("two.txt: "));
+    CHECK(fs::exists(target));
+    CHECK_FALSE(s.is_new());
+    CHECK(names_in(target) == std::set<std::string>{ "one.txt" });
+}
+
 TEST_CASE("edits are staged, shown as row states and applied in place", "[session]")
 {
     Fixture f;

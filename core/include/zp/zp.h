@@ -481,7 +481,10 @@ ZP_API zp_plan_t* zp_editor_plan(zp_editor_t* editor);
  * the current zp_editor_plan(). On failure the edit is unchanged. */
 ZP_API int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, size_t count);
 ZP_API int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user);
-ZP_API int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user);
+/* As zp_editor_commit with build options (NULL = defaults). Like zp_build, returns
+ * ZP_SOURCE_CHANGED when added files changed since they were planned: they are left out, the
+ * output is complete, and `out_result` (may be NULL) lists them. */
+ZP_API int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result);
 ZP_API void zp_editor_free(zp_editor_t* editor);
 
 #ifdef __cplusplus

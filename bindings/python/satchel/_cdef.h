@@ -308,5 +308,5 @@ int zp_editor_replace(zp_editor_t* editor, size_t i, zp_input_t* input);
 zp_plan_t* zp_editor_plan(zp_editor_t* editor);
 int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, size_t count);
 int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user);
-int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user);
+int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result);
 void zp_editor_free(zp_editor_t* editor);

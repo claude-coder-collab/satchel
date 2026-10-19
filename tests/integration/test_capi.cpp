@@ -7,6 +7,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstring>
+#include <fstream>
 #include <map>
 #include <string>
 #include <vector>
@@ -134,6 +135,58 @@ TEST_CASE("C API plan, resolve, build, read, extract", "[capi]")
     zp_stream_free(out);
     zp_plan_free(plan);
     zp_input_free(in);
+}
+
+TEST_CASE("C API editor commit leaves out files that changed and still writes the archive", "[capi]")
+{
+    Ctx c;
+    zp::test::TempDir dir;
+    const auto src_file = dir.path() / "late.txt";
+    {
+        std::ofstream(src_file) << "first";
+    }
+    zp_input_t* base_in = zp_input_memory();
+    const std::string a = "keep me";
+    REQUIRE(zp_input_memory_add_file(base_in, "a.txt", reinterpret_cast<const std::uint8_t*>(a.data()), a.size(), 0, 0644) == ZP_OK);
+    zp_plan_t* plan = zp_plan_create(c.ctx, base_in, nullptr);
+    zp_stream_t* base = zp_stream_memory();
+    REQUIRE(zp_build(plan, base, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
+    zp_plan_free(plan);
+    zp_input_free(base_in);
+
+    const auto base_bytes = memory_bytes(base);
+    zp_stream_t* src = zp_stream_memory_from(base_bytes.data(), base_bytes.size());
+    zp_editor_t* ed = zp_editor_open(c.ctx, src);
+    REQUIRE(ed);
+    const auto late = src_file.string();
+    const char* paths[] = { late.c_str() };
+    zp_input_t* add = zp_input_from_paths(paths, 1);
+    REQUIRE(zp_editor_add(ed, add) == ZP_OK);
+    {
+        std::ofstream(src_file) << "changed after it was added";
+    }
+
+    zp_stream_t* out = zp_stream_memory();
+    zp_build_result_t* result = nullptr;
+    CHECK(zp_editor_commit_with_options(ed, out, nullptr, nullptr, nullptr, &result) == ZP_SOURCE_CHANGED);
+    REQUIRE(result);
+    bool reported = false;
+    for (std::size_t i = 0; i < zp_build_result_entry_count(result); ++i)
+    {
+        zp_entry_result_t r{};
+        REQUIRE(zp_build_result_get_entry(result, i, &r) == ZP_OK);
+        reported = reported || (std::string(r.name) == "late.txt" && r.status == ZP_SOURCE_CHANGED);
+    }
+    CHECK(reported);
+    auto x = zp::test::extract_all(memory_bytes(out));
+    CHECK(x.files.contains("a.txt"));
+    CHECK_FALSE(x.files.contains("late.txt"));
+    zp_build_result_free(result);
+    zp_stream_free(out);
+    zp_editor_free(ed);
+    zp_input_free(add);
+    zp_stream_free(src);
+    zp_stream_free(base);
 }
 
 TEST_CASE("C API editor and atomic file output", "[capi]")
@@ -483,7 +536,7 @@ TEST_CASE("C API editor options, resolutions and build options", "[capi][editor]
     zp_stream_t* out = zp_stream_memory();
     zp_build_options_t bo{};
     bo.readme_template = "custom";
-    REQUIRE(zp_editor_commit_with_options(ed, out, &bo, nullptr, nullptr) == ZP_OK);
+    REQUIRE(zp_editor_commit_with_options(ed, out, &bo, nullptr, nullptr, nullptr) == ZP_OK);
     auto x2 = zp::test::extract_all(memory_bytes(out));
     CHECK(x2.files.contains("take.wav"));
     CHECK(x2.files.contains("b.txt"));

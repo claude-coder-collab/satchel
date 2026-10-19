@@ -22,7 +22,7 @@ public:
     explicit SessionBar(QWidget* parent = nullptr);
 
     void show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, bool busy, bool committing);
-    void show_result(const QString& text, const QString& output);
+    void show_result(const QString& text, const QString& output, bool warning = false);
     void set_progress(std::uint64_t done, std::uint64_t total);
     void clear_result();
     // Session options as Settings (compression and Leave out) plus Existing entries.

@@ -227,9 +227,10 @@ int SessionController::commit(const QString& output, const QString& title, const
             temp = settings.temp_folder->string();
             options.temp_dir = temp.c_str();
         }
+        std::vector<std::string> left_out;
         try
         {
-            (*session)->commit(to_path(output), &options, jc.progress);
+            left_out = (*session)->commit(to_path(output), &options, jc.progress);
         } catch (const zpp::Error& e)
         {
             out.status = e.status();
@@ -239,6 +240,13 @@ int SessionController::commit(const QString& output, const QString& title, const
         out.output_bytes = static_cast<std::uint64_t>(QFileInfo(output).size());
         out.input_bytes = input_bytes;
         out.summary = is_new ? labels::savings(input_bytes, out.output_bytes) : QObject::tr("Archive updated (%1)").arg(QString::fromStdString(satchel_gui::human_size(out.output_bytes)));
+        for (const auto& l : left_out)
+            out.details << QString::fromStdString(l);
+        if (!left_out.empty())
+        {
+            out.status = ZP_SOURCE_CHANGED;
+            out.summary += QObject::tr(" · %n file(s) left out: changed after they were added", nullptr, static_cast<int>(left_out.size()));
+        }
         if (settings.verify_after_build)
         {
             auto v = verify_job(jc, output);

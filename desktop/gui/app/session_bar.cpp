@@ -208,9 +208,9 @@ void SessionBar::set_progress(std::uint64_t done, std::uint64_t total)
     progress_->setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
 }
 
-void SessionBar::show_result(const QString& text, const QString& output)
+void SessionBar::show_result(const QString& text, const QString& output, bool warning)
 {
-    result_->setText(QStringLiteral("✓ ") + text);
+    result_->setText((warning ? QStringLiteral("⚠ ") : QStringLiteral("✓ ")) + text);
     result_output_ = output;
     result_->show();
     reveal_->setVisible(!output.isEmpty());

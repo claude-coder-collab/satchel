@@ -200,8 +200,10 @@ public:
 
     // Writes the merged plan to `output` (the archive itself for Apply: temp file, then atomic
     // swap) and reopens the session on `output` with no changes. Throws zpp::Error; on failure
-    // or cancel the session keeps its staged changes and nothing at `output` changes.
-    void commit(const std::filesystem::path& output, const zp_build_options_t* build_options = nullptr, const CommitProgress& progress = {});
+    // or cancel the session keeps its staged changes and nothing at `output` changes. Added files
+    // that changed since they were staged are left out of the written archive; returns them as
+    // "name: reason".
+    std::vector<std::string> commit(const std::filesystem::path& output, const zp_build_options_t* build_options = nullptr, const CommitProgress& progress = {});
 
 private:
     Session(zp_context_t* context, std::filesystem::path target, bool is_new, SessionOptions options);

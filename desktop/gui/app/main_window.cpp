@@ -1609,7 +1609,7 @@ void MainWindow::on_finished(int id, const QString& title, const JobOutcome& out
         auto then = std::exchange(after_commit_, nullptr);
         if (ok)
         {
-            bar_->show_result(outcome.summary, outcome.output);
+            bar_->show_result(outcome.summary, outcome.output, !outcome.details.isEmpty());
             if (then)
                 QMetaObject::invokeMethod(this, then, Qt::QueuedConnection);
         }
@@ -1620,9 +1620,9 @@ void MainWindow::on_finished(int id, const QString& title, const JobOutcome& out
             base_stale_ = false;
         }
     }
-    if (was_mine && !ok && outcome.status != ZP_CANCELLED)
+    if (was_mine && (ok ? !outcome.details.isEmpty() : outcome.status != ZP_CANCELLED))
     {
-        QMessageBox box(QMessageBox::Warning, title, outcome.message, QMessageBox::Ok, this);
+        QMessageBox box(QMessageBox::Warning, title, ok ? outcome.summary : outcome.message, QMessageBox::Ok, this);
         box.setDetailedText(outcome.details.join('\n'));
         box.exec();
     }

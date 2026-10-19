@@ -354,7 +354,7 @@ int          zp_editor_replace(zp_editor_t*, size_t i, zp_input_t*);
 zp_plan_t*   zp_editor_plan(zp_editor_t*);
 int          zp_editor_resolve(zp_editor_t*, const zp_resolution_t*, size_t n);
 int          zp_editor_commit(zp_editor_t*, zp_stream_t* output, zp_progress_fn, void* user);
-int          zp_editor_commit_with_options(zp_editor_t*, zp_stream_t* output, const zp_build_options_t*, zp_progress_fn, void* user);
+int          zp_editor_commit_with_options(zp_editor_t*, zp_stream_t* output, const zp_build_options_t*, zp_progress_fn, void* user, zp_build_result_t** out); // SOURCE_CHANGED: output complete, changed files left out
 void         zp_editor_free(zp_editor_t*);
 ```
 

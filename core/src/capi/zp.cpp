@@ -1669,19 +1669,25 @@ int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, s
 
 int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user)
 {
-    return zp_editor_commit_with_options(editor, output, nullptr, progress, user);
+    return zp_editor_commit_with_options(editor, output, nullptr, progress, user, nullptr);
 }
 
-int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user)
+int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result)
 {
     ZP_REQUIRE(editor && output, ZP_INVALID_ARGUMENT);
+    if (out_result)
+        *out_result = nullptr;
     return guarded(
         [&]() -> int {
             CallbackProgress p(progress, user);
-            const auto r = editor->editor->commit(*output->stream, p, builder_options(options));
-            if (r.status != Status::Ok)
-                return set_error(r.status, r.message);
-            return ZP_OK;
+            auto result = std::make_unique<zp_build_result>();
+            result->result = editor->editor->commit(*output->stream, p, builder_options(options));
+            const auto status = result->result.status;
+            if (status != Status::Ok)
+                set_error(status, result->result.message);
+            if (out_result)
+                *out_result = result.release();
+            return static_cast<int>(status);
         },
         ZP_INTERNAL
     );
