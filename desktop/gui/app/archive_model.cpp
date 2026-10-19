@@ -297,8 +297,10 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
     const Row* r = n->row;
     const bool folder = n->folder;
     const auto* be = folder ? nullptr : entry_of(n);
-    const auto state = folder ? n->state : be ? std::optional(be->state)
-                                              : std::nullopt;
+    const int state = folder ? (n->state ? static_cast<int>(*n->state) : -1) : be ? static_cast<int>(be->state)
+                                                                                  : -1;
+    const bool deleted = state == static_cast<int>(RowState::Deleted);
+    const bool renamed = state == static_cast<int>(RowState::Renamed);
     const auto mtime = r ? r->mtime : 0;
     const auto method = r && !r->directory ? QString::fromStdString(r->method) : QString(folder ? "Folder" : "");
     const bool restorable = r && !r->restores_to.empty();
@@ -366,18 +368,18 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
             }
             return {};
         case Qt::FontRole:
-            if (state == RowState::Deleted || (index.column() == Name && state == RowState::Renamed))
+            if (deleted || (index.column() == Name && renamed))
             {
                 QFont f;
-                f.setStrikeOut(state == RowState::Deleted);
-                f.setItalic(state == RowState::Renamed);
+                f.setStrikeOut(deleted);
+                f.setItalic(renamed);
                 return f;
             }
             return {};
         case Qt::ToolTipRole:
             if (be && be->conflicted)
                 return tr("Another entry has the same name; see Issues");
-            if (state == RowState::Deleted)
+            if (deleted)
                 return tr("Will be removed when the changes are applied");
             if (be && be->state == RowState::Renamed)
                 return tr("Renamed from %1").arg(be->previous_name);
@@ -389,7 +391,7 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
                 return tr("Restorable: extracts as %1").arg(QString::fromStdString(r->restores_to));
             return {};
         case Qt::ForegroundRole:
-            if (method == "Unsupported" || method == "Symlink" || state == RowState::Deleted)
+            if (method == "Unsupported" || method == "Symlink" || deleted)
                 return QVariant::fromValue(QPalette().color(QPalette::Disabled, QPalette::Text));
             return {};
         case EntriesRole:
@@ -414,7 +416,7 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
         case FolderRole:
             return folder || (r && r->directory);
         case StateRole:
-            return state ? static_cast<int>(*state) : -1;
+            return state;
         case GroupRole:
             return r && r->channel_count > 0 && r->channel_index == 0;
         case PathRole:
