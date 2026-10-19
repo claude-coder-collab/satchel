@@ -421,7 +421,7 @@ callbacks directly.
   free space for both copies until the staging file is removed.
 - The iOS Safari / Android Chrome multi-GB spike still needs real devices.
 
-**Tests:** `tests/web/test_web.py` (Playwright). CI runs Chromium on every change; the weekly Full
+**Tests:** `tests/web/test_web.py` (Playwright). CI runs Chromium on every change; the manually triggered Full
 workflow runs Chromium, Firefox and WebKit. Firefox could not be launched in the macOS VM used for
 development.
 
@@ -818,7 +818,7 @@ bots are allow-listed).
 - Interop with the `flac` tool (when installed): `flac -t` and `flac -d --keep-foreign-metadata` on
   our files, and our restore of files encoded by `flac --keep-foreign-metadata`.
 - Interop tests run Info-ZIP `unzip`/`zip` and 7-Zip when they are installed and skip otherwise.
-- Hidden `[.large]` tests (`zp_tests "[large]"`, weekly in `full.yml`, about 6 minutes, ~10 GB of
+- Hidden `[.large]` tests (`zp_tests "[large]"`, manual in `full.yml`, about 6 minutes, ~10 GB of
   temporary disk): a 4 GiB + 12345-byte store entry (Zip64, checked with `unzip -t`/`7z t` when
   present); a 4 GiB 24-bit stereo RF64 through FLAC restored bit-exactly under a 96 MiB budget; a
   2 GiB deflate entry with 1 and 64 threads under a 48 MiB budget. Inputs are generated on the fly
@@ -827,14 +827,14 @@ bots are allow-listed).
   192 kHz, 16 channels, and 768 kHz stereo 24-bit / mono 32-bit (non-subset FLAC).
 - With ffmpeg installed, extracted FLACs (6-channel, and a member of a 10-channel multi-mono set)
   decode in `ffmpeg` and `ffprobe` shows the channel count and the mirrored tags (bext
-  description, iXML track name, ENCODER). Weekly `interop` job in `full.yml`: unzip, 7-Zip, the
+  description, iXML track name, ENCODER). Manual `interop` job in `full.yml`: unzip, 7-Zip, the
   `flac` tool and ffmpeg.
 - Browser tests also run on emulated phones: `SATCHEL_DEVICES="iPhone 15:webkit,Pixel 7:chromium"`
-  (Playwright device descriptors; weekly). Real iOS/Android devices remain a manual check.
+  (Playwright device descriptors; manual). Real iOS/Android devices remain a manual check.
 - Fuzzing (`fuzz` preset, libFuzzer + ASan/UBSan, `tests/fuzz`): `fuzz_archive` (open, plan and
   verify an arbitrary archive, 2 threads, so single-entry FLAC archives take the parallel restore
   path), `fuzz_pcm` (container scanner and tag reader), `fuzz_flac` (a standalone FLAC file: the
   frame splitter, then `restore` with 1 and 3 threads, output capped at 64 MiB). Seeds come from
   `tests/fuzz/make_seeds.py` plus small FLAC files and a one-FLAC archive made by the CLI
-  (`tests/fuzz/seeds`). The weekly `fuzz` job runs each for 15 minutes.
+  (`tests/fuzz/seeds`). The manual `fuzz` job runs each for 15 minutes.
 - Sanitizers: `clang-asan` and `clang-tsan` presets. clang-tidy: `.clang-tidy` at the root.
