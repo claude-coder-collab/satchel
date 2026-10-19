@@ -250,7 +250,9 @@ TEST_CASE("existing entries policy", "[session]")
         CHECK_FALSE(s.view().executable);
         CHECK_THROWS_AS(s.commit(archive), zpp::Error);
 
-        s.apply({ op::Resolve{ { newer.string(), "a.txt" }, ZP_RESOLVE_RENAME, "a2.txt" } });
+        const auto added = std::ranges::find_if(s.view().rows, [](const SessionRow& r) { return r.state == RowState::Added; });
+        REQUIRE(added != s.view().rows.end());
+        s.apply({ op::Resolve{ added->key, ZP_RESOLVE_RENAME, "a2.txt" } });
         CHECK(s.view().executable);
         CHECK(row(s, "a2.txt").state == RowState::Added);
     }
