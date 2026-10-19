@@ -172,7 +172,7 @@ A bar at the bottom of the browser, visible while the session has pending change
 - **Issues** button with a count, which opens the issues panel (a popover over the bar):
   - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls. The rows involved get a warning badge in the browser.
   - Skipped symlinks and leave-out matches (warning), FLAC fallbacks (info), listed with paths.
-- **Options** button, which opens a popover with FLAC on/off, FLAC level, deflate level, Existing entries and the Leave out controls. These are per-session overrides of Settings, applied when the popover closes, and are not saved; an invalid Leave out pattern is refused. Threads stay a Settings value (one thread pool for the app).
+- **Options** button, which opens a popover with FLAC on/off, FLAC level, deflate level, Existing entries and the Leave out controls. These are per-session overrides of Settings and are not saved. OK applies them (an invalid Leave out pattern is shown in the popover and keeps it open); Cancel, Esc or clicking elsewhere discards them. Threads stay a Settings value (one thread pool for the app).
 - **Discard** and the Go button (**Create Archive** / **Apply Changes**, ⌘S). Go is disabled while blocking issues remain or additions are still being planned.
 
 ### Go

@@ -9,11 +9,16 @@
 #include "mac_services.hpp"
 #include "mac_uninstall.hpp"
 #include "main_window.hpp"
+#include "session_bar.hpp"
 #include "settings_store.hpp"
 #include "simple_window.hpp"
 #include "user_data.hpp"
 #include <QAction>
+#include <QApplication>
+#include <QCheckBox>
+#include <QDialogButtonBox>
 #include <QDir>
+#include <QPushButton>
 #include <QSettings>
 #include <QTemporaryDir>
 
@@ -358,6 +363,46 @@ private slots:
         names.sort();
         QCOMPARE(names, (QStringList{ "alpha.txt", "new/extra.txt" }));
         QVERIFY(!w->isWindowModified());
+    }
+
+    void options_popover_applies_only_on_ok()
+    {
+        App app;
+        app.show_full();
+        auto* w = app.full();
+        auto& session = w->session();
+        const auto settled = [&] { return !session.busy() && session.snapshot(); };
+        w->start_new_archive(dir_.filePath("options.zip"));
+        QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
+        QVERIFY(session.snapshot()->options.flac);
+        auto* bar = w->findChild<SessionBar*>();
+        QVERIFY(bar);
+        QPushButton* options = nullptr;
+        for (auto* b : bar->findChildren<QPushButton*>())
+        {
+            if (b->text() == "Options")
+                options = b;
+        }
+        QVERIFY(options);
+        const auto popover = [] {
+            for (auto* top : QApplication::topLevelWidgets())
+            {
+                if (top->isVisible() && (top->windowFlags() & Qt::Popup) == Qt::Popup && top->findChild<QDialogButtonBox*>())
+                    return top;
+            }
+            return static_cast<QWidget*>(nullptr);
+        };
+        for (const auto button : { QDialogButtonBox::Cancel, QDialogButtonBox::Ok })
+        {
+            options->click();
+            QTRY_VERIFY(popover());
+            auto* pop = popover();
+            pop->findChild<QCheckBox*>()->setChecked(false);
+            pop->findChild<QDialogButtonBox*>()->button(button)->click();
+            QTRY_VERIFY(!popover());
+            QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
+            QCOMPARE(session.snapshot()->options.flac, button == QDialogButtonBox::Cancel);
+        }
     }
 
     void translations_are_embedded()

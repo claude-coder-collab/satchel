@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -16,7 +17,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollArea>
@@ -305,25 +305,35 @@ void SessionBar::open_options()
     form->addRow(tr("Existing entries"), existing);
     form->addRow(tr("Leave out"), excludes);
     form->addRow(new QLabel(tr("These apply to this archive only."), pop));
-    pop->on_hide = [this, flac, flac_level, deflate, existing, excludes] {
+    auto* error = new QLabel(pop);
+    error->setWordWrap(true);
+    error->hide();
+    form->addRow(error);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, pop);
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, pop, &QWidget::close);
+    connect(buttons, &QDialogButtonBox::accepted, pop, [this, pop, error, flac, flac_level, deflate, existing, excludes] {
         auto s = settings_;
         s.flac = flac->isChecked();
         s.flac_level = flac_level->value();
         s.deflate_level = deflate->value();
         excludes->apply_to(s);
-        const auto e = static_cast<ExistingEntries>(existing->currentData().toInt());
-        if (const auto error = exclude_pattern_error(exclude_patterns(s)); !error.isEmpty())
+        if (const auto message = exclude_pattern_error(exclude_patterns(s)); !message.isEmpty())
         {
-            QMessageBox::warning(this, tr("Invalid pattern"), tr("The Leave out patterns were not changed: %1").arg(error));
-            s.exclude_system = settings_.exclude_system;
-            s.exclude_daw_caches = settings_.exclude_daw_caches;
-            s.exclude_patterns = settings_.exclude_patterns;
+            error->setText(tr("Invalid Leave out pattern: %1").arg(message));
+            error->show();
+            pop->adjustSize();
+            return;
         }
-        if (s.flac == settings_.flac && s.flac_level == settings_.flac_level && s.deflate_level == settings_.deflate_level && s.exclude_system == settings_.exclude_system && s.exclude_daw_caches == settings_.exclude_daw_caches && s.exclude_patterns == settings_.exclude_patterns && e == existing_)
+        const auto e = static_cast<ExistingEntries>(existing->currentData().toInt());
+        const bool same = s.flac == settings_.flac && s.flac_level == settings_.flac_level && s.deflate_level == settings_.deflate_level && s.exclude_system == settings_.exclude_system
+            && s.exclude_daw_caches == settings_.exclude_daw_caches && s.exclude_patterns == settings_.exclude_patterns && e == existing_;
+        pop->close();
+        if (same)
             return;
         settings_ = s;
         existing_ = e;
         emit options_changed(s, e);
-    };
+    });
     pop->show_above(options_);
 }

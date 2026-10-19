@@ -1117,11 +1117,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Invalid pattern</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The Leave out patterns were not changed: %1</source>
+        <source>Invalid Leave out pattern: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
