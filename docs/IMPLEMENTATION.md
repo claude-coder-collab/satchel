@@ -540,7 +540,7 @@ only.
     clicked: sorting 100k rows up front cost about 1.3 s.
   - Inspector (HTML) uses `zp_reader_flac_describe` for audio, original, production metadata,
     tracks and the chunk list.
-  - Status-bar summary and a Jobs dock (cancel, reveal).
+  - Status-bar summary, with a progress bar for the window's own extract and verify jobs.
   - Staged editing (desktop UI spec, "Building and editing archives"): `SessionController` owns the
     `Session` on its own worker thread (a FIFO of tasks) and publishes immutable `SessionSnapshot`s
     to the window; Create / Apply / Save As run `Session::commit` as a `JobQueue` job, and the
@@ -550,14 +550,18 @@ only.
     browser is rebuilt from snapshots only once there are changes. Each browser entry keeps a
     `Ref` (session row and/or archive entry index) for keys, Inspector, extraction and verify
     results. Expanded folders, selection and scroll position survive the rebuilds.
-  - `ArchiveModel` takes `BrowserEntry` rows (state, pending packed size, reason, conflict); the
-    `BadgeDelegate` draws New / Replaced after the name. Renames in place go through
+  - `ArchiveModel` takes `BrowserEntry` rows (state, pending packed size, conflict); the
+    `BadgeDelegate` draws New / Replaced right-aligned in the Name cell (the selection background
+    is drawn once across the cell, then the text in the narrowed rect). Renames in place go through
     `rename_requested`; the model never changes itself.
   - Extraction: `ExtractDialog` options, then a pre-flight showing issues and existing files.
   - Verify writes nothing and fills the Verified column.
-  - Double-click opens an entry through a temporary extraction (an added file: its source);
-    dragging out extracts to a temporary folder first. The Name column is resizable; column
-    layout is saved under `browser/columns`.
+  - Dragging out extracts to a temporary folder first. The Name column is resizable; column
+    layout is saved under `browser/header` (renamed when the Reason column went, since
+    `restoreState` misapplies a layout with a different column count).
+  - `Session::commit` returns the files the build left out because they changed after planning
+    (`zp_editor_commit_with_options` returns `ZP_SOURCE_CHANGED` with a complete output and a build
+    result, like `zp_build`); the job reports them as details and a warning.
 - `--smoke-test ARCHIVE` prints the time to list an archive. 100,000 entries list in about
   0.45–0.6 s on the development Mac.
 - Tests: `satchel_gui_logic_tests` (Catch2) and `satchel_gui_tests` (Qt Test, offscreen): both
@@ -778,7 +782,7 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   `.deb` leave per-user data behind, so Help has **Delete Settings and Temporary Files…** (not on macOS,
   where the uninstaller covers it). What the app leaves per user: the `QSettings` store (organisation
   `Venn Audio`, application `Satchel`: `HKCU\Software\Venn Audio\Satchel` on Windows,
-  `~/.config/Venn Audio/Satchel.conf` on Linux; recent files, header layout, last mode, options);
+  `~/.config/Venn Audio/Satchel.conf` on Linux; header layout, last mode, options);
   WinSparkle's own key `HKCU\Software\<ZP_VENDOR>\Satchel\WinSparkle` (the path comes from WinSparkle's
   documentation and the exe's version resource, not yet seen on a real Windows machine); and temp
   leftovers `satchel-<ms>` (entries extracted for opening or dragging, never deleted by the app) and

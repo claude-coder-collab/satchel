@@ -23,7 +23,6 @@ struct BrowserEntry
     bool pending = false; // packed size not known yet (staged additions)
     bool conflicted = false;
     QString previous_name;
-    QString reason;
 };
 
 // The open archive, with staged changes, as rows: a flat list or a folder tree; multi-mono groups
@@ -39,7 +38,6 @@ public:
         Packed,
         Ratio,
         Method,
-        Reason,
         RestoresTo,
         Modified,
         Verified,

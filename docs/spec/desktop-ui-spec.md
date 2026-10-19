@@ -64,11 +64,11 @@ A system notification is sent when a job finishes while the window is not focuse
 
 ## Full mode window
 
-One window: archive browser on the left, Inspector on the right, archive summary and Jobs in the status bar. All commands live in the native menu bar (File, Archive, View, Help) rather than a toolbar. Simple mode has a View menu with Switch to Full Mode (Ctrl/Cmd+Shift+M); in Full mode the same shortcut switches back.
+One window: archive browser on the left, Inspector on the right, archive summary in the status bar (with a progress bar while an extract or verify runs). All commands live in the native menu bar (File, Archive, View, Help) rather than a toolbar. Simple mode has a View menu with Switch to Full Mode (Ctrl/Cmd+Shift+M); in Full mode the same shortcut switches back.
 
 &#91;embedded content: Full mode main window · browser, inspector, status bar\]
 
-Selecting a row fills the Inspector; a multi-mono set is one row that expands to its channel files. With no archive open, the browser area shows a drop zone and recent archives. Dropping one zip there opens it. Dropping anything else asks for a name and location, as New does (the default name follows the Simple-mode output rule, e.g. `<item>.zip` next to the items), then starts a new archive with those items added (see Building and editing archives).
+Selecting a row fills the Inspector; a multi-mono set is one row that expands to its channel files. With no archive open, the browser area shows a drop zone. Dropping one zip there opens it. Dropping anything else asks for a name and location, as New does (the default name follows the Simple-mode output rule, e.g. `<item>.zip` next to the items), then starts a new archive with those items added (see Building and editing archives).
 
 ## Archive browser
 
@@ -87,7 +87,7 @@ The center pane lists the open archive's entries, read from the central director
 - Converted audio carries a "restorable" badge.
 - A multi-mono set is one row (`take2.wav — 16 channels`), expandable to its `_chNN.flac` members. Selecting, extracting, renaming or deleting the row acts on the whole group.
 - Tree view (the default) and flat list toggle; sorting on every column; column visibility saved.
-- Search field filters by name; filter chips by method and by "restorable only".
+- Search field filters by name; filter chips by method and by "restorable only". While any of them is active, every folder holding a match is expanded; clearing them restores the earlier expansion.
 - Third-party entries the core can't read (unsupported method, symlinks) are shown greyed with the reason as a tooltip.
 - The table model is virtualized, so 100,000+ entries scroll smoothly.
 
@@ -138,7 +138,8 @@ The window holds one **session** at a time: a base archive (none for a new archi
 | Change | How |
 | --- | --- |
 | Add files / folders | Archive ▸ Add Files… (⌘⇧A) or Add Folder…, or drag from Finder/Explorer onto the browser. In tree view they go into the selected folder (or the selected entry's folder), or the folder or entry row they are dropped on; in flat view, and when dropped on empty space, to the top level |
-| New folder | Archive ▸ New Folder (⌘⇧N), named in place |
+| New folder | Archive ▸ New Folder (⌘⇧N): an empty folder next to the selection (beside a selected folder, not inside it), or at the top level with nothing selected, named in place |
+| New folder with items | Archive ▸ New Folder with Items (⌃⌘N; Ctrl+Alt+N elsewhere): a new folder next to the selection with the selected items moved into it, named in place |
 | Rename | F2 / Enter on macOS, edited in place; works on folders, which renames everything below them. A multi-mono set is renamed through a dialog asking for the channel files' stem. A name containing `/` is refused (use Move To…) |
 | Move | Archive ▸ Move To…: pick an existing folder or type a new path (stored as renames). Dragging rows is reserved for dragging out to Finder/Explorer, which extracts them first |
 | Delete | Delete key; no confirmation, because it is only staged and can be undone |
@@ -154,13 +155,12 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | Row state | Display |
 | --- | --- |
-| Added | "New" badge; Size from the source file; Packed blank; Method and **Reason** from the plan. For files that are not converted to FLAC, Store or Deflate is predicted by the build's own sampling (`zp_plan_predict_store`), so already-compressed media shows Store before anything is written |
+| Added | "New" badge, right-aligned in the Name column; Size from the source file; Packed blank; Method from the plan. For files that are not converted to FLAC, Store or Deflate is predicted by the build's own sampling (`zp_plan_predict_store`), so already-compressed media shows Store before anything is written |
 | Renamed / moved | New name, with the old name in the tooltip and Inspector |
 | Replaced | "Replaced" badge; columns show the new source |
 | Deleted | Struck through and dimmed; View ▸ Show Deleted (on by default) hides them |
 | Unchanged | As today |
 
-- The Reason column is shown only while there are additions.
 - The Inspector shows the plan for an added entry (source path, method, reason) instead of archive metadata. For a deleted or replaced entry it still shows the archive metadata.
 - Extract, Open and Verify act on the archive as stored on disk: they ignore staged additions (and are disabled when the selection contains only additions), and still include entries staged for deletion.
 
@@ -179,8 +179,8 @@ A bar at the bottom of the browser, visible while the session has pending change
 ### Go
 
 1. Create and Apply need no dialog. For an Edit session, **Save As…** (⌘⇧S) asks for a path and writes a copy, leaving the original untouched.
-2. The job runs in the background queue, with progress and Cancel in the action bar (and in the Jobs panel). A job cancelled while still queued is reported as cancelled. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
-3. On success: a result card in the action bar (savings, per-method breakdown, warnings, Reveal), and the session reopens the written archive. With "verify after build" on, Verify runs on the written archive.
+2. The job runs in the background queue, with progress and Cancel in the action bar. A job cancelled while still queued is reported as cancelled. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
+3. On success: a result card in the action bar (savings, per-method breakdown, warnings, Reveal). Added files that changed on disk after they were added are left out of the written archive; the card is marked with a warning and a dialog lists them, and the session reopens the written archive. With "verify after build" on, Verify runs on the written archive.
 4. On failure or Cancel: the original archive is untouched, and the pending changes stay staged so the user can retry.
 
 ### Implementation model
@@ -202,7 +202,6 @@ Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three
 - **Options dialog** (Extract All/Selected): destination, "Restore original audio" (default on) vs keep FLAC, include generated readme (default off), overwrite policy (Ask / Skip / Replace).
 - **Drag-out** uses the saved defaults without a dialog.
 - **Pre-flight**: the extraction plan's warnings and errors (unsafe paths, symlinks, incomplete multi-mono groups, case-only duplicates) are shown before writing; existing files prompt per the overwrite policy.
-- **Open with default app**: double-click extracts that one entry (restored if audio) to a temp folder and opens it.
 - **Result**: files written, restored and hash-verified count, any failures with reasons; hash mismatch is shown as an error with the file name and the partial output already deleted.
 
 ## Verify
@@ -265,7 +264,7 @@ Each platform gets a native previewer and context-menu entries; these are separa
 
 ## General
 
-- **Jobs**: one background queue for builds, extracts, verifies and edits; a Jobs panel lists running and finished jobs with Cancel and Reveal. Closing the window while a job runs asks whether to cancel or keep running.
+- **Jobs**: one background queue for builds, extracts, verifies and edits; Simple and Full mode show their own jobs (Simple: the progress page; Full: the action bar for writes, the status bar for extract and verify). Files sent from the file manager (Compress/Extract with Satchel, the Dock icon) are handled by the Simple window, opened alongside a visible Full window, which keeps its session; the app never quits on its own while Full mode has unwritten changes. Closing the window while a job runs asks whether to cancel or keep running.
 - **Keyboard shortcuts**:
 
 | Action | macOS | Windows / Linux |
@@ -274,6 +273,7 @@ Each platform gets a native previewer and context-menu entries; these are separa
 | Open archive | ⌘O | Ctrl+O |
 | Add files | ⌘⇧A | Ctrl+Shift+A |
 | New folder | ⌘⇧N | Ctrl+Shift+N |
+| New folder with items | ⌃⌘N | Ctrl+Alt+N |
 | Create archive / Apply changes | ⌘S | Ctrl+S |
 | Save as | ⌘⇧S | Ctrl+Shift+S |
 | Undo / Redo | ⌘Z / ⌘⇧Z | Ctrl+Z / Ctrl+Shift+Z |

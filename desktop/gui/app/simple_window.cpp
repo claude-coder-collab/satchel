@@ -284,7 +284,7 @@ void SimpleWindow::on_finished(int id, const QString& title, const JobOutcome& o
     );
     reveal_->setVisible(ok);
     retry_->setVisible(!ok && outcome.status != ZP_CANCELLED);
-    if (quit_if_clean && outcome.status == ZP_OK && outcome.details.isEmpty() && mine_.isEmpty() && !app_.jobs().busy() && !(app_.full() && app_.full()->isVisible()))
+    if (quit_if_clean && outcome.status == ZP_OK && outcome.details.isEmpty() && mine_.isEmpty() && !app_.jobs().busy() && !(app_.full() && (app_.full()->isVisible() || app_.full()->dirty())))
     {
         QApplication::quit();
         return;

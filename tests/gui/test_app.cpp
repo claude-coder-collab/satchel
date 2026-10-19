@@ -18,10 +18,12 @@
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QSettings>
 #include <QSpinBox>
 #include <QTemporaryDir>
+#include <QTreeView>
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -31,10 +33,12 @@
 #include <QTest>
 #include <QTranslator>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <format>
+#include <functional>
 #include <thread>
 
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
@@ -496,6 +500,103 @@ private slots:
         QVERIFY(!QFile::exists(target));
         release = true;
         QVERIFY(finished.wait(20000));
+    }
+
+    void full_mode_folders_search_and_files_from_the_file_manager()
+    {
+        QDir root(dir_.filePath("folders"));
+        QVERIFY(root.mkpath("src/docs"));
+        for (const auto* name : { "src/a.txt", "src/docs/b.txt", "outside.txt" })
+        {
+            QFile f(root.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(name);
+        }
+        App app;
+        app.show_full();
+        auto* w = app.full();
+        auto& session = w->session();
+        const auto settled = [&] { return !session.busy() && session.snapshot(); };
+        w->start_new_archive(root.filePath("folders.zip"), { root.filePath("src/a.txt"), root.filePath("src/docs") });
+        QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
+
+        auto* view = w->findChild<QTreeView*>();
+        QVERIFY(view);
+        const auto find = [view](const QString& path) {
+            std::function<QModelIndex(const QModelIndex&)> walk = [&](const QModelIndex& parent) -> QModelIndex {
+                for (int r = 0; r < view->model()->rowCount(parent); ++r)
+                {
+                    const auto idx = view->model()->index(r, 0, parent);
+                    if (idx.data(ArchiveModel::PathRole).toString() == path)
+                        return idx;
+                    if (auto found = walk(idx); found.isValid())
+                        return found;
+                }
+                return {};
+            };
+            return walk({});
+        };
+        const auto select = [view](const QModelIndex& idx) {
+            view->selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        };
+        const auto trigger = [w](const QString& text) {
+            for (auto* a : w->findChildren<QAction*>())
+            {
+                if (a->text() == text)
+                {
+                    QVERIFY(a->isEnabled());
+                    a->trigger();
+                    return;
+                }
+            }
+            QFAIL(qPrintable(text));
+        };
+        const auto has_entry = [&](const QString& name) {
+            const auto bare = [](std::string n) {
+                if (n.ends_with('/'))
+                    n.pop_back();
+                return QString::fromStdString(n);
+            };
+            return std::ranges::any_of(session.snapshot()->view.rows, [&](const satchel_gui::SessionRow& r) { return r.state != satchel_gui::RowState::Deleted && r.plan && bare(r.plan->output_name) == name; });
+        };
+
+        // Searching expands the folders that hold matches, and clearing restores the tree.
+        QVERIFY(!view->isExpanded(find("docs")));
+        QLineEdit* search = nullptr;
+        for (auto* e : w->findChildren<QLineEdit*>())
+        {
+            if (e->accessibleName() == "Search")
+                search = e;
+        }
+        QVERIFY(search);
+        search->setText("b.txt");
+        QVERIFY(view->isExpanded(find("docs")));
+        QVERIFY(find("docs/b.txt").isValid());
+        search->clear();
+        QVERIFY(!view->isExpanded(find("docs")));
+
+        // New Folder goes next to the selection: beside a folder, not inside it.
+        select(find("docs"));
+        trigger("New Folder");
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && has_entry("New Folder"), 20000);
+        QVERIFY(!has_entry("docs/New Folder"));
+
+        // New Folder with Items moves the selection into a new sibling folder.
+        select(find("a.txt"));
+        trigger("New Folder with Items");
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && has_entry("New Folder 2/a.txt"), 20000);
+        QVERIFY(!has_entry("a.txt"));
+
+        // Files sent from the file manager are compressed on their own; the plan stays.
+        const auto rows = session.snapshot()->view.rows.size();
+        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        app.open_paths({ root.filePath("outside.txt") }, satchel_gui::Intent::Compress);
+        QVERIFY(finished.wait(20000));
+        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
+        QVERIFY(QFile::exists(root.filePath("outside.txt.zip")));
+        QVERIFY(w->isVisible());
+        QVERIFY(session.snapshot()->is_new);
+        QCOMPARE(session.snapshot()->view.rows.size(), rows);
     }
 
     void folder_settings_are_dropdowns()

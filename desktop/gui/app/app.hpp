@@ -30,10 +30,12 @@ public:
     void start_updates();
     Updater* updater() { return updater_.get(); }
 
-    void show_simple();
+    // keep_full: alongside a visible Full window (files from the file manager while planning).
+    void show_simple(bool keep_full = false);
     void show_full(const QString& archive = {});
     void toggle_mode();
-    // Files dropped on the app icon or passed on the command line: Simple-mode rule.
+    // Files dropped on the app icon or passed on the command line: Simple-mode rule. A visible
+    // Full window and its session stay as they are.
     void open_paths(const QStringList& paths, satchel_gui::Intent intent = satchel_gui::Intent::Auto);
     // Desktop notification when a job ends while no window is focused.
     void notify(const QString& title, const QString& text);

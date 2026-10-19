@@ -22,7 +22,6 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
-class QListWidget;
 class QProgressBar;
 class QStackedWidget;
 class QTextBrowser;
@@ -47,6 +46,8 @@ public:
 
     [[nodiscard]] QString archive_path() const { return archive_; }
     [[nodiscard]] int visible_rows() const;
+    // Staged changes (or a new archive with files) that have not been written.
+    [[nodiscard]] bool dirty() const;
     [[nodiscard]] SessionController& session() { return *controller_; }
     [[nodiscard]] ArchiveModel& model() { return *model_; }
 
@@ -74,29 +75,33 @@ private:
     void rename_selected();
     void rename_entry(const QModelIndex& index, const QString& leaf);
     void move_selected();
-    void new_folder();
+    // An empty folder next to the selection (top level without one); with_selection moves the
+    // selected items into it.
+    void new_folder(bool with_selection);
     void save_as();
     // Leaves a new archive without creating it.
     void cancel_new();
-    void open_entry(const QModelIndex& index);
     void show_empty();
-    void update_recent();
     void update_inspector();
     void update_summary();
     void update_actions();
     void update_title();
+    // Applies a search/filter change, expanding every folder while one is active and restoring the
+    // earlier expansion after.
+    void expand_for_filter(const std::function<void()>& apply);
     void on_session_updated();
     void load_base(const QString& path);
     void show_model(std::vector<BrowserEntry> entries, std::vector<Ref> refs);
     // Asks what to do with staged changes before `then`; false if the caller must not go on now.
     bool confirm_leave(const std::function<void()>& then);
-    [[nodiscard]] bool dirty() const;
     [[nodiscard]] satchel_gui::SessionOptions session_options() const;
     [[nodiscard]] std::vector<std::size_t> selected_positions() const;
     [[nodiscard]] std::vector<std::size_t> base_ids(const std::vector<std::size_t>& positions) const;
     [[nodiscard]] std::optional<satchel_gui::EntryKey> key_of(std::size_t position) const;
     [[nodiscard]] const satchel_gui::SessionRow* row_of(std::size_t position) const;
     [[nodiscard]] QString folder_for(const QModelIndex& index) const;
+    // Renames that move the selected entries and folders into `dest`.
+    [[nodiscard]] satchel_gui::Change move_change(const QString& dest) const;
     [[nodiscard]] QStringList folders_in_session() const;
     QString extract_to_temp(const std::vector<std::size_t>& base);
 
@@ -121,21 +126,20 @@ private:
     int commit_job_ = 0;
     std::function<void()> after_commit_;
     QString edit_after_update_;
+    bool filtering_ = false;
+    QSet<QString> expanded_before_filter_;
 
     ArchiveModel* model_ = nullptr;
     ArchiveFilter* filter_ = nullptr;
     QStackedWidget* center_ = nullptr;
     ArchiveView* view_ = nullptr;
     SessionBar* bar_ = nullptr;
-    QListWidget* recent_ = nullptr;
     QTextBrowser* inspector_ = nullptr;
     QLineEdit* search_ = nullptr;
     QComboBox* method_filter_ = nullptr;
     QCheckBox* restorable_only_ = nullptr;
     QLabel* summary_ = nullptr;
-    QListWidget* jobs_list_ = nullptr;
     QProgressBar* job_bar_ = nullptr;
-    QLabel* jobs_label_ = nullptr;
     QHash<int, QString> verification_; // by archive entry
     QHash<int, QString> verified_at_;
     QList<int> mine_;

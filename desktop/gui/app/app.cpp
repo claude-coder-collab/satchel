@@ -36,16 +36,17 @@ void App::start_updates()
         updater_ = Updater::create(settings_.check_updates);
 }
 
-void App::show_simple()
+void App::show_simple(bool keep_full)
 {
     if (!simple_)
         simple_ = new SimpleWindow(*this);
-    if (full_)
+    if (full_ && !keep_full)
         full_->hide();
     simple_->show();
     simple_->raise();
     simple_->activateWindow();
-    set_last_mode("simple");
+    if (!keep_full)
+        set_last_mode("simple");
 }
 
 void App::show_full(const QString& archive)
@@ -77,7 +78,7 @@ void App::open_paths(const QStringList& paths, satchel_gui::Intent intent)
         full_->open_archive(paths.front());
         return;
     }
-    show_simple();
+    show_simple(full_ && full_->isVisible());
     simple_->handle(paths, intent);
 }
 

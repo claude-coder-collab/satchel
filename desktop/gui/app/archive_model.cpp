@@ -320,8 +320,6 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
                 case Method:
                     return r && !r->directory ? labels::row_method(*r) : folder ? labels::method("Folder")
                                                                                 : QString();
-                case Reason:
-                    return be ? be->reason : QString();
                 case RestoresTo:
                     return r ? QString::fromStdString(r->restores_to) : QString();
                 case Modified:
@@ -444,7 +442,7 @@ QVariant ArchiveModel::headerData(int section, Qt::Orientation orientation, int 
 {
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole)
         return {};
-    static const QStringList names{ tr("Name"), tr("Size"), tr("Packed"), tr("Ratio"), tr("Method"), tr("Reason"), tr("Restores to"), tr("Modified"), tr("Verified") };
+    static const QStringList names{ tr("Name"), tr("Size"), tr("Packed"), tr("Ratio"), tr("Method"), tr("Restores to"), tr("Modified"), tr("Verified") };
     return names.value(section);
 }
 
@@ -573,19 +571,25 @@ void BadgeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
     const int pad = 6;
     const int w = fm.horizontalAdvance(badge) + 2 * pad;
     const int h = fm.height() + 2;
-    opt.rect.setRight(opt.rect.right() - w - pad);
-    QApplication::style()->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
     const auto* style = opt.widget ? opt.widget->style() : QApplication::style();
-    const auto text = style->subElementRect(QStyle::SE_ItemViewItemText, &opt, opt.widget);
-    const int text_end = text.left() + QFontMetrics(opt.font).horizontalAdvance(opt.text) + pad;
-    const QRect pill(std::min(text_end, opt.rect.right() + pad / 2), option.rect.center().y() - h / 2, w, h);
+    style->drawPrimitive(QStyle::PE_PanelItemViewItem, &opt, painter, opt.widget);
+    opt.rect.setRight(opt.rect.right() - w - 2 * pad);
+    opt.backgroundBrush = Qt::NoBrush;
+    opt.state &= ~QStyle::State_HasFocus;
+    opt.features &= ~QStyleOptionViewItem::Alternate;
+    opt.palette.setColor(QPalette::Highlight, Qt::transparent);
+    style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
+    const QRect pill(option.rect.right() - pad - w, option.rect.center().y() - h / 2, w, h);
+    const bool selected = option.state & QStyle::State_Selected;
+    auto fill = option.palette.color(selected ? QPalette::HighlightedText : QPalette::Highlight);
+    if (selected)
+        fill.setAlpha(60);
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
-    const auto accent = option.palette.color(QPalette::Highlight);
     QPainterPath path;
     path.addRoundedRect(pill, h / 2.0, h / 2.0);
-    painter->fillPath(path, option.state & QStyle::State_Selected ? option.palette.color(QPalette::HighlightedText) : accent);
-    painter->setPen(option.state & QStyle::State_Selected ? accent : option.palette.color(QPalette::HighlightedText));
+    painter->fillPath(path, fill);
+    painter->setPen(option.palette.color(QPalette::HighlightedText));
     painter->setFont(small);
     painter->drawText(pill, Qt::AlignCenter, badge);
     painter->restore();

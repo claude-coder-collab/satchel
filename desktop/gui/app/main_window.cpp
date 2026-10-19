@@ -20,10 +20,7 @@
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDateTime>
-#include <QDesktopServices>
 #include <QDir>
-#include <QDirIterator>
-#include <QDockWidget>
 #include <QDrag>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -35,7 +32,6 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -299,12 +295,18 @@ void MainWindow::build_ui()
     auto* archive_menu = menuBar()->addMenu(tr("&Archive"));
     auto* add = action(tr("Add Files…"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A), [this] { choose_and_add(false); });
     auto* add_folder = action(tr("Add Folder…"), QKeySequence(), [this] { choose_and_add(true); });
-    auto* folder = action(tr("New Folder"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N), [this] { new_folder(); });
+    auto* folder = action(tr("New Folder"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N), [this] { new_folder(false); });
+#if defined(Q_OS_MACOS)
+    const QKeySequence with_items_key(Qt::CTRL | Qt::META | Qt::Key_N);
+#else
+    const QKeySequence with_items_key(Qt::CTRL | Qt::ALT | Qt::Key_N);
+#endif
+    auto* folder_with_items = action(tr("New Folder with Items"), with_items_key, [this] { new_folder(true); });
     auto* rename = action(tr("Rename"), QKeySequence(Qt::Key_F2), [this] { rename_selected(); });
     auto* move = action(tr("Move To…"), QKeySequence(), [this] { move_selected(); });
     auto* remove = action(tr("Delete"), QKeySequence::Delete, [this] { delete_selected(); });
     remove->setShortcuts({ QKeySequence::Delete, QKeySequence(Qt::Key_Backspace) });
-    edit_actions_ = { add, add_folder, folder, rename, move, remove };
+    edit_actions_ = { add, add_folder, folder, folder_with_items, rename, move, remove };
     for (auto* a : edit_actions_)
         archive_menu->addAction(a);
     archive_menu->addSeparator();
@@ -368,9 +370,15 @@ void MainWindow::build_ui()
     filters->addWidget(method_filter_);
     filters->addWidget(restorable_only_);
     layout->addLayout(filters);
-    connect(search_, &QLineEdit::textChanged, filter_, &ArchiveFilter::set_text);
-    connect(method_filter_, &QComboBox::currentIndexChanged, this, [this] { filter_->set_method(method_filter_->currentData().toString()); });
-    connect(restorable_only_, &QCheckBox::toggled, filter_, &ArchiveFilter::set_restorable_only);
+    connect(search_, &QLineEdit::textChanged, this, [this](const QString& text) {
+        expand_for_filter([this, text] { filter_->set_text(text); });
+    });
+    connect(method_filter_, &QComboBox::currentIndexChanged, this, [this] {
+        expand_for_filter([this] { filter_->set_method(method_filter_->currentData().toString()); });
+    });
+    connect(restorable_only_, &QCheckBox::toggled, this, [this](bool on) {
+        expand_for_filter([this, on] { filter_->set_restorable_only(on); });
+    });
 
     center_ = new QStackedWidget(central);
     auto* empty = new QWidget(center_);
@@ -378,12 +386,7 @@ void MainWindow::build_ui()
     auto* drop = new QLabel(tr("Drop a .zip here to open it, or files to create a new archive."), empty);
     drop->setAlignment(Qt::AlignCenter);
     drop->setStyleSheet("QLabel { border: 2px dashed palette(mid); border-radius: 12px; padding: 40px; }");
-    recent_ = new QListWidget(empty);
-    recent_->setAccessibleName(tr("Recent archives"));
-    connect(recent_, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) { open_archive(item->data(Qt::UserRole).toString()); });
     empty_layout->addWidget(drop, 1);
-    empty_layout->addWidget(new QLabel(tr("Recent archives"), empty));
-    empty_layout->addWidget(recent_, 1);
     center_->addWidget(empty);
 
     auto* split = new QSplitter(center_);
@@ -418,15 +421,14 @@ void MainWindow::build_ui()
             a->setChecked(!view_->header()->isSectionHidden(c));
             connect(a, &QAction::toggled, this, [this, c](bool on) {
                 view_->header()->setSectionHidden(c, !on);
-                QSettings().setValue("browser/columns", view_->header()->saveState());
+                QSettings().setValue("browser/header", view_->header()->saveState());
             });
         }
         menu.exec(view_->header()->mapToGlobal(pos));
     });
-    if (!view_->header()->restoreState(QSettings().value("browser/columns").toByteArray()))
+    if (!view_->header()->restoreState(QSettings().value("browser/header").toByteArray()))
         view_->header()->resizeSection(ArchiveModel::Name, 380);
-    connect(view_->header(), &QHeaderView::sectionResized, this, [this] { QSettings().setValue("browser/columns", view_->header()->saveState()); });
-    connect(view_, &QTreeView::doubleClicked, this, &MainWindow::open_entry);
+    connect(view_->header(), &QHeaderView::sectionResized, this, [this] { QSettings().setValue("browser/header", view_->header()->saveState()); });
     connect(view_->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this] {
         update_inspector();
         update_actions();
@@ -466,29 +468,6 @@ void MainWindow::build_ui()
     job_bar_->setMaximumWidth(220);
     job_bar_->hide();
     statusBar()->addPermanentWidget(job_bar_);
-    jobs_label_ = new QLabel(tr("No jobs"), this);
-    statusBar()->addPermanentWidget(jobs_label_);
-
-    auto* dock = new QDockWidget(tr("Jobs"), this);
-    dock->setObjectName("jobs-dock");
-    jobs_list_ = new QListWidget(dock);
-    jobs_list_->setAccessibleName(tr("Jobs"));
-    connect(jobs_list_, &QListWidget::itemActivated, this, [](QListWidgetItem* item) {
-        const auto out = item->data(Qt::UserRole).toString();
-        if (!out.isEmpty())
-            reveal_in_file_manager(out);
-    });
-    auto* cancel = new QAction(tr("Cancel Job"), jobs_list_);
-    connect(cancel, &QAction::triggered, this, [this] {
-        if (auto* item = jobs_list_->currentItem())
-            app_.jobs().cancel(item->data(Qt::UserRole + 1).toInt());
-    });
-    jobs_list_->addAction(cancel);
-    jobs_list_->setContextMenuPolicy(Qt::ActionsContextMenu);
-    dock->setWidget(jobs_list_);
-    addDockWidget(Qt::BottomDockWidgetArea, dock);
-    dock->hide();
-    view_menu->addAction(dock->toggleViewAction());
 }
 
 satchel_gui::SessionOptions MainWindow::session_options() const
@@ -506,19 +485,8 @@ void MainWindow::show_empty()
     center_->setCurrentIndex(0);
     inspector_->clear();
     summary_->setText(tr("No archive open"));
-    update_recent();
     update_title();
     update_actions();
-}
-
-void MainWindow::update_recent()
-{
-    recent_->clear();
-    for (const auto& p : QSettings().value("recent").toStringList())
-    {
-        auto* item = new QListWidgetItem(QFileInfo(p).fileName() + "  —  " + QFileInfo(p).absolutePath(), recent_);
-        item->setData(Qt::UserRole, p);
-    }
 }
 
 int MainWindow::visible_rows() const
@@ -545,7 +513,7 @@ void MainWindow::update_actions()
     const bool has_selection = view_ && view_->selectionModel()->hasSelection();
     for (auto* a : edit_actions_)
         a->setEnabled(ready);
-    for (auto* a : std::initializer_list<QAction*>{ edit_actions_[3], edit_actions_[4], edit_actions_[5] })
+    for (auto* a : edit_actions_.mid(3))
         a->setEnabled(ready && has_selection);
     undo_->setEnabled(ready && snap_->can_undo);
     redo_->setEnabled(ready && snap_->can_redo);
@@ -626,10 +594,6 @@ void MainWindow::load_base(const QString& path)
     }
     show_model(std::move(list), std::move(refs));
     model_is_base_ = true;
-    auto recent = QSettings().value("recent").toStringList();
-    recent.removeAll(path);
-    recent.prepend(path);
-    QSettings().setValue("recent", recent.mid(0, 10));
 }
 
 void MainWindow::open_archive(const QString& path)
@@ -767,7 +731,51 @@ void MainWindow::show_model(std::vector<BrowserEntry> entries, std::vector<Ref> 
         view_->edit(idx);
         edit_after_update_.clear();
     }
+    if (filtering_)
+        view_->expandAll();
     update_inspector();
+}
+
+void MainWindow::expand_for_filter(const std::function<void()>& apply)
+{
+    const bool active = !search_->text().isEmpty() || !method_filter_->currentData().toString().isEmpty() || restorable_only_->isChecked();
+    if (active && !filtering_)
+    {
+        expanded_before_filter_.clear();
+        std::function<void(const QModelIndex&)> remember = [&](const QModelIndex& parent) {
+            for (int r = 0; r < model_->rowCount(parent); ++r)
+            {
+                const auto idx = model_->index(r, 0, parent);
+                const auto proxy = filter_->mapFromSource(idx);
+                if (proxy.isValid() && view_->isExpanded(proxy))
+                    expanded_before_filter_.insert(idx.data(ArchiveModel::PathRole).toString());
+                remember(idx);
+            }
+        };
+        remember({});
+    }
+    apply();
+    if (active)
+        view_->expandAll();
+    else if (filtering_)
+    {
+        view_->collapseAll();
+        std::function<void(const QModelIndex&)> restore = [&](const QModelIndex& parent) {
+            for (int r = 0; r < filter_->rowCount(parent); ++r)
+            {
+                const auto idx = filter_->index(r, 0, parent);
+                if (expanded_before_filter_.contains(idx.data(ArchiveModel::PathRole).toString()))
+                {
+                    view_->expand(idx);
+                    restore(idx);
+                }
+            }
+        };
+        restore({});
+        if (view_->currentIndex().isValid())
+            view_->scrollTo(view_->currentIndex());
+    }
+    filtering_ = active;
 }
 
 void MainWindow::on_session_updated()
@@ -846,7 +854,6 @@ void MainWindow::on_session_updated()
                 if (p.codec == ZP_CODEC_FLAC || p.codec == ZP_CODEC_FLAC_MONO)
                     l.original_size = p.size;
                 be.pending = true;
-                be.reason = labels::plan_reason(p, r.stored);
             }
             else
                 be.listed.name = r.key.name;
@@ -864,8 +871,6 @@ void MainWindow::on_session_updated()
         }
         model_->set_verification(v);
     }
-    const bool additions = std::ranges::any_of(snap->view.rows, [](const satchel_gui::SessionRow& r) { return r.state == RowState::Added || r.state == RowState::Replaced; });
-    view_->header()->setSectionHidden(ArchiveModel::Reason, !additions);
     bar_->show_snapshot(snap_, controller_->busy(), controller_->committing());
     update_summary();
     update_title();
@@ -1061,15 +1066,27 @@ void MainWindow::drop_paths(const QStringList& paths, const QModelIndex& target)
     add_paths(paths, folder_for(target));
 }
 
-void MainWindow::new_folder()
+void MainWindow::new_folder(bool with_selection)
 {
-    const auto parent = folder_for(filter_->mapToSource(view_->currentIndex()));
+    const auto rows = view_->selectionModel()->selectedRows();
+    if (with_selection && rows.isEmpty())
+        return;
+    QString parent;
+    if (!rows.isEmpty() && model_->tree())
+    {
+        const auto current = view_->currentIndex();
+        const auto anchor = current.isValid() && view_->selectionModel()->isRowSelected(current.row(), current.parent()) ? current : rows.front();
+        parent = parent_of(filter_->mapToSource(anchor).data(ArchiveModel::PathRole).toString());
+    }
     const auto existing = folders_in_session();
     auto name = join_path(parent, tr("New Folder"));
     for (int n = 2; existing.contains(name); ++n)
         name = join_path(parent, tr("New Folder %1").arg(n));
+    satchel_gui::Change change{ op::NewFolder{ name.toStdString() } };
+    if (with_selection)
+        std::ranges::move(move_change(name), std::back_inserter(change));
     edit_after_update_ = name;
-    controller_->apply({ op::NewFolder{ name.toStdString() } });
+    controller_->apply(std::move(change));
 }
 
 void MainWindow::delete_selected()
@@ -1160,8 +1177,7 @@ void MainWindow::rename_selected()
 
 void MainWindow::move_selected()
 {
-    const auto rows = view_->selectionModel()->selectedRows();
-    if (rows.isEmpty())
+    if (!view_->selectionModel()->hasSelection())
         return;
     auto folders = folders_in_session();
     folders.prepend(tr("(top level)"));
@@ -1170,6 +1186,13 @@ void MainWindow::move_selected()
     if (!ok)
         return;
     const auto dest = choice == folders.front() ? QString() : choice.trimmed().remove(QRegularExpression("^/+|/+$"));
+    if (auto change = move_change(dest); !change.empty())
+        controller_->apply(std::move(change));
+}
+
+satchel_gui::Change MainWindow::move_change(const QString& dest) const
+{
+    const auto rows = view_->selectionModel()->selectedRows();
     satchel_gui::Change change;
     QStringList moved_folders;
     for (const auto& proxy : rows)
@@ -1191,8 +1214,7 @@ void MainWindow::move_selected()
             continue;
         change.emplace_back(op::Rename{ *key, join_path(dest, name.section('/', -1)).toStdString() });
     }
-    if (!change.empty())
-        controller_->apply(std::move(change));
+    return change;
 }
 
 int MainWindow::apply_changes()
@@ -1487,30 +1509,6 @@ QString MainWindow::extract_to_temp(const std::vector<std::size_t>& base)
     return dir;
 }
 
-void MainWindow::open_entry(const QModelIndex& proxy)
-{
-    const auto index = filter_->mapToSource(proxy);
-    if (index.data(ArchiveModel::FolderRole).toBool())
-        return;
-    std::vector<std::size_t> positions;
-    for (const auto& v : index.data(ArchiveModel::EntriesRole).toList())
-        positions.push_back(static_cast<std::size_t>(v.toULongLong()));
-    if (positions.size() == 1)
-    {
-        if (const auto* r = row_of(positions.front()); r && r->state == RowState::Added && r->plan && !r->generated)
-        {
-            QDesktopServices::openUrl(QUrl::fromLocalFile(qs(r->plan->source_path)));
-            return;
-        }
-    }
-    const auto dir = extract_to_temp(base_ids(positions));
-    if (dir.isEmpty())
-        return;
-    QDirIterator it(dir, QDir::Files, QDirIterator::Subdirectories);
-    if (it.hasNext())
-        QDesktopServices::openUrl(QUrl::fromLocalFile(it.next()));
-}
-
 void MainWindow::dragEnterEvent(QDragEnterEvent* e)
 {
     if (e->mimeData()->hasUrls() && e->source() != view_)
@@ -1556,9 +1554,9 @@ void MainWindow::closeEvent(QCloseEvent* e)
 
 void MainWindow::on_started(int id, const QString& title)
 {
-    auto* item = new QListWidgetItem(tr("Running: %1").arg(title), jobs_list_);
-    item->setData(Qt::UserRole + 1, id);
-    jobs_label_->setText(title);
+    if (!mine_.contains(id) || id == commit_job_)
+        return;
+    statusBar()->showMessage(title);
     job_bar_->setValue(0);
     job_bar_->show();
 }
@@ -1567,25 +1565,19 @@ void MainWindow::on_progress(int id, quint64 done, quint64 total)
 {
     if (id == commit_job_)
         bar_->set_progress(done, total);
-    job_bar_->setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
+    else if (mine_.contains(id))
+        job_bar_->setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
 }
 
 void MainWindow::on_finished(int id, const QString& title, const JobOutcome& outcome)
 {
-    job_bar_->hide();
-    jobs_label_->setText(app_.jobs().busy() ? tr("Jobs running") : tr("No jobs running"));
     const bool ok = outcome.status == ZP_OK || outcome.status == ZP_SOURCE_CHANGED;
-    for (int i = 0; i < jobs_list_->count(); ++i)
-    {
-        auto* item = jobs_list_->item(i);
-        if (item->data(Qt::UserRole + 1).toInt() == id)
-        {
-            item->setText(QString("%1 %2 — %3").arg(ok ? "✔" : "✖", title, ok ? outcome.summary : outcome.message));
-            item->setData(Qt::UserRole, outcome.output);
-            item->setToolTip(outcome.details.join('\n'));
-        }
-    }
     const bool was_mine = mine_.removeOne(id);
+    if (was_mine && id != commit_job_)
+    {
+        job_bar_->hide();
+        statusBar()->showMessage(ok ? QString("%1 — %2").arg(title, outcome.summary) : QString(), 10000);
+    }
     if (!outcome.entry_status.isEmpty() && outcome.output == archive_)
     {
         const auto when = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");

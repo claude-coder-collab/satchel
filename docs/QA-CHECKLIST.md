@@ -50,9 +50,9 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] New (⌘N) asks for name and location first; nothing is written until Create Archive; title shows the edited marker
 - [ ] Drop files on the empty window: name dialog defaults to `<item>.zip` next to them; drop one zip: opens it
 - [ ] Drop one zip on an open archive: Add to This Archive / Open
-- [ ] Add Files, Add Folder, drop into a folder row; New Folder (named in place); rename in place (file, folder, Added entry); rename a multi-mono set; Move To… (existing and new folder); Delete (no confirmation)
+- [ ] Add Files, Add Folder, drop into a folder row; New Folder (next to the selection, top level without one, named in place); New Folder with Items; rename in place (file, folder, Added entry); rename a multi-mono set; Move To… (existing and new folder); Delete (no confirmation)
 - [ ] Row states: New / Replaced badges, renamed in italics (tooltip shows the old name), deleted struck through; View ▸ Show Deleted
-- [ ] Undo / Redo through several changes; Discard; Reason column only while there are additions
+- [ ] Undo / Redo through several changes; Discard
 - [ ] Drop a file onto an entry with the same name: Replace?
 - [ ] Collisions: Issues popover with Rename / Skip (Remove for the archive's entry) / Store unconverted; Apply disabled until resolved
 - [ ] Options popover: FLAC off, deflate 1/9, FLAC level 0/8, Existing entries (Ask, Replace, Replace if newer, Keep), Leave out; staged additions re-plan
@@ -60,9 +60,11 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Close the window / open another archive / New with staged changes: Apply / Discard / Cancel
 - [ ] Apply with a failure midway (disk full, cancel) keeps the original intact and the changes staged
 - [ ] Cancel a new archive (with and without added files) returns to the start page; Cancel in the action bar while writing, also while the write waits behind another job
-- [ ] Extract / Verify / double-click with staged changes act on the archive on disk; double-click on an added file opens the source
+- [ ] Extract / Verify with staged changes act on the archive on disk; double-click does nothing
 - [ ] Archive open in the app is modified or deleted by another program
-- [ ] Recent archives list: missing file, moved file
+- [ ] Search and filters expand folders with matches; clearing restores the tree
+- [ ] While planning, Compress with Satchel from Finder compresses on its own and leaves the plan and Full window open
+- [ ] Change an added file on disk before Create: the archive is written without it and a warning names it
 - [ ] Verify whole archive and selection, with injected CRC error, hash mismatch, incomplete multi-mono group
 - [ ] Verify after build setting
 
@@ -70,7 +72,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 
 ## 5. Extraction
 
-- [ ] Extract All, Extract Selected, drag-out to the file manager, double-click to open with default app
+- [ ] Extract All, Extract Selected, drag-out to the file manager
 - [ ] Restore original audio vs keep FLAC; byte-identical to the original (compare hashes) for every container type
 - [ ] Original filename and case restored
 - [ ] Readme option
