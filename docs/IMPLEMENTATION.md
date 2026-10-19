@@ -515,8 +515,8 @@ defaults and "Copy as CLI command".
 
 **Session** (`desktop/gui/session`, library `satchel_gui_session`, no Qt, Catch2-tested in
 `satchel_gui_session_tests`): the staged Full-mode model (desktop UI spec, "Implementation
-model"). It builds on the C API through `desktop/common/zp_cpp.hpp`. Not used by the app yet;
-the staged UI replaces the immediate edit jobs and `PlanReviewDialog` in the next milestone.
+model"). It builds on the C API through `desktop/common/zp_cpp.hpp`. Summary counts are files
+only.
 
 **App** (`desktop/gui/app`, library `satchel_gui_app` plus `Satchel` executable):
 - Exclude settings (`exclude_system`, `exclude_daw_caches`, `exclude_patterns`) are stored under
@@ -541,13 +541,23 @@ the staged UI replaces the immediate edit jobs and `PlanReviewDialog` in the nex
   - Inspector (HTML) uses `zp_reader_flac_describe` for audio, original, production metadata,
     tracks and the chunk list.
   - Status-bar summary and a Jobs dock (cancel, reveal).
-  - Every build goes through `PlanReviewDialog`: entries with method and reason, totals, conflict
-    controls (Rename / Skip / Store unconverted), warnings, collapsed options, Copy as CLI command.
+  - Staged editing (desktop UI spec, "Building and editing archives"): `SessionController` owns the
+    `Session` on its own worker thread (a FIFO of tasks) and publishes immutable `SessionSnapshot`s
+    to the window; Create / Apply / Save As run `Session::commit` as a `JobQueue` job, and the
+    controller refuses other calls until it ends. `SessionBar` is the action bar with the Issues and
+    Options popovers. Opening an archive fills the browser from the central directory at once
+    (`load_base`), so the 100k-entry target holds; the session opens in the background and the
+    browser is rebuilt from snapshots only once there are changes. Each browser entry keeps a
+    `Ref` (session row and/or archive entry index) for keys, Inspector, extraction and verify
+    results. Expanded folders, selection and scroll position survive the rebuilds.
+  - `ArchiveModel` takes `BrowserEntry` rows (state, pending packed size, reason, conflict); the
+    `BadgeDelegate` draws New / Replaced after the name. Renames in place go through
+    `rename_requested`; the model never changes itself.
   - Extraction: `ExtractDialog` options, then a pre-flight showing issues and existing files.
   - Verify writes nothing and fills the Verified column.
-  - Edits (add, delete, rename — renaming a group renames every member) are editor jobs that
-    rewrite the archive in place. Double-click opens an entry through a temporary extraction;
-    dragging out extracts to a temporary folder first.
+  - Double-click opens an entry through a temporary extraction (an added file: its source);
+    dragging out extracts to a temporary folder first. The Name column is resizable; column
+    layout is saved under `browser/columns`.
 - `--smoke-test ARCHIVE` prints the time to list an archive. 100,000 entries list in about
   0.45–0.6 s on the development Mac.
 - Tests: `satchel_gui_logic_tests` (Catch2) and `satchel_gui_tests` (Qt Test, offscreen): both

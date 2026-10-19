@@ -13,6 +13,7 @@
 #include "simple_window.hpp"
 #include "user_data.hpp"
 #include <QAction>
+#include <QDir>
 #include <QSettings>
 #include <QTemporaryDir>
 
@@ -158,7 +159,7 @@ private slots:
         const QStringList inputs{ dir_.filePath("proj") };
         const auto excluded = [&](const satchel_gui::Settings& s) {
             QStringList out;
-            for (const auto& x : zpp::plan_excluded(PlanReviewDialog::make_plan(inputs, s)->get()))
+            for (const auto& x : zpp::plan_excluded(make_plan(inputs, s)->get()))
                 out << QString::fromStdString(x.archive_path);
             return out;
         };
@@ -279,6 +280,84 @@ private slots:
         QVERIFY(satchel_gui::temp_leftovers(temp.path()).isEmpty());
         QVERIFY(dir.exists("keep.txt"));
         QVERIFY(dir.exists("satchel-notes"));
+    }
+
+    void full_mode_creates_then_edits_an_archive()
+    {
+        QDir root(dir_.filePath("full"));
+        QVERIFY(root.mkpath("src/docs"));
+        for (const auto* name : { "src/a.txt", "src/docs/b.txt", "src/docs/c.txt" })
+        {
+            QFile f(root.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(name);
+        }
+        const auto target = root.filePath("made.zip");
+        App app;
+        app.show_full();
+        auto* w = app.full();
+        auto& session = w->session();
+        const auto settled = [&] { return !session.busy() && session.snapshot(); };
+
+        w->start_new_archive(target, { root.filePath("src/a.txt"), root.filePath("src/docs") });
+        QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
+        QVERIFY(session.snapshot()->is_new);
+        QCOMPARE(session.snapshot()->view.summary.added, std::size_t{ 3 });
+        QVERIFY(!QFile::exists(target));
+        QVERIFY(w->windowTitle().startsWith("made.zip"));
+
+        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        QVERIFY(w->apply_changes() != 0);
+        QVERIFY(finished.wait(20000));
+        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->is_new, 20000);
+        QVERIFY(QFile::exists(target));
+        QCOMPARE(w->archive_path(), target);
+        QVERIFY(!session.snapshot()->has_changes);
+
+        // Rename in place, delete, add into a folder: staged until Apply.
+        auto& model = w->model();
+        QModelIndex a;
+        QModelIndex docs;
+        for (int r = 0; r < model.rowCount(); ++r)
+        {
+            const auto idx = model.index(r, ArchiveModel::Name);
+            if (idx.data(ArchiveModel::PathRole).toString() == "a.txt")
+                a = idx;
+            if (idx.data(ArchiveModel::PathRole).toString() == "docs")
+                docs = idx;
+        }
+        QVERIFY(a.isValid() && docs.isValid());
+        QVERIFY(model.flags(a) & Qt::ItemIsEditable);
+        model.setData(a, "alpha.txt", Qt::EditRole);
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->has_changes, 20000);
+        satchel_gui::Change remove{ satchel_gui::op::RemoveFolder{ "docs" } };
+        session.apply(remove);
+        QFile extra(root.filePath("extra.txt"));
+        QVERIFY(extra.open(QIODevice::WriteOnly));
+        extra.close();
+        w->add_paths({ extra.fileName() }, "new");
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->view.summary.added == 1, 20000);
+        const auto& sum = session.snapshot()->view.summary;
+        QCOMPARE(sum.renamed, std::size_t{ 1 });
+        QCOMPARE(sum.removed, std::size_t{ 2 });
+        QVERIFY(w->isWindowModified());
+
+        session.undo();
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->view.summary.added == 0, 20000);
+        session.redo();
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->view.summary.added == 1, 20000);
+
+        QVERIFY(w->apply_changes() != 0);
+        QVERIFY(finished.wait(20000));
+        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->has_changes, 20000);
+        QStringList names;
+        for (const auto& e : session.snapshot()->view.rows)
+            names << QString::fromStdString(e.key.name);
+        names.sort();
+        QCOMPARE(names, (QStringList{ "alpha.txt", "new/extra.txt" }));
+        QVERIFY(!w->isWindowModified());
     }
 
     void translations_are_embedded()

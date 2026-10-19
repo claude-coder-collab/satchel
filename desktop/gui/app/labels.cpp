@@ -69,4 +69,41 @@ QString savings(std::uint64_t input, std::uint64_t output, bool ratio_known)
                       : QCoreApplication::translate("Archive", "%1 → %2, %3% larger").arg(size_text(input), size_text(output)).arg(std::abs(saved));
 }
 
+QString plan_method(const zpp::PlanEntry& e)
+{
+    switch (e.codec)
+    {
+        case ZP_CODEC_FLAC:
+            return QCoreApplication::translate("Method", "FLAC");
+        case ZP_CODEC_FLAC_MONO:
+            return QCoreApplication::translate("Method", "FLAC channel %1/%2").arg(e.channel_index).arg(e.channel_count);
+        case ZP_CODEC_GENERATED:
+            return QCoreApplication::translate("Method", "Readme");
+        case ZP_CODEC_KEPT:
+            return {};
+        default:
+            break;
+    }
+    if (e.kind == ZP_KIND_DIRECTORY)
+        return QCoreApplication::translate("Method", "Folder");
+    if (e.fallback_reason >= 0)
+        return QCoreApplication::translate("Method", "Store");
+    return QCoreApplication::translate("Method", "Deflate");
+}
+
+QString plan_reason(const zpp::PlanEntry& e)
+{
+    if (e.kind == ZP_KIND_DIRECTORY)
+        return {};
+    if (e.fallback_reason >= 0)
+        return QCoreApplication::translate("Archive", "Stored: %1").arg(QString::fromStdString(e.fallback_detail));
+    if (e.codec == ZP_CODEC_FLAC || e.codec == ZP_CODEC_FLAC_MONO)
+        return QCoreApplication::translate("Archive", "PCM audio; restores to %1").arg(QString::fromStdString(e.restored_name).section('/', -1));
+    if (e.codec == ZP_CODEC_GENERATED)
+        return QCoreApplication::translate("Archive", "Explains how to restore the audio");
+    if (e.codec == ZP_CODEC_GENERAL)
+        return QCoreApplication::translate("Archive", "Deflate, or Store if it does not shrink");
+    return {};
+}
+
 }

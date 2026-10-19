@@ -83,6 +83,9 @@ std::vector<std::string> exclude_patterns(const satchel_gui::Settings& settings)
 // Empty if every pattern is valid, else the library's message for the first invalid one.
 QString exclude_pattern_error(const std::vector<std::string>& patterns);
 
+// Plans `inputs` with the settings' compression and Leave out options (Simple mode).
+std::shared_ptr<zpp::Plan> make_plan(const QStringList& inputs, const satchel_gui::Settings& settings);
+
 // Job bodies.
 JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, const satchel_gui::Settings& settings);
 JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& destination, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, bool replace_existing);

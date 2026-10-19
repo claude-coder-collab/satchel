@@ -137,10 +137,10 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | Change | How |
 | --- | --- |
-| Add files / folders | Archive ▸ Add Files (⌘⇧A), or drag from Finder/Explorer onto the browser. They go into the folder being viewed in flat view, or the folder row they are dropped on in tree view |
+| Add files / folders | Archive ▸ Add Files… (⌘⇧A) or Add Folder…, or drag from Finder/Explorer onto the browser. In tree view they go into the selected folder (or the selected entry's folder), or the folder or entry row they are dropped on; in flat view, and when dropped on empty space, to the top level |
 | New folder | Archive ▸ New Folder (⌘⇧N), named in place |
-| Rename | F2 / Enter on macOS, edited in place; works on folders, which renames everything below them |
-| Move | Drag rows onto a folder row inside the browser (stored as a rename of every moved entry) |
+| Rename | F2 / Enter on macOS, edited in place; works on folders, which renames everything below them. A multi-mono set is renamed through a dialog asking for the channel files' stem. A name containing `/` is refused (use Move To…) |
+| Move | Archive ▸ Move To…: pick an existing folder or type a new path (stored as renames). Dragging rows is reserved for dragging out to Finder/Explorer, which extracts them first |
 | Delete | Delete key; no confirmation, because it is only staged and can be undone |
 | Replace | Drop a single file onto a file row with the same name and confirm "Replace *name*?" |
 
@@ -172,7 +172,7 @@ A bar at the bottom of the browser, visible while the session has pending change
 - **Issues** button with a count, which opens the issues panel (a popover over the bar):
   - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls. The rows involved get a warning badge in the browser.
   - Skipped symlinks and leave-out matches (warning), FLAC fallbacks (info), listed with paths.
-- **Options** button, which opens a popover with FLAC on/off, FLAC level, deflate level, threads, Existing entries and the Leave out controls. These are per-session overrides of Settings and are not saved. "Copy as CLI command" lives here.
+- **Options** button, which opens a popover with FLAC on/off, FLAC level, deflate level, Existing entries and the Leave out controls. These are per-session overrides of Settings, applied when the popover closes, and are not saved; an invalid Leave out pattern is refused. Threads stay a Settings value (one thread pool for the app).
 - **Discard** and the Go button (**Create Archive** / **Apply Changes**, ⌘S). Go is disabled while blocking issues remain or additions are still being planned.
 
 ### Go
@@ -234,9 +234,9 @@ Verify checks an archive's integrity without writing any files: CRC32 for every 
 | Integration | Associate with .zip | Off (offered, never forced) |
 | Updates | Check automatically | On |
 
-"Copy as CLI command" (on the plan review and Settings) produces the equivalent CLI invocation for the current options.
+"Copy as CLI command" (in Settings) produces the equivalent CLI invocation for the current options.
 
-The plan review's Options panel has the same "Leave out" controls as Settings, as a per-archive override that is not saved. Items left out are counted in the totals line and listed below the conflicts ("Left out: …"). Settings refuses to close while a custom pattern is invalid.
+Full mode's Options popover has the same "Leave out" controls as Settings, as a per-archive override that is not saved. Items left out are counted in the action bar and listed in its Issues popover ("Left out: …"). Settings refuses to close while a custom pattern is invalid.
 
 ## OS integration
 

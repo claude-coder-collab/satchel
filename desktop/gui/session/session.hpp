@@ -77,7 +77,7 @@ struct RenameFolder
 
 struct Remove
 {
-    EntryKey entry;
+    std::vector<EntryKey> entries;
 };
 
 struct RemoveFolder
@@ -135,6 +135,7 @@ struct SessionConflict
 
 struct SessionSummary
 {
+    // Files only; folders show as rows but are not counted.
     std::size_t added = 0;
     std::uint64_t added_bytes = 0;
     std::size_t removed = 0;

@@ -19,9 +19,37 @@
         <source>%1 → %2, %3% larger</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Stored: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PCM audio; restores to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Explains how to restore the audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Deflate, or Store if it does not shrink</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ArchiveModel</name>
+    <message>
+        <source>Another entry has the same name; see Issues</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Will be removed when the changes are applied</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Renamed from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>This entry uses a compression method or encryption that cannot be read</source>
         <translation type="unfinished"></translation>
@@ -64,6 +92,21 @@
     </message>
     <message>
         <source>Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reason</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>BadgeDelegate</name>
+    <message>
+        <source>New</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replaced</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -180,19 +223,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>New Archive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Open archive</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Zip archives (*.zip);;All files (*)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add Files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -314,10 +349,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>%1 — Satchel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Created by %1 · %2 · %3 · Zip64 %4</source>
         <translation type="unfinished"></translation>
     </message>
@@ -383,6 +414,218 @@
     </message>
     <message>
         <source>Method</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot make that change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New Archive…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply Changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save As…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discard Changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&amp;Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Undo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Redo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Files…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add Folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Move To…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show Deleted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1[*] — Satchel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Create Archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing the archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wait until the archive has been written.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Create the archive?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply your changes?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>“%1” has not been created yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>“%1” has changes that have not been applied.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Create</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Archive.zip</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New archive · will be written to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>the archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add a folder to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add or open?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add “%1” to this archive, or open it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add to This Archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace “%1” with the file you dropped?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New Folder %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use Move To… to put an entry into another folder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(top level)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Move To</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder (type a new path to create it):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>“%1” already exists. Replace it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Creating %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Applying changes to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Create the archive as</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save a copy as</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saving %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Will be added</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Will replace the archive&apos;s entry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reason</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Restores to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Entry in the archive now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Will be removed when the changes are applied</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Renamed from %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -490,15 +733,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Create blank archive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Zip archives (*.zip)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cannot create archive</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -506,60 +741,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>How do you want to start the new archive?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Blank archive: create an empty archive, then add files to it.
-Compress a folder: choose a folder and review how it will be compressed.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Blank Archive…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Compress a Folder…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose a folder to compress</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Compressing to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Add files to %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Review the additions</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Adding to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove %1 entr(ies) from the archive?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Deleting from %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>New name for the channel files (without _chNN.flac):</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>New name:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Renaming in %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -641,191 +827,13 @@ Compress a folder: choose a folder and review how it will be compressed.</source
         <source>FLAC channel %1/%2</source>
         <translation type="unfinished"></translation>
     </message>
-</context>
-<context>
-    <name>PlanReviewDialog</name>
     <message>
-        <source>Review the new archive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Warnings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Planned entries</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Convert PCM audio to FLAC</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Deflate level</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>FLAC level</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Leave out</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Archive file</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save archive as</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Zip archives (*.zip)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save as</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Copy as CLI command</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Build</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cannot plan the archive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cannot apply</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Name in archive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Method</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Reason</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 file(s), %2 · %3 FLAC, %4 deflate or store, %5 stored</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <source> · %n item(s) left out</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Name collision: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Invalid name: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>New name for %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Rename</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Skip</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Store unconverted</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No conflicts.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Skipped: %1 — %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stored as is: %1 — %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Left out: %1%2</source>
+        <source>Readme</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>QObject</name>
-    <message>
-        <source>FLAC</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>FLAC (channel %1 of %2)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Readme</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stored</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Deflate</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stored: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Restores to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Explains how to restore the audio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The change would create name collisions</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Archive updated</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Delete Settings</source>
         <translation type="unfinished"></translation>
@@ -888,6 +896,10 @@ Compress a folder: choose a folder and review how it will be compressed.</source
         <source>Uninstall Satchel…</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Archive updated (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ResolutionSheet</name>
@@ -901,6 +913,215 @@ Compress a folder: choose a folder and review how it will be compressed.</source
     </message>
     <message>
         <source>Rename and continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SessionBar</name>
+    <message>
+        <source>Staged changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Issues</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reveal</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reading…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add files or folders, or drop them here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n file(s), %1 · %2 FLAC, %3 other</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>+%n file(s) (%1)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>−%n removed</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n renamed</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n replaced</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>No changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source> · %n left out</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Notes (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Issues (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Create Archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply Changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name collision: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid name: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>In the archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Added: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New name for %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Store unconverted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dropped a change: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skipped: %1 — %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stored as is: %1 — %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Left out: %1%2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Convert PCM audio to FLAC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ask</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace if newer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep the archive&apos;s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>When an added file has the same name as an entry already in the archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>FLAC level</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Deflate level</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Existing entries</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Leave out</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>These apply to this archive only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid pattern</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The Leave out patterns were not changed: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

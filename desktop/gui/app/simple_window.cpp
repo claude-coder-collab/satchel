@@ -199,7 +199,7 @@ void SimpleWindow::start_compress(const QStringList& paths)
     std::shared_ptr<zpp::Plan> plan;
     try
     {
-        plan = PlanReviewDialog::make_plan(paths, s);
+        plan = make_plan(paths, s);
     } catch (const zpp::Error& e)
     {
         QMessageBox::critical(this, tr("Cannot compress"), QString::fromUtf8(e.what()));

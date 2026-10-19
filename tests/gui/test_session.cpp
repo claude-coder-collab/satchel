@@ -124,7 +124,7 @@ TEST_CASE("edits are staged, shown as row states and applied in place", "[sessio
     REQUIRE(s.view().rows.size() == 3);
 
     s.apply({ op::Rename{ kept("a.txt"), "renamed.txt" } });
-    s.apply({ op::Remove{ kept("docs/c.txt") } });
+    s.apply({ op::Remove{ { kept("docs/c.txt") } } });
     s.apply({ op::NewFolder{ "empty/" } });
     s.apply({ op::Add{ { f.write("more/d.txt", "delta") }, "docs" } });
 
@@ -140,7 +140,7 @@ TEST_CASE("edits are staged, shown as row states and applied in place", "[sessio
     const auto& sum = s.view().summary;
     CHECK(sum.renamed == 1);
     CHECK(sum.removed == 1);
-    CHECK(sum.added == 2);
+    CHECK(sum.added == 1);
     CHECK(names_in(archive).contains("a.txt"));
 
     s.commit(archive);
@@ -152,8 +152,10 @@ TEST_CASE("undo, redo and discard", "[session]")
 {
     Fixture f;
     auto s = Session::open(f.ctx, f.base_archive());
-    s.apply({ op::Remove{ kept("a.txt") } });
+    s.apply({ op::Remove{ { kept("a.txt") } } });
     s.apply({ op::Rename{ kept("docs/b.txt"), "docs/bee.txt" } });
+    CHECK_THROWS_AS(s.apply({ op::Remove{ { kept("docs/c.txt"), kept("missing.txt") } } }), zpp::Error);
+    CHECK(row(s, "docs/c.txt").state == RowState::Unchanged);
     CHECK(s.can_undo());
     CHECK_FALSE(s.can_redo());
 
@@ -165,7 +167,7 @@ TEST_CASE("undo, redo and discard", "[session]")
     CHECK(row(s, "docs/bee.txt").state == RowState::Renamed);
 
     s.undo();
-    s.apply({ op::Remove{ kept("docs/c.txt") } });
+    s.apply({ op::Remove{ { kept("docs/c.txt") } } });
     CHECK_FALSE(s.can_redo());
 
     s.discard();
@@ -178,7 +180,7 @@ TEST_CASE("a rename onto an existing name is refused and changes nothing", "[ses
 {
     Fixture f;
     auto s = Session::open(f.ctx, f.base_archive());
-    s.apply({ op::Remove{ kept("docs/c.txt") } });
+    s.apply({ op::Remove{ { kept("docs/c.txt") } } });
     try
     {
         s.apply({ op::Rename{ kept("a.txt"), "DOCS/B.TXT" } });
@@ -331,8 +333,8 @@ TEST_CASE("a change whose source vanished is dropped on replay", "[session]")
     auto s = Session::open(f.ctx, f.base_archive());
     const auto gone = f.write("tmp/gone.txt", "bye");
     s.apply({ op::Add{ { gone }, "" } });
-    s.apply({ op::Remove{ kept("a.txt") } });
-    s.apply({ op::Remove{ kept("docs/b.txt") } });
+    s.apply({ op::Remove{ { kept("a.txt") } } });
+    s.apply({ op::Remove{ { kept("docs/b.txt") } } });
     fs::remove(gone);
     s.undo();
     CHECK(s.view().problems.size() == 1);
@@ -346,7 +348,7 @@ TEST_CASE("a failed commit keeps the staged changes", "[session]")
     Fixture f;
     const auto archive = f.base_archive();
     auto s = Session::open(f.ctx, archive);
-    s.apply({ op::Remove{ kept("a.txt") } });
+    s.apply({ op::Remove{ { kept("a.txt") } } });
     CHECK_THROWS_AS(s.commit(f.path("no/such/dir/out.zip")), zpp::Error);
     CHECK(s.has_changes());
     CHECK(row(s, "a.txt").state == RowState::Deleted);

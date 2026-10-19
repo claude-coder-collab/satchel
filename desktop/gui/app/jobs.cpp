@@ -141,6 +141,21 @@ void JobQueue::loop()
     }
 }
 
+std::shared_ptr<zpp::Plan> make_plan(const QStringList& inputs, const satchel_gui::Settings& settings)
+{
+    std::vector<std::string> paths;
+    for (const auto& i : inputs)
+        paths.push_back(i.toStdString());
+    auto input = zpp::input_from_paths(paths);
+    zpp::set_excludes(input, exclude_patterns(settings));
+    zp_plan_options_t options{};
+    zp_plan_options_init(&options);
+    options.flac_enabled = settings.flac ? 1 : 0;
+    options.deflate_level = settings.deflate_level;
+    options.flac_level = settings.flac_level;
+    return std::make_shared<zpp::Plan>(zpp::not_null(zp_plan_create(app_context(), input.get(), &options)));
+}
+
 JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, const satchel_gui::Settings& settings)
 {
     JobOutcome out;

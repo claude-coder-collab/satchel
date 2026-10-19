@@ -186,7 +186,24 @@ void Session::run(const op::RenameFolder& r, std::vector<EntryKey>& renamed)
 
 void Session::run(const op::Remove& r, std::vector<EntryKey>&)
 {
-    zpp::check(zp_editor_remove(editor_.get(), index_of(r.entry)));
+    std::map<std::pair<std::string_view, std::string_view>, std::size_t> index;
+    const auto list = entries();
+    for (const auto& e : list)
+        index.emplace(std::pair<std::string_view, std::string_view>{ e.source_path, e.output_name }, e.index);
+    std::vector<std::size_t> doomed;
+    doomed.reserve(r.entries.size());
+    for (const auto& k : r.entries)
+    {
+        const auto it = index.find({ k.source, k.name });
+        if (it == index.end())
+            throw zpp::Error(ZP_INVALID_ARGUMENT, "entry not found: " + k.name);
+        doomed.push_back(it->second);
+    }
+    std::ranges::sort(doomed);
+    const auto [first, last] = std::ranges::unique(doomed);
+    doomed.erase(first, last);
+    for (const auto i : doomed | std::views::reverse)
+        zpp::check(zp_editor_remove(editor_.get(), i));
 }
 
 void Session::run(const op::RemoveFolder& r, std::vector<EntryKey>&)
@@ -396,7 +413,8 @@ void Session::refresh_view()
             {
                 row.state = RowState::Renamed;
                 row.previous_name = it->second;
-                ++view_.summary.renamed;
+                if (e.kind == ZP_KIND_FILE)
+                    ++view_.summary.renamed;
             }
         }
         else
@@ -426,19 +444,21 @@ void Session::refresh_view()
             deleted.erase(it);
             ++view_.summary.replaced;
         }
-        else
+        else if (row.plan && row.plan->kind == ZP_KIND_FILE)
         {
             ++view_.summary.added;
-            view_.summary.added_bytes += row.plan ? row.plan->size : 0;
+            view_.summary.added_bytes += row.plan->size;
         }
     }
     for (const auto& k : baseline_)
     {
         if (const auto it = deleted.find(k.name); it != deleted.end())
         {
+            const auto& gone = it->second;
+            if (gone.base_index && *gone.base_index < base_entries_.size() && base_entries_[*gone.base_index].kind == ZP_KIND_FILE)
+                ++view_.summary.removed;
             view_.rows.push_back(std::move(it->second));
             deleted.erase(it);
-            ++view_.summary.removed;
         }
     }
 
