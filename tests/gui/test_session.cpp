@@ -128,7 +128,7 @@ TEST_CASE("edits are staged, shown as row states and applied in place", "[sessio
     s.apply({ op::NewFolder{ "empty/" } });
     s.apply({ op::Add{ { f.write("more/d.txt", "delta") }, "docs" } });
 
-    const auto& r = row(s, "renamed.txt");
+    const auto r = row(s, "renamed.txt");
     CHECK(r.state == RowState::Renamed);
     CHECK(r.previous_name == "a.txt");
     CHECK(r.base_index.has_value());
@@ -217,7 +217,7 @@ TEST_CASE("replace swaps an entry for a file from disk", "[session]")
     const auto archive = f.base_archive();
     auto s = Session::open(f.ctx, archive);
     s.apply({ op::Replace{ kept("docs/b.txt"), f.write("new/b.txt", "BETA 2") } });
-    const auto& r = row(s, "docs/b.txt");
+    const auto r = row(s, "docs/b.txt");
     CHECK(r.state == RowState::Replaced);
     CHECK(r.base_index.has_value());
     CHECK(s.view().summary.replaced == 1);

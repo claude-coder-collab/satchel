@@ -206,6 +206,14 @@ private:
     void reset_editor();
     void rebuild();
     void apply_op(const Op& o, std::vector<EntryKey>& renamed);
+    void run(const op::Add& o, std::vector<EntryKey>& renamed);
+    void run(const op::NewFolder& o, std::vector<EntryKey>& renamed);
+    void run(const op::Rename& o, std::vector<EntryKey>& renamed);
+    void run(const op::RenameFolder& o, std::vector<EntryKey>& renamed);
+    void run(const op::Remove& o, std::vector<EntryKey>& renamed);
+    void run(const op::RemoveFolder& o, std::vector<EntryKey>& renamed);
+    void run(const op::Replace& o, std::vector<EntryKey>& renamed);
+    void run(const op::Resolve& o, std::vector<EntryKey>& renamed);
     void apply_existing_policy(std::size_t first_added);
     void refresh_view();
     [[nodiscard]] std::size_t index_of(const EntryKey& key) const;

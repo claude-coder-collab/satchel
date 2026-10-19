@@ -3,6 +3,7 @@
 #include "session.hpp"
 
 #include <algorithm>
+#include <array>
 #include <ctime>
 #include <map>
 #include <ranges>
@@ -16,7 +17,7 @@ namespace satchel_gui
 namespace
 {
 
-constexpr std::uint8_t empty_zip[22] = { 'P', 'K', 5, 6 };
+constexpr std::array<std::uint8_t, 22> empty_zip{ 'P', 'K', 5, 6 };
 constexpr std::string_view archive_prefix = "archive:";
 
 std::string utf8(const std::filesystem::path& p)
@@ -54,12 +55,6 @@ zp_plan_options_t plan_options(const SessionOptions& o)
     p.deflate_level = o.deflate_level;
     return p;
 }
-
-template <class... Ts>
-struct Overloaded : Ts...
-{
-    using Ts::operator()...;
-};
 
 }
 
@@ -114,7 +109,7 @@ void Session::reset_editor()
     editor_.reset();
     base_stream_.reset();
     inputs_.clear();
-    base_stream_ = zpp::Stream(zpp::not_null(is_new_ ? zp_stream_memory_from(empty_zip, sizeof empty_zip) : zp_stream_open_file(utf8(target_).c_str())));
+    base_stream_ = zpp::Stream(zpp::not_null(is_new_ ? zp_stream_memory_from(empty_zip.data(), empty_zip.size()) : zp_stream_open_file(utf8(target_).c_str())));
     const auto o = plan_options(options_);
     editor_ = zpp::Editor(zpp::not_null(zp_editor_open_with_options(context_, base_stream_.get(), &o)));
 }
@@ -137,79 +132,93 @@ std::size_t Session::index_of(const EntryKey& key) const
 
 void Session::apply_op(const Op& o, std::vector<EntryKey>& renamed)
 {
-    std::visit(
-        Overloaded{
-            [&](const op::Add& a) {
-                std::vector<std::string> paths;
-                paths.reserve(a.sources.size());
-                for (const auto& p : a.sources)
-                    paths.push_back(utf8(p));
-                auto input = zpp::input_from_paths(paths);
-                zpp::set_excludes(input, options_.excludes);
-                zpp::set_prefix(input, trim_slashes(a.folder));
-                const auto first_added = static_cast<std::size_t>(std::ranges::count_if(entries(), [](const auto& e) { return e.codec != ZP_CODEC_GENERATED; }));
-                zpp::check(zp_editor_add(editor_.get(), input.get()));
-                inputs_.push_back(std::move(input));
-                apply_existing_policy(first_added);
-            },
-            [&](const op::NewFolder& f) {
-                zpp::Input input(zpp::not_null(zp_input_memory()));
-                zpp::check(zp_input_memory_add_directory(input.get(), trim_slashes(f.path).c_str(), std::time(nullptr), 0755));
-                zpp::check(zp_editor_add(editor_.get(), input.get()));
-                inputs_.push_back(std::move(input));
-            },
-            [&](const op::Rename& r) {
-                const auto i = index_of(r.entry);
-                zpp::check(zp_editor_rename(editor_.get(), i, r.to.c_str()));
-                renamed.push_back({ r.entry.source, entries()[i].output_name });
-            },
-            [&](const op::RenameFolder& r) {
-                const auto from = trim_slashes(r.from);
-                const auto to = trim_slashes(r.to);
-                std::vector<std::pair<std::size_t, std::string>> moves;
-                for (const auto& e : entries())
-                {
-                    if (e.codec != ZP_CODEC_GENERATED && in_folder(e.output_name, from))
-                        moves.emplace_back(e.index, to + e.output_name.substr(from.size()));
-                }
-                if (moves.empty())
-                    throw zpp::Error(ZP_INVALID_ARGUMENT, "folder not found: " + from);
-                for (const auto& [i, name] : moves)
-                    zpp::check(zp_editor_rename(editor_.get(), i, name.c_str()));
-                const auto now = entries();
-                for (const auto& [i, name] : moves)
-                    renamed.push_back({ now[i].source_path, now[i].output_name });
-            },
-            [&](const op::Remove& r) { zpp::check(zp_editor_remove(editor_.get(), index_of(r.entry))); },
-            [&](const op::RemoveFolder& r) {
-                const auto folder = trim_slashes(r.path);
-                std::vector<std::size_t> doomed;
-                for (const auto& e : entries())
-                {
-                    if (e.codec != ZP_CODEC_GENERATED && in_folder(e.output_name, folder))
-                        doomed.push_back(e.index);
-                }
-                if (doomed.empty())
-                    throw zpp::Error(ZP_INVALID_ARGUMENT, "folder not found: " + folder);
-                for (const auto i : doomed | std::views::reverse)
-                    zpp::check(zp_editor_remove(editor_.get(), i));
-            },
-            [&](const op::Replace& r) {
-                const auto i = index_of(r.entry);
-                const auto folder = parent_folder(entries()[i].output_name);
-                zpp::check(zp_editor_remove(editor_.get(), i));
-                auto input = zpp::input_from_paths({ utf8(r.source) });
-                zpp::set_prefix(input, folder);
-                zpp::check(zp_editor_add(editor_.get(), input.get()));
-                inputs_.push_back(std::move(input));
-            },
-            [&](const op::Resolve& r) {
-                const zp_resolution_t res{ index_of(r.entry), r.action, r.action == ZP_RESOLVE_RENAME ? r.new_name.c_str() : nullptr };
-                zpp::check(zp_editor_resolve(editor_.get(), &res, 1));
-            },
-        },
-        o
-    );
+    std::visit([&](const auto& x) { run(x, renamed); }, o);
+}
+
+void Session::run(const op::Add& a, std::vector<EntryKey>&)
+{
+    std::vector<std::string> paths;
+    paths.reserve(a.sources.size());
+    for (const auto& p : a.sources)
+        paths.push_back(utf8(p));
+    auto input = zpp::input_from_paths(paths);
+    zpp::set_excludes(input, options_.excludes);
+    zpp::set_prefix(input, trim_slashes(a.folder));
+    const auto first_added = static_cast<std::size_t>(std::ranges::count_if(entries(), [](const auto& e) { return e.codec != ZP_CODEC_GENERATED; }));
+    zpp::check(zp_editor_add(editor_.get(), input.get()));
+    inputs_.push_back(std::move(input));
+    apply_existing_policy(first_added);
+}
+
+void Session::run(const op::NewFolder& f, std::vector<EntryKey>&)
+{
+    zpp::Input input(zpp::not_null(zp_input_memory()));
+    zpp::check(zp_input_memory_add_directory(input.get(), trim_slashes(f.path).c_str(), std::time(nullptr), 0755));
+    zpp::check(zp_editor_add(editor_.get(), input.get()));
+    inputs_.push_back(std::move(input));
+}
+
+void Session::run(const op::Rename& r, std::vector<EntryKey>& renamed)
+{
+    const auto i = index_of(r.entry);
+    zpp::check(zp_editor_rename(editor_.get(), i, r.to.c_str()));
+    renamed.push_back({ r.entry.source, entries()[i].output_name });
+}
+
+void Session::run(const op::RenameFolder& r, std::vector<EntryKey>& renamed)
+{
+    const auto from = trim_slashes(r.from);
+    const auto to = trim_slashes(r.to);
+    std::vector<std::pair<std::size_t, std::string>> moves;
+    for (const auto& e : entries())
+    {
+        if (e.codec != ZP_CODEC_GENERATED && in_folder(e.output_name, from))
+            moves.emplace_back(e.index, to + e.output_name.substr(from.size()));
+    }
+    if (moves.empty())
+        throw zpp::Error(ZP_INVALID_ARGUMENT, "folder not found: " + from);
+    for (const auto& [i, name] : moves)
+        zpp::check(zp_editor_rename(editor_.get(), i, name.c_str()));
+    const auto now = entries();
+    for (const auto& [i, name] : moves)
+        renamed.push_back({ now[i].source_path, now[i].output_name });
+}
+
+void Session::run(const op::Remove& r, std::vector<EntryKey>&)
+{
+    zpp::check(zp_editor_remove(editor_.get(), index_of(r.entry)));
+}
+
+void Session::run(const op::RemoveFolder& r, std::vector<EntryKey>&)
+{
+    const auto folder = trim_slashes(r.path);
+    std::vector<std::size_t> doomed;
+    for (const auto& e : entries())
+    {
+        if (e.codec != ZP_CODEC_GENERATED && in_folder(e.output_name, folder))
+            doomed.push_back(e.index);
+    }
+    if (doomed.empty())
+        throw zpp::Error(ZP_INVALID_ARGUMENT, "folder not found: " + folder);
+    for (const auto i : doomed | std::views::reverse)
+        zpp::check(zp_editor_remove(editor_.get(), i));
+}
+
+void Session::run(const op::Replace& r, std::vector<EntryKey>&)
+{
+    const auto i = index_of(r.entry);
+    const auto folder = parent_folder(entries()[i].output_name);
+    zpp::check(zp_editor_remove(editor_.get(), i));
+    auto input = zpp::input_from_paths({ utf8(r.source) });
+    zpp::set_prefix(input, folder);
+    zpp::check(zp_editor_add(editor_.get(), input.get()));
+    inputs_.push_back(std::move(input));
+}
+
+void Session::run(const op::Resolve& r, std::vector<EntryKey>&)
+{
+    const zp_resolution_t res{ index_of(r.entry), r.action, r.action == ZP_RESOLVE_RENAME ? r.new_name.c_str() : nullptr };
+    zpp::check(zp_editor_resolve(editor_.get(), &res, 1));
 }
 
 void Session::apply_existing_policy(std::size_t first_added)
@@ -420,7 +429,7 @@ void Session::refresh_view()
         else
         {
             ++view_.summary.added;
-            view_.summary.added_bytes += row.plan->size;
+            view_.summary.added_bytes += row.plan ? row.plan->size : 0;
         }
     }
     for (const auto& k : baseline_)
@@ -461,7 +470,7 @@ void Session::commit(const std::filesystem::path& output, const zp_build_options
     {
         const auto error = zpp::last_error(status);
         rebuild();
-        throw error;
+        throw zpp::Error(error.status(), error.what());
     }
     out.reset();
     target_ = output;
