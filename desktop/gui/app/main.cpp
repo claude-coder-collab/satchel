@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "app.hpp"
 #include "mac_services.hpp"
+#include "mac_uninstall.hpp"
 #include "main_window.hpp"
 #include "settings_store.hpp"
 #include "user_data.hpp"
@@ -55,6 +56,8 @@ private:
 
 int main(int argc, char** argv)
 {
+    if (const auto request = parse_uninstall_helper(argc, argv))
+        return run_uninstall_helper(*request);
     QApplication qapp(argc, argv);
     QApplication::setApplicationName("Satchel");
     QApplication::setOrganizationName("Venn Audio");

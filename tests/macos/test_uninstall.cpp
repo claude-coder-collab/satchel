@@ -31,7 +31,7 @@ struct FakeRunner
         if (argv[0] == "plutil")
             return { 0, bundle_id + "\n" };
         if (argv[0] == "pluginkit" && argv[1] == "-mAvvv")
-            return { 0, pluginkit_list };
+            return { failing == "pluginkit-list" ? 1 : 0, pluginkit_list };
         return { argv[0] == failing ? 1 : 0, {} };
     }
 
@@ -92,7 +92,7 @@ TEST_CASE("uninstall removes the app, extension registrations and settings", "[u
     CHECK_FALSE(fs::exists(sandbox.root / "Library" / "Application Support" / "com.example.satchel"));
     CHECK(runner.called("defaults", "delete"));
     const auto removed = std::ranges::count_if(runner.calls, [](const auto& c) { return c[0] == "pluginkit" && c[1] == "-r"; });
-    CHECK(removed == 2);
+    CHECK(removed == 1);
     CHECK(runner.calls.back()[1] == "-flush");
 }
 
@@ -154,6 +154,7 @@ TEST_CASE("a failing pluginkit is reported", "[uninstall]")
 {
     Sandbox sandbox;
     FakeRunner runner;
+    runner.pluginkit_list = pluginkit_output;
     runner.failing = "pluginkit";
 
     const auto report = uninstall(sandbox.options(), std::ref(runner));
@@ -169,4 +170,28 @@ TEST_CASE("run_process captures output and status", "[uninstall]")
     CHECK(ok.output == "hello\n");
     CHECK(run_process({ "/usr/bin/false" }).status == 1);
     CHECK(run_process({ "/nonexistent/program" }).status == 127);
+}
+
+TEST_CASE("only registered extensions are unregistered", "[uninstall]")
+{
+    Sandbox sandbox;
+    FakeRunner runner;
+
+    const auto report = uninstall(sandbox.options(), std::ref(runner));
+
+    CHECK(report.failed.empty());
+    CHECK_FALSE(runner.called("pluginkit", "-r"));
+    CHECK(fs::is_directory(sandbox.root / ".Trash" / "Satchel.app"));
+}
+
+TEST_CASE("without a pluginkit listing, the bundle's own extension is unregistered", "[uninstall]")
+{
+    Sandbox sandbox;
+    FakeRunner runner;
+    runner.failing = "pluginkit-list";
+
+    const auto report = uninstall(sandbox.options(), std::ref(runner));
+
+    CHECK(report.failed.empty());
+    CHECK(std::ranges::any_of(runner.calls, [&](const auto& c) { return c[0] == "pluginkit" && c[1] == "-r" && c[2] == (sandbox.app / "Contents" / "PlugIns" / "SatchelPreview.appex").string(); }));
 }

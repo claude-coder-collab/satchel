@@ -30,6 +30,7 @@
 #include <QTest>
 #include <QTranslator>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <format>
@@ -231,16 +232,52 @@ private slots:
         App app;
         app.show_simple();
         app.show_full();
+        // One item for the whole app: the macOS application menu is shared by both windows.
+        int found = 0;
+        for (auto* action : qApp->findChildren<QAction*>(Qt::FindDirectChildrenOnly))
+            found += action->text() == "Uninstall Satchel…";
         for (QWidget* window : { static_cast<QWidget*>(app.simple()), static_cast<QWidget*>(app.full()) })
         {
-            int found = 0;
             for (auto* action : window->findChildren<QAction*>())
                 found += action->text() == "Uninstall Satchel…";
-            QCOMPARE(found, uninstall_available() ? 1 : 0);
         }
+        QCOMPARE(found, uninstall_available() ? 1 : 0);
 #ifdef Q_OS_MACOS
         QVERIFY(uninstall_available());
 #endif
+    }
+
+    void uninstall_helper_arguments_round_trip()
+    {
+        if (!uninstall_available())
+            QSKIP("macOS only");
+        const UninstallRequest request{ 4242, true, "/Applications/Satchel copy.app" };
+        auto args = uninstall_helper_arguments(request);
+        args.prepend("Satchel");
+        std::vector<QByteArray> bytes;
+        for (const auto& a : args)
+            bytes.push_back(a.toUtf8());
+        std::vector<char*> argv;
+        for (auto& b : bytes)
+            argv.push_back(b.data());
+        const auto parsed = parse_uninstall_helper(static_cast<int>(argv.size()), argv.data());
+        QVERIFY(parsed);
+        QCOMPARE(parsed->pid, 4242LL);
+        QVERIFY(parsed->keep_settings);
+        QCOMPARE(QString::fromStdString(parsed->app), QString("/Applications/Satchel copy.app"));
+
+        std::array<char*, 3> bad{ argv[0], bytes[1].data(), const_cast<char*>("12x") };
+        QVERIFY(!parse_uninstall_helper(3, bad.data()));
+        std::array<char*, 2> plain{ argv[0], const_cast<char*>("--version") };
+        QVERIFY(!parse_uninstall_helper(2, plain.data()));
+    }
+
+    void uninstall_helper_gives_up_while_the_app_runs()
+    {
+        if (!uninstall_available())
+            QSKIP("macOS only");
+        const UninstallRequest request{ QCoreApplication::applicationPid(), true, "/nonexistent/Satchel.app" };
+        QCOMPARE(run_uninstall_helper(request, std::chrono::milliseconds(300)), 2);
     }
 
     void cleanup_menu_item_exists_where_available()
