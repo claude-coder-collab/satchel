@@ -104,12 +104,25 @@ Result<std::vector<InputItem>> InputSource::enumerate()
 {
     excluded_.clear();
     auto items = list_items();
-    if (!items || exclude_.empty())
+    if (!items)
         return items;
+    auto kept = exclude_.empty() ? std::move(items) : filter(std::move(*items));
+    if (!kept || prefix_.empty())
+        return kept;
+    const auto under = prefix_ + '/';
+    for (auto& item : *kept)
+        item.archive_path.insert(0, under);
+    for (auto& item : excluded_)
+        item.archive_path.insert(0, under);
+    return kept;
+}
+
+Result<std::vector<InputItem>> InputSource::filter(std::vector<InputItem> items)
+{
     std::set<std::string, std::less<>> seen;
     std::vector<InputItem> kept;
-    kept.reserve(items->size());
-    for (auto& item : *items)
+    kept.reserve(items.size());
+    for (auto& item : items)
     {
         const std::string_view path = item.archive_path;
         std::optional<std::size_t> cut;

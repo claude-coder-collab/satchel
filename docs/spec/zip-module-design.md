@@ -53,6 +53,8 @@ InputSource                     // abstraction over "things to archive"
     enumerate() -> vector<InputItem>   // minus items matching the exclude filter (main spec 6.3.1)
     set_exclude(ExcludeFilter)
     excluded() -> vector<ExcludedItem> // {source_path, archive_path, kind}; topmost excluded paths
+    set_prefix(folder)                 // normalized archive folder put in front of every archive path
+                                        // (C: zp_input_set_prefix); applied after exclusion
 
 InputItem
     source_path: string         // as given by the platform
@@ -279,10 +281,12 @@ ArchiveEditor
     remove(index)
     rename(index, new_name)
     replace(index, InputItem)
+    resolve(resolutions)              // same decisions as ArchivePlanner::replan, applied to the edit
     plan() -> ArchivePlan             // merged view: kept entries + additions; conflicts/warnings
     commit(IChunkedStream& output, ProgressSink&) -> Status
 ```
 
+- Planner options given at open apply to additions; build options (readme template, temp dir) are given at commit.
 - Kept entries are copied raw (compressed bytes and CRC unchanged, no recompression).
 - The readme is regenerated from the merged plan on every commit, and dropped if no converted entries remain.
 - Native commit writes to a temp file in the same directory, fsyncs, then atomically replaces (`rename` / `ReplaceFileW`). On failure the original is untouched and the temp file is removed.
@@ -341,12 +345,15 @@ void         zp_reader_free(zp_reader_t*);
 
 /* editing */
 zp_editor_t* zp_editor_open(zp_context_t*, zp_stream_t* input);
+zp_editor_t* zp_editor_open_with_options(zp_context_t*, zp_stream_t* input, const zp_plan_options_t*);
 int          zp_editor_add(zp_editor_t*, zp_input_t*);
 int          zp_editor_remove(zp_editor_t*, size_t i);
 int          zp_editor_rename(zp_editor_t*, size_t i, const char* new_name);
 int          zp_editor_replace(zp_editor_t*, size_t i, zp_input_t*);
 zp_plan_t*   zp_editor_plan(zp_editor_t*);
+int          zp_editor_resolve(zp_editor_t*, const zp_resolution_t*, size_t n);
 int          zp_editor_commit(zp_editor_t*, zp_stream_t* output, zp_progress_fn, void* user);
+int          zp_editor_commit_with_options(zp_editor_t*, zp_stream_t* output, const zp_build_options_t*, zp_progress_fn, void* user);
 void         zp_editor_free(zp_editor_t*);
 ```
 

@@ -29,10 +29,12 @@ public:
     VoidResult remove(std::size_t index);
     VoidResult rename(std::size_t index, const std::string& new_name);
     VoidResult replace(std::size_t index, InputItem item);
+    // Applies conflict resolutions (ArchivePlanner::replan) to the edit.
+    VoidResult resolve(const std::vector<Resolution>& resolutions);
     [[nodiscard]] ArchivePlan plan() const;
     // Writes the edited archive to `output` (native in-place edits pass an AtomicFileStream for
     // the original path). Refuses while the merged plan has conflicts.
-    BuildResult commit(IChunkedStream& output, ProgressSink& progress);
+    BuildResult commit(IChunkedStream& output, ProgressSink& progress, BuilderOptions options = {});
 
     [[nodiscard]] ArchiveReader* reader() { return reader_.get(); }
 

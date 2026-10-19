@@ -122,6 +122,16 @@ VoidResult ArchiveEditor::replace(std::size_t index, InputItem item)
     return {};
 }
 
+VoidResult ArchiveEditor::resolve(const std::vector<Resolution>& resolutions)
+{
+    auto next = ArchivePlanner::replan(plan(), resolutions);
+    if (!next)
+        return std::unexpected(next.error());
+    std::erase_if(next->entries, [](const PlanEntry& e) { return e.codec == PlanCodec::Generated; });
+    entries_ = std::move(next->entries);
+    return {};
+}
+
 ArchivePlan ArchiveEditor::plan() const
 {
     ArchivePlan p;
@@ -134,7 +144,7 @@ ArchivePlan ArchiveEditor::plan() const
     return p;
 }
 
-BuildResult ArchiveEditor::commit(IChunkedStream& output, ProgressSink& progress)
+BuildResult ArchiveEditor::commit(IChunkedStream& output, ProgressSink& progress, BuilderOptions options)
 {
     if (!reader_)
     {
@@ -143,7 +153,7 @@ BuildResult ArchiveEditor::commit(IChunkedStream& output, ProgressSink& progress
         r.message = "no archive is open";
         return r;
     }
-    ArchiveBuilder builder(output, context_);
+    ArchiveBuilder builder(output, context_, std::move(options));
     builder.set_kept_source(reader_.get());
     return builder.execute(plan(), progress);
 }
