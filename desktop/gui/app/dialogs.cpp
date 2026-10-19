@@ -4,6 +4,8 @@
 
 #include "jobs.hpp"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
@@ -64,8 +66,8 @@ QString preset_tooltip(int preset)
 void pad_spin_box(QAbstractSpinBox* spin)
 {
     if (auto* edit = spin->findChild<QLineEdit*>())
-        edit->setTextMargins(4, 0, 0, 0);
-    spin->setMinimumWidth(spin->sizeHint().width() + 4);
+        edit->setTextMargins(6, 0, 6, 0);
+    spin->setMinimumWidth(std::max(spin->sizeHint().width() + 12, spin->fontMetrics().horizontalAdvance(QStringLiteral("000")) + 44));
 }
 
 FolderChoice::FolderChoice(const QString& default_text, QString dialog_title, std::optional<std::filesystem::path> folder, QWidget* parent) :
@@ -364,11 +366,11 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
     threads_->setRange(0, 256);
     threads_->setSpecialValueText(tr("All cores"));
     threads_->setValue(base_.threads);
-    threads_->setMinimumWidth(threads_->fontMetrics().horizontalAdvance(tr("All cores")) + 52);
+    threads_->setMinimumWidth(threads_->fontMetrics().horizontalAdvance(tr("All cores")) + 60);
     pad_spin_box(flac_level_);
     pad_spin_box(deflate_);
     if (auto* edit = threads_->findChild<QLineEdit*>())
-        edit->setTextMargins(4, 0, 0, 0);
+        edit->setTextMargins(6, 0, 6, 0);
     temp_ = new FolderChoice(tr("System temporary folder"), tr("Folder for temporary files"), base_.temp_folder, this);
     restore_ = new QCheckBox(tr("Restore original audio"), this);
     restore_->setChecked(base_.restore_audio);
