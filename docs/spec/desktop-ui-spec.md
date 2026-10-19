@@ -184,13 +184,15 @@ A bar at the bottom of the browser, visible while the session has pending change
 
 ### Implementation model
 
-- The session keeps the base archive path plus an ordered list of operations keyed by entry name, not index: add(paths, folder prefix), new-folder, rename(from, to), remove(name), replace(name, path).
-- After every change (and on undo/redo) the session opens a fresh `ArchiveEditor` on the base archive (an empty zip in memory for a new archive), replays the list and calls `plan()`. The browser model and action bar are rebuilt from that merged plan, so they always show exactly what Go will write. Replays run off the UI thread; directory scans and FLAC probes of earlier additions are cached by path and mtime, so a replay does not rescan unchanged sources.
-- Go commits the same replayed editor to the output stream. Apply's output is a temp file next to the archive, swapped into place (zip module design, Section 10).
-- The base archive's reader stays open for browsing and is released only for the swap.
-- The session logic lives in `desktop/gui/logic` and has no widgets, so it is unit-tested directly (main spec, Section 11).
+- The session (`desktop/gui/session`, no widgets, unit-tested) owns an `ArchiveEditor` opened on the base archive (an empty zip in memory for a new archive) with the session's planner options, and a history of changes. A change is one undo step: a list of operations that address entries by key, not index. The key is the entry's source (`archive:<original name>` for base entries, the file path for additions) plus its current name. Operations: add(paths, folder), new folder, rename, rename folder, remove, remove folder, replace(entry, path), resolve(entry, Rename / Skip / Store unconverted).
+- A new change is applied to the live editor. Undo, a change of options, or a failed change rebuilds the editor from the base archive and replays the applied history. A change that no longer applies during a replay (for example, its source file was deleted) is dropped and reported.
+- A rename or folder rename that would collide with another entry is refused (`ZP_NAME_COLLISION`) and leaves the session unchanged. Collisions from additions are left for the Issues panel unless the Existing entries option settles them.
+- Replace is staged as remove + add into the entry's folder, so restorable audio is planned like any addition. Adding a folder that already exists in the archive merges into it.
+- Row states come from comparing the merged plan with the base: a base entry still present under its original name is Unchanged, under another name Renamed; a base entry missing is Deleted, unless an addition took its name, which makes that row Replaced. Everything else is Added. The generated readme is Unchanged if the base has one, Added otherwise. So the browser always shows exactly what Go will write.
+- Go commits the editor to `zp_stream_create_file(output)`. The editor and base stream are closed before `zp_stream_commit` swaps the file into place (zip module design, Section 10), then the session reopens on the output with an empty history. On failure the session keeps its changes.
+- The session is not thread-safe. The GUI runs planning and commits on its job thread and does not touch the session meanwhile.
 
-**Core addition:** `zp_input_set_prefix(zp_input_t*, const char* folder)` places every item of a path input under an archive folder, so files can be added into the folder being viewed.
+**Core additions:** `zp_input_set_prefix` (items placed under an archive folder), `zp_editor_open_with_options` (planner options for additions), `zp_editor_resolve` (conflict decisions on an edit), `zp_editor_commit_with_options` (build options such as the temp folder).
 
 ## Extracting
 

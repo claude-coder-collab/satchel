@@ -1,0 +1,475 @@
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+// Copyright (c) 2026 Venn Audio Ltd.
+#include "session.hpp"
+
+#include <algorithm>
+#include <ctime>
+#include <map>
+#include <ranges>
+#include <set>
+#include <string_view>
+#include <utility>
+
+namespace satchel_gui
+{
+
+namespace
+{
+
+constexpr std::uint8_t empty_zip[22] = { 'P', 'K', 5, 6 };
+constexpr std::string_view archive_prefix = "archive:";
+
+std::string utf8(const std::filesystem::path& p)
+{
+    const auto s = p.u8string();
+    return { reinterpret_cast<const char*>(s.data()), s.size() };
+}
+
+std::string trim_slashes(std::string s)
+{
+    while (!s.empty() && (s.back() == '/' || s.back() == '\\'))
+        s.pop_back();
+    while (!s.empty() && (s.front() == '/' || s.front() == '\\'))
+        s.erase(s.begin());
+    return s;
+}
+
+bool in_folder(std::string_view name, std::string_view folder)
+{
+    return name == folder || (name.size() > folder.size() && name.starts_with(folder) && name[folder.size()] == '/');
+}
+
+std::string parent_folder(std::string_view name)
+{
+    const auto slash = name.rfind('/');
+    return slash == std::string_view::npos ? std::string{} : std::string(name.substr(0, slash));
+}
+
+zp_plan_options_t plan_options(const SessionOptions& o)
+{
+    zp_plan_options_t p;
+    zp_plan_options_init(&p);
+    p.flac_enabled = o.flac ? 1 : 0;
+    p.flac_level = o.flac_level;
+    p.deflate_level = o.deflate_level;
+    return p;
+}
+
+template <class... Ts>
+struct Overloaded : Ts...
+{
+    using Ts::operator()...;
+};
+
+}
+
+Session::Session(zp_context_t* context, std::filesystem::path target, bool is_new, SessionOptions options) :
+    context_(context),
+    target_(std::move(target)),
+    is_new_(is_new),
+    options_(std::move(options))
+{
+}
+
+Session Session::create(zp_context_t* context, std::filesystem::path target, SessionOptions options)
+{
+    Session s(context, std::move(target), true, std::move(options));
+    s.load_base();
+    return s;
+}
+
+Session Session::open(zp_context_t* context, std::filesystem::path archive, SessionOptions options)
+{
+    Session s(context, std::move(archive), false, std::move(options));
+    s.load_base();
+    return s;
+}
+
+void Session::set_target(std::filesystem::path target)
+{
+    target_ = std::move(target);
+}
+
+void Session::load_base()
+{
+    base_entries_.clear();
+    if (!is_new_)
+    {
+        zpp::Stream stream(zpp::not_null(zp_stream_open_file(utf8(target_).c_str())));
+        zpp::Reader reader(zpp::not_null(zp_reader_open(context_, stream.get())));
+        base_entries_ = zpp::reader_entries(reader.get());
+    }
+    reset_editor();
+    baseline_.clear();
+    for (const auto& e : entries())
+    {
+        if (e.codec != ZP_CODEC_GENERATED)
+            baseline_.push_back({ e.source_path, e.output_name });
+    }
+    refresh_view();
+}
+
+void Session::reset_editor()
+{
+    editor_.reset();
+    base_stream_.reset();
+    inputs_.clear();
+    base_stream_ = zpp::Stream(zpp::not_null(is_new_ ? zp_stream_memory_from(empty_zip, sizeof empty_zip) : zp_stream_open_file(utf8(target_).c_str())));
+    const auto o = plan_options(options_);
+    editor_ = zpp::Editor(zpp::not_null(zp_editor_open_with_options(context_, base_stream_.get(), &o)));
+}
+
+std::vector<zpp::PlanEntry> Session::entries() const
+{
+    zpp::Plan plan(zpp::not_null(zp_editor_plan(editor_.get())));
+    return zpp::plan_entries(plan.get());
+}
+
+std::size_t Session::index_of(const EntryKey& key) const
+{
+    for (const auto& e : entries())
+    {
+        if (e.source_path == key.source && e.output_name == key.name)
+            return e.index;
+    }
+    throw zpp::Error(ZP_INVALID_ARGUMENT, "entry not found: " + key.name);
+}
+
+void Session::apply_op(const Op& o, std::vector<EntryKey>& renamed)
+{
+    std::visit(
+        Overloaded{
+            [&](const op::Add& a) {
+                std::vector<std::string> paths;
+                paths.reserve(a.sources.size());
+                for (const auto& p : a.sources)
+                    paths.push_back(utf8(p));
+                auto input = zpp::input_from_paths(paths);
+                zpp::set_excludes(input, options_.excludes);
+                zpp::set_prefix(input, trim_slashes(a.folder));
+                const auto first_added = static_cast<std::size_t>(std::ranges::count_if(entries(), [](const auto& e) { return e.codec != ZP_CODEC_GENERATED; }));
+                zpp::check(zp_editor_add(editor_.get(), input.get()));
+                inputs_.push_back(std::move(input));
+                apply_existing_policy(first_added);
+            },
+            [&](const op::NewFolder& f) {
+                zpp::Input input(zpp::not_null(zp_input_memory()));
+                zpp::check(zp_input_memory_add_directory(input.get(), trim_slashes(f.path).c_str(), std::time(nullptr), 0755));
+                zpp::check(zp_editor_add(editor_.get(), input.get()));
+                inputs_.push_back(std::move(input));
+            },
+            [&](const op::Rename& r) {
+                const auto i = index_of(r.entry);
+                zpp::check(zp_editor_rename(editor_.get(), i, r.to.c_str()));
+                renamed.push_back({ r.entry.source, entries()[i].output_name });
+            },
+            [&](const op::RenameFolder& r) {
+                const auto from = trim_slashes(r.from);
+                const auto to = trim_slashes(r.to);
+                std::vector<std::pair<std::size_t, std::string>> moves;
+                for (const auto& e : entries())
+                {
+                    if (e.codec != ZP_CODEC_GENERATED && in_folder(e.output_name, from))
+                        moves.emplace_back(e.index, to + e.output_name.substr(from.size()));
+                }
+                if (moves.empty())
+                    throw zpp::Error(ZP_INVALID_ARGUMENT, "folder not found: " + from);
+                for (const auto& [i, name] : moves)
+                    zpp::check(zp_editor_rename(editor_.get(), i, name.c_str()));
+                const auto now = entries();
+                for (const auto& [i, name] : moves)
+                    renamed.push_back({ now[i].source_path, now[i].output_name });
+            },
+            [&](const op::Remove& r) { zpp::check(zp_editor_remove(editor_.get(), index_of(r.entry))); },
+            [&](const op::RemoveFolder& r) {
+                const auto folder = trim_slashes(r.path);
+                std::vector<std::size_t> doomed;
+                for (const auto& e : entries())
+                {
+                    if (e.codec != ZP_CODEC_GENERATED && in_folder(e.output_name, folder))
+                        doomed.push_back(e.index);
+                }
+                if (doomed.empty())
+                    throw zpp::Error(ZP_INVALID_ARGUMENT, "folder not found: " + folder);
+                for (const auto i : doomed | std::views::reverse)
+                    zpp::check(zp_editor_remove(editor_.get(), i));
+            },
+            [&](const op::Replace& r) {
+                const auto i = index_of(r.entry);
+                const auto folder = parent_folder(entries()[i].output_name);
+                zpp::check(zp_editor_remove(editor_.get(), i));
+                auto input = zpp::input_from_paths({ utf8(r.source) });
+                zpp::set_prefix(input, folder);
+                zpp::check(zp_editor_add(editor_.get(), input.get()));
+                inputs_.push_back(std::move(input));
+            },
+            [&](const op::Resolve& r) {
+                const zp_resolution_t res{ index_of(r.entry), r.action, r.action == ZP_RESOLVE_RENAME ? r.new_name.c_str() : nullptr };
+                zpp::check(zp_editor_resolve(editor_.get(), &res, 1));
+            },
+        },
+        o
+    );
+}
+
+void Session::apply_existing_policy(std::size_t first_added)
+{
+    if (options_.existing == ExistingEntries::Ask)
+        return;
+    zpp::Plan plan(zpp::not_null(zp_editor_plan(editor_.get())));
+    const auto list = zpp::plan_entries(plan.get());
+    std::vector<zp_resolution_t> skips;
+    for (const auto& c : zpp::plan_conflicts(plan.get()))
+    {
+        if (c.kind != ZP_CONFLICT_COLLISION || c.entries.size() != 2)
+            continue;
+        auto older = c.entries[0];
+        auto newer = c.entries[1];
+        if (older > newer)
+            std::swap(older, newer);
+        if (older >= first_added || newer < first_added)
+            continue;
+        bool replace = options_.existing == ExistingEntries::Replace;
+        if (options_.existing == ExistingEntries::ReplaceIfNewer)
+            replace = list[newer].mtime > list[older].mtime;
+        skips.push_back({ replace ? older : newer, ZP_RESOLVE_SKIP, nullptr });
+    }
+    if (!skips.empty())
+        zpp::check(zp_editor_resolve(editor_.get(), skips.data(), skips.size()));
+}
+
+void Session::rebuild()
+{
+    reset_editor();
+    view_.problems.clear();
+    std::vector<EntryKey> ignored;
+    for (std::size_t i = 0; i < applied_;)
+    {
+        try
+        {
+            for (const auto& o : history_[i])
+                apply_op(o, ignored);
+            ++i;
+        } catch (const zpp::Error& e)
+        {
+            view_.problems.emplace_back(e.what());
+            history_.erase(history_.begin() + static_cast<std::ptrdiff_t>(i));
+            --applied_;
+            reset_editor();
+            for (std::size_t j = 0; j < i; ++j)
+            {
+                for (const auto& o : history_[j])
+                    apply_op(o, ignored);
+            }
+        }
+    }
+    refresh_view();
+}
+
+void Session::apply(Change change)
+{
+    std::vector<EntryKey> renamed;
+    try
+    {
+        for (const auto& o : change)
+            apply_op(o, renamed);
+        if (!renamed.empty())
+        {
+            zpp::Plan plan(zpp::not_null(zp_editor_plan(editor_.get())));
+            const auto list = zpp::plan_entries(plan.get());
+            for (const auto& c : zpp::plan_conflicts(plan.get()))
+            {
+                for (const auto i : c.entries)
+                {
+                    const EntryKey k{ list[i].source_path, list[i].output_name };
+                    if (std::ranges::find(renamed, k) != renamed.end())
+                        throw zpp::Error(ZP_NAME_COLLISION, "'" + k.name + "' already exists");
+                }
+            }
+        }
+    } catch (...)
+    {
+        rebuild();
+        throw;
+    }
+    history_.resize(applied_);
+    history_.push_back(std::move(change));
+    ++applied_;
+    view_.problems.clear();
+    refresh_view();
+}
+
+void Session::undo()
+{
+    if (!can_undo())
+        return;
+    --applied_;
+    rebuild();
+}
+
+void Session::redo()
+{
+    if (!can_redo())
+        return;
+    std::vector<EntryKey> ignored;
+    try
+    {
+        for (const auto& o : history_[applied_])
+            apply_op(o, ignored);
+    } catch (...)
+    {
+        history_.resize(applied_);
+        rebuild();
+        throw;
+    }
+    ++applied_;
+    refresh_view();
+}
+
+void Session::discard()
+{
+    history_.clear();
+    applied_ = 0;
+    rebuild();
+}
+
+void Session::set_options(SessionOptions options)
+{
+    if (options == options_)
+        return;
+    options_ = std::move(options);
+    rebuild();
+}
+
+void Session::refresh_view()
+{
+    zpp::Plan plan(zpp::not_null(zp_editor_plan(editor_.get())));
+    const auto list = zpp::plan_entries(plan.get());
+    auto problems = std::move(view_.problems);
+    view_ = {};
+    view_.problems = std::move(problems);
+    view_.warnings = zpp::plan_warnings(plan.get());
+    view_.excluded = zpp::plan_excluded(plan.get());
+    view_.executable = zp_plan_executable(plan.get()) != 0;
+
+    std::map<std::string, std::size_t, std::less<>> base_by_name;
+    for (const auto& b : base_entries_)
+        base_by_name.emplace(b.name, b.index);
+    const auto base_index = [&](std::string_view name) -> std::optional<std::size_t> {
+        if (const auto it = base_by_name.find(name); it != base_by_name.end())
+            return it->second;
+        return std::nullopt;
+    };
+    std::map<std::string, std::string, std::less<>> baseline_name;
+    for (const auto& k : baseline_)
+        baseline_name.emplace(k.source, k.name);
+
+    std::set<std::string, std::less<>> present;
+    std::vector<SessionRow> added;
+    for (const auto& e : list)
+    {
+        SessionRow row;
+        row.key = { e.source_path, e.output_name };
+        row.plan = e;
+        if (e.codec == ZP_CODEC_GENERATED)
+        {
+            row.generated = true;
+            row.base_index = base_index(e.output_name);
+            row.state = row.base_index ? RowState::Unchanged : RowState::Added;
+        }
+        else if (e.source_path.starts_with(archive_prefix))
+        {
+            present.insert(e.source_path);
+            const auto original = std::string_view(e.source_path).substr(archive_prefix.size());
+            row.base_index = base_index(original);
+            const auto it = baseline_name.find(e.source_path);
+            if (it != baseline_name.end() && it->second != e.output_name)
+            {
+                row.state = RowState::Renamed;
+                row.previous_name = it->second;
+                ++view_.summary.renamed;
+            }
+        }
+        else
+            row.state = RowState::Added;
+        view_.rows.push_back(std::move(row));
+    }
+
+    std::map<std::string, SessionRow, std::less<>> deleted;
+    for (const auto& k : baseline_)
+    {
+        if (present.contains(k.source))
+            continue;
+        SessionRow row;
+        row.state = RowState::Deleted;
+        row.key = k;
+        row.base_index = base_index(std::string_view(k.source).substr(archive_prefix.size()));
+        deleted.emplace(k.name, std::move(row));
+    }
+    for (auto& row : view_.rows)
+    {
+        if (row.state != RowState::Added || row.generated)
+            continue;
+        if (const auto it = deleted.find(row.key.name); it != deleted.end())
+        {
+            row.state = RowState::Replaced;
+            row.base_index = it->second.base_index;
+            deleted.erase(it);
+            ++view_.summary.replaced;
+        }
+        else
+        {
+            ++view_.summary.added;
+            view_.summary.added_bytes += row.plan->size;
+        }
+    }
+    for (const auto& k : baseline_)
+    {
+        if (const auto it = deleted.find(k.name); it != deleted.end())
+        {
+            view_.rows.push_back(std::move(it->second));
+            deleted.erase(it);
+            ++view_.summary.removed;
+        }
+    }
+
+    for (const auto& c : zpp::plan_conflicts(plan.get()))
+    {
+        SessionConflict sc{ c.kind, c.key, c.detail, {} };
+        for (const auto i : c.entries)
+        {
+            sc.entries.push_back({ list[i].source_path, list[i].output_name });
+            view_.rows[i].conflicted = true;
+        }
+        view_.conflicts.push_back(std::move(sc));
+    }
+    view_.summary.entries = list.size();
+    view_.summary.input_bytes = zp_plan_total_bytes(plan.get());
+}
+
+void Session::commit(const std::filesystem::path& output, const zp_build_options_t* build_options, const CommitProgress& progress)
+{
+    if (!view_.executable)
+        throw zpp::Error(ZP_CONFLICTS_UNRESOLVED, "resolve the conflicts first");
+    zpp::Stream out(zpp::not_null(zp_stream_create_file(utf8(output).c_str())));
+    zpp::ProgressAdapter adapter{ progress };
+    zpp::check(zp_editor_commit_with_options(editor_.get(), out.get(), build_options, zpp::ProgressAdapter::call, &adapter));
+    editor_.reset();
+    base_stream_.reset();
+    inputs_.clear();
+    if (const auto status = zp_stream_commit(out.get()); status != ZP_OK)
+    {
+        const auto error = zpp::last_error(status);
+        rebuild();
+        throw error;
+    }
+    out.reset();
+    target_ = output;
+    is_new_ = false;
+    history_.clear();
+    applied_ = 0;
+    view_.problems.clear();
+    load_base();
+}
+
+}

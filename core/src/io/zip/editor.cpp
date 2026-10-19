@@ -5,6 +5,8 @@
 #include "io/zip/path_policy.hpp"
 
 #include <format>
+#include <set>
+#include <string>
 #include <utility>
 
 namespace zp
@@ -79,8 +81,23 @@ VoidResult ArchiveEditor::add(InputSource& input)
     auto added = planner_.make_entries(std::move(*items), warnings_);
     if (!added)
         return std::unexpected(added.error());
+    std::set<std::string, std::less<>> folders;
+    for (const auto& e : entries_)
+    {
+        if (e.is_directory())
+            if (auto k = PathPolicy::collision_key(e.output_name))
+                folders.insert(std::move(*k));
+    }
     for (auto& e : *added)
+    {
+        if (e.is_directory())
+        {
+            auto k = PathPolicy::collision_key(e.output_name);
+            if (k && !folders.insert(std::move(*k)).second)
+                continue;
+        }
         entries_.push_back(std::move(e));
+    }
     excluded_.insert(excluded_.end(), input.excluded().begin(), input.excluded().end());
     return {};
 }
