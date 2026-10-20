@@ -17,7 +17,9 @@ permissions:
   contents: read
 
 env:
-  QT_VERSION: "6.11.3"
+  QT_VERSION_MACOS: "6.11.3"
+  # aqtinstall cannot fetch Qt 6.11 for Windows yet.
+  QT_VERSION_WINDOWS: "6.10.3"
 
 jobs:
   version:
@@ -89,7 +91,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
         with:
-          version: ${{ env.QT_VERSION }}
+          version: ${{ env.QT_VERSION_MACOS }}
           cache: true
       - name: Install tools
         run: brew install ninja
@@ -154,7 +156,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: jurplel/install-qt-action@v4
         with:
-          version: ${{ env.QT_VERSION }}
+          version: ${{ env.QT_VERSION_WINDOWS }}
           arch: win64_msvc2022_64
           cache: true
       - name: Install WiX

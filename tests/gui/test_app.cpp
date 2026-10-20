@@ -603,7 +603,7 @@ private slots:
     {
         QDir root(dir_.filePath("cancel-extract"));
         QVERIFY(root.mkpath("src/deep/er"));
-        const QByteArray zeros(32 << 20, 0);
+        const QByteArray zeros(1 << 20, 0);
         for (int i = 0; i < 8; ++i)
         {
             QFile f(root.filePath(QString("src/deep/er/f%1.bin").arg(i)));

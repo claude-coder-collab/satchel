@@ -637,7 +637,7 @@ design doc. The progress callback returns non-zero to cancel. `zp_last_error` is
 - `.github/workflows/release.yml` runs on `v*` tags, on demand, and on pull requests touching
   packaging. The version is the tag without `v` (else the CMake project version) and goes into
   `ZP_VERSION`. Jobs: Linux (deb, tar.gz, AppImage; installs the deb and starts the AppImage under
-  Xvfb), macOS (Qt 6.11.3 from `install-qt-action`; 6.8.3 clipped focus rings and drew square buttons on current macOS, universal arm64 + x86_64, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
+  Xvfb), macOS (Qt 6.11.3 from `install-qt-action`; 6.8.3 clipped focus rings and drew square buttons on current macOS; Windows stays on 6.10.3 because aqtinstall cannot fetch 6.11 for Windows, universal arm64 + x86_64, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
   stapled when Apple credentials exist; checks the bundle links nothing outside itself and the
   system), Windows (MSI; installs it silently and runs `satchel --version`), web (zip of the browser
   app, npm tarball), Python wheels (Linux, macOS, Windows). `publish` writes `SHA256SUMS` and, for tags, creates a draft GitHub release.

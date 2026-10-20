@@ -1391,7 +1391,7 @@ zp_xplan_t* zp_extract_plan_relative(zp_reader_t* reader, const size_t* sel, siz
             x->context = reader->context;
             x->reader = reader;
             x->sink = sink;
-            x->options = o;
+            x->options = std::move(o);
             x->plan = std::move(*plan);
             return x;
         },
