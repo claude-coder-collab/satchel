@@ -43,6 +43,7 @@
 #include <format>
 #include <functional>
 #include <thread>
+#include <utility>
 
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 constexpr qint64 limit_ms = 15000;
@@ -67,7 +68,7 @@ private slots:
         QCoreApplication::setOrganizationName("Venn Audio Test");
         QCoreApplication::setApplicationName("Satchel Test");
         auto* watchdog = new QTimer(this);
-        connect(watchdog, &QTimer::timeout, this, [] {
+        connect(watchdog, &QTimer::timeout, this, [this] {
             for (auto* w : QApplication::topLevelWidgets())
             {
                 auto* box = qobject_cast<QMessageBox*>(w);
@@ -78,12 +79,18 @@ private slots:
                     box->setProperty("seen", true);
                     continue;
                 }
-                qWarning("unexpected dialog: %s | %s | %s", qPrintable(box->windowTitle()), qPrintable(box->text()), qPrintable(box->detailedText()));
+                unexpected_dialogs_ << QString("%1 | %2 | %3").arg(box->windowTitle(), box->text(), box->detailedText());
                 box->reject();
             }
         });
         watchdog->start(3000);
         QVERIFY(dir_.isValid());
+    }
+
+    void cleanup()
+    {
+        const auto dialogs = std::exchange(unexpected_dialogs_, {});
+        QVERIFY2(dialogs.isEmpty(), qPrintable("unexpected dialog: " + dialogs.join(" / ")));
     }
 
     void both_modes_launch()
@@ -710,6 +717,7 @@ private slots:
 
 private:
     QTemporaryDir dir_;
+    QStringList unexpected_dialogs_;
 };
 
 QTEST_MAIN(AppTest)
