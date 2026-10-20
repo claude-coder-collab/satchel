@@ -36,6 +36,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QPainter>
 #include <QProgressBar>
 #include <QProgressDialog>
 #include <QPushButton>
@@ -254,6 +255,7 @@ protected:
         dragging_ = mime;
         auto* drag = new QDrag(this);
         drag->setMimeData(mime);
+        drag->setPixmap(drag_pixmap());
         drag->exec(Qt::CopyAction | Qt::MoveAction, Qt::CopyAction);
         dragging_ = nullptr;
     }
@@ -356,6 +358,42 @@ protected:
     }
 
 private:
+    // The first dragged row's icon and name, and "+N more" for further rows (without it, macOS
+    // draws the drag's first URL, a temporary path).
+    [[nodiscard]] QPixmap drag_pixmap() const
+    {
+        const auto rows = selectionModel()->selectedRows();
+        const auto first = rows.value(0);
+        const auto icon = first.data(Qt::DecorationRole).value<QIcon>();
+        auto text = first.data(Qt::DisplayRole).toString();
+        if (rows.size() > 1)
+            text += QCoreApplication::translate("ArchiveView", " +%n more", nullptr, static_cast<int>(rows.size() - 1));
+        const auto dpr = devicePixelRatioF();
+        QPixmap probe(QSize(1, 1) * dpr);
+        probe.setDevicePixelRatio(dpr);
+        const QFontMetrics fm(font(), &probe);
+        const int pad = 4;
+        const int icon_size = 16;
+        const QSize size(std::min(icon_size + 5 * pad + fm.horizontalAdvance(text), 360), std::max(icon_size, fm.height()) + 2 * pad);
+        QPixmap pm(size * dpr);
+        pm.setDevicePixelRatio(dpr);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        QColor back = palette().color(QPalette::Highlight);
+        back.setAlpha(200);
+        p.setPen(Qt::NoPen);
+        p.setBrush(back);
+        p.drawRoundedRect(QRectF(QPointF(0, 0), QSizeF(size)), 5, 5);
+        if (!icon.isNull())
+            icon.paint(&p, QRect(pad, (size.height() - icon_size) / 2, icon_size, icon_size));
+        p.setPen(palette().color(QPalette::HighlightedText));
+        p.setFont(font());
+        const QRect text_rect(icon_size + 2 * pad, 0, size.width() - icon_size - 2 * pad, size.height());
+        p.drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft, fm.elidedText(text, Qt::ElideMiddle, text_rect.width()));
+        return pm;
+    }
+
     [[nodiscard]] bool internal(const QDropEvent* e) const { return e->source() == this && e->mimeData()->hasFormat(entries_mime); }
 
     EntriesMime* dragging_ = nullptr;

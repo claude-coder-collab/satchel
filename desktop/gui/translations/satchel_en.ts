@@ -80,6 +80,16 @@
     </message>
 </context>
 <context>
+    <name>ArchiveView</name>
+    <message numerus="yes">
+        <source> +%n more</source>
+        <translation>
+            <numerusform> +%n more</numerusform>
+            <numerusform> +%n more</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>BadgeDelegate</name>
     <message>
         <source>New</source>
