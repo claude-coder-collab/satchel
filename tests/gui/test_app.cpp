@@ -30,7 +30,6 @@
 
 #include <QElapsedTimer>
 #include <QFile>
-#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
@@ -56,6 +55,28 @@ constexpr qint64 limit_ms = 3000;
 #else
 constexpr qint64 limit_ms = 3000;
 #endif
+
+// Job results as they reach the test's thread. A QSignalSpy on JobQueue::finished records on the
+// job thread, so a job that ends before wait() starts is missed.
+class JobResults : public QObject
+{
+public:
+    explicit JobResults(JobQueue& jobs)
+    {
+        connect(&jobs, &JobQueue::finished, this, [this](int, const QString&, const JobOutcome& outcome) { pending_ << outcome; });
+    }
+
+    // Waits until a result is pending.
+    bool wait(int timeout_ms)
+    {
+        return QTest::qWaitFor([this] { return !pending_.isEmpty(); }, timeout_ms);
+    }
+    [[nodiscard]] bool isEmpty() const { return pending_.isEmpty(); }
+    JobOutcome take() { return pending_.takeFirst(); }
+
+private:
+    QList<JobOutcome> pending_;
+};
 
 class AppTest : public QObject
 {
@@ -170,10 +191,10 @@ private slots:
         }
         App app;
         app.show_simple();
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        JobResults finished(app.jobs());
         app.simple()->handle({ input });
         QVERIFY(finished.wait(20000));
-        const auto outcome = finished.takeFirst().at(2).value<JobOutcome>();
+        const auto outcome = finished.take();
         QCOMPARE(outcome.status, ZP_OK);
         QCOMPARE(QDir::fromNativeSeparators(outcome.output), dir_.filePath("notes.txt.zip"));
         QVERIFY(QFile::exists(outcome.output));
@@ -181,7 +202,7 @@ private slots:
         // Dropping the zip extracts it next to itself.
         app.simple()->handle({ outcome.output });
         QVERIFY(finished.wait(20000));
-        const auto extracted = finished.takeFirst().at(2).value<JobOutcome>();
+        const auto extracted = finished.take();
         QCOMPARE(extracted.status, ZP_OK);
         // "notes.txt" exists as a file, so the folder gets a suffix instead of clashing.
         QCOMPARE(QDir::fromNativeSeparators(extracted.output), dir_.filePath("notes.txt 2"));
@@ -247,10 +268,10 @@ private slots:
             f.write(QByteArray("service ").repeated(500));
         }
         App app;
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        JobResults finished(app.jobs());
         QVERIFY(perform_mac_service(app, "compressFiles", { input }));
         QVERIFY(finished.wait(20000));
-        const auto outcome = finished.takeFirst().at(2).value<JobOutcome>();
+        const auto outcome = finished.take();
         QCOMPARE(outcome.status, ZP_OK);
         QCOMPARE(QDir::fromNativeSeparators(outcome.output), dir_.filePath("service.txt.zip"));
         QVERIFY(!perform_mac_service(app, "unknownMessage", { input }));
@@ -383,20 +404,10 @@ private slots:
         QVERIFY(!QFile::exists(target));
         QVERIFY(w->windowTitle().startsWith("made.zip"));
 
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
-        QSignalSpy started(&app.jobs(), &JobQueue::started);
-        QSignalSpy progress(&app.jobs(), &JobQueue::progress);
+        JobResults finished(app.jobs());
         QVERIFY(w->apply_changes() != 0);
-        const bool done = finished.wait(20000);
-        if (!done)
-        {
-            QStringList last;
-            for (const auto& p : progress)
-                last << QString("%1/%2").arg(p.at(1).toULongLong()).arg(p.at(2).toULongLong());
-            qWarning("started %lld, progress %lld (%s), jobs busy %d, committing %d, files %s", static_cast<long long>(started.size()), static_cast<long long>(progress.size()), qPrintable(last.mid(std::max<qsizetype>(0, last.size() - 5)).join(' ')), app.jobs().busy(), session.committing(), qPrintable(QDir(root.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot).join(',')));
-        }
-        QVERIFY(done);
-        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
+        QVERIFY(finished.wait(20000));
+        QCOMPARE(finished.take().status, ZP_OK);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->is_new, 20000);
         QVERIFY(QFile::exists(target));
         QCOMPARE(w->archive_path(), target);
@@ -437,7 +448,7 @@ private slots:
 
         QVERIFY(w->apply_changes() != 0);
         QVERIFY(finished.wait(20000));
-        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
+        QCOMPARE(finished.take().status, ZP_OK);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->has_changes, 20000);
         QStringList names;
         for (const auto& e : session.snapshot()->view.rows)
@@ -525,12 +536,12 @@ private slots:
         const auto target = dir_.filePath("cancelled.zip");
         w->start_new_archive(target, { source.fileName() });
         QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->view.summary.added == 1, 20000);
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        JobResults finished(app.jobs());
         QVERIFY(w->apply_changes() != 0);
         QTRY_VERIFY(button("Cancel"));
         button("Cancel")->click();
         QTRY_VERIFY(!finished.isEmpty());
-        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_CANCELLED);
+        QCOMPARE(finished.take().status, ZP_CANCELLED);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.committing(), 20000);
         QVERIFY(session.snapshot()->is_new);
         QCOMPARE(session.snapshot()->view.summary.added, std::size_t{ 1 });
@@ -626,10 +637,10 @@ private slots:
 
         // Files sent from the file manager are compressed on their own; the plan stays.
         const auto rows = session.snapshot()->view.rows.size();
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        JobResults finished(app.jobs());
         app.open_paths({ root.filePath("outside.txt") }, satchel_gui::Intent::Compress);
         QVERIFY(finished.wait(20000));
-        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
+        QCOMPARE(finished.take().status, ZP_OK);
         QVERIFY(QFile::exists(root.filePath("outside.txt.zip")));
         QVERIFY(w->isVisible());
         QVERIFY(session.snapshot()->is_new);
