@@ -401,6 +401,10 @@ typedef struct zp_extract_options
     int restore_wav; /* default 1 */
     int include_readme; /* default 0 */
     int overwrite; /* ZP_OVERWRITE_*, default ASK */
+    /* Archive folder the targets are relative to (no trailing slash; NULL or "" = the archive
+     * root): "docs/a.txt" with base "docs" is written as "a.txt", and the folder entry itself is
+     * not written. Entries outside it keep their full path. Default NULL. */
+    const char* base_folder;
 } zp_extract_options_t;
 
 ZP_API void zp_extract_options_init(zp_extract_options_t* options);
@@ -432,10 +436,6 @@ typedef struct zp_extract_outcome
 
 /* sel = NULL / n = 0: every entry. The plan keeps using reader and sink. */
 ZP_API zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options);
-/* As zp_extract_plan, with targets relative to the archive folder `base_folder` (no trailing
- * slash; NULL or "" = the archive root): "docs/a.txt" with base "docs" is written as "a.txt", and
- * the folder entry itself is not written. Entries outside it keep their full path. */
-ZP_API zp_xplan_t* zp_extract_plan_relative(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options, const char* base_folder);
 ZP_API size_t zp_xplan_issue_count(const zp_xplan_t* xplan);
 ZP_API int zp_xplan_get_issue(const zp_xplan_t* xplan, size_t i, zp_extract_issue_t* out);
 ZP_API size_t zp_xplan_item_count(const zp_xplan_t* xplan);
@@ -472,9 +472,8 @@ ZP_API char* zp_preview(zp_stream_t* input, const char* file_name, int format);
 
 /* The editor keeps using `input`; free the editor before the stream. Entry indices refer to
  * the current zp_editor_plan() order. */
-ZP_API zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input);
-/* As zp_editor_open; `options` (NULL = defaults) apply to entries added later. */
-ZP_API zp_editor_t* zp_editor_open_with_options(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options);
+/* `options` (NULL = defaults) apply to entries added later. */
+ZP_API zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options);
 ZP_API int zp_editor_add(zp_editor_t* editor, zp_input_t* input);
 ZP_API int zp_editor_remove(zp_editor_t* editor, size_t i);
 ZP_API int zp_editor_rename(zp_editor_t* editor, size_t i, const char* new_name);
@@ -484,11 +483,10 @@ ZP_API zp_plan_t* zp_editor_plan(zp_editor_t* editor);
 /* Applies conflict resolutions to the edit, as zp_plan_resolve does for a plan; indices refer to
  * the current zp_editor_plan(). On failure the edit is unchanged. */
 ZP_API int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, size_t count);
-ZP_API int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user);
-/* As zp_editor_commit with build options (NULL = defaults). Like zp_build, returns
+/* Build options: NULL = defaults. Like zp_build, returns
  * ZP_SOURCE_CHANGED when added files changed since they were planned: they are left out, the
  * output is complete, and `out_result` (may be NULL) lists them. */
-ZP_API int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result);
+ZP_API int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result);
 ZP_API void zp_editor_free(zp_editor_t* editor);
 
 #ifdef __cplusplus

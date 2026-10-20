@@ -133,7 +133,10 @@ TEST_CASE("C API plan, resolve, build, read, extract", "[capi]")
     zp::test::TempDir picked;
     zp_sink_t* picked_sink = zp_sink_filesystem(picked.path().string().c_str());
     const std::array<std::size_t, 1> just_b{ 2 };
-    zp_xplan_t* relative = zp_extract_plan_relative(reader, just_b.data(), just_b.size(), picked_sink, nullptr, "dir");
+    zp_extract_options_t in_dir{};
+    zp_extract_options_init(&in_dir);
+    in_dir.base_folder = "dir";
+    zp_xplan_t* relative = zp_extract_plan(reader, just_b.data(), just_b.size(), picked_sink, &in_dir);
     REQUIRE(relative);
     REQUIRE(zp_extract(relative, nullptr, nullptr) == ZP_OK);
     CHECK(zp::test::read_file(picked.path() / "b.txt") == zp::test::text_bytes("beta"));
@@ -142,7 +145,7 @@ TEST_CASE("C API plan, resolve, build, read, extract", "[capi]")
     const std::array<std::size_t, 3> whole_dir{ 0, 1, 2 };
     zp::test::TempDir folder;
     zp_sink_t* folder_sink = zp_sink_filesystem(folder.path().string().c_str());
-    zp_xplan_t* kept = zp_extract_plan_relative(reader, whole_dir.data(), whole_dir.size(), folder_sink, nullptr, "");
+    zp_xplan_t* kept = zp_extract_plan(reader, whole_dir.data(), whole_dir.size(), folder_sink, nullptr);
     REQUIRE(kept);
     REQUIRE(zp_extract(kept, nullptr, nullptr) == ZP_OK);
     CHECK(std::filesystem::exists(folder.path() / "dir" / "a.txt"));
@@ -177,7 +180,7 @@ TEST_CASE("C API editor commit leaves out files that changed and still writes th
 
     const auto base_bytes = memory_bytes(base);
     zp_stream_t* src = zp_stream_memory_from(base_bytes.data(), base_bytes.size());
-    zp_editor_t* ed = zp_editor_open(c.ctx, src);
+    zp_editor_t* ed = zp_editor_open(c.ctx, src, nullptr);
     REQUIRE(ed);
     const auto late = src_file.string();
     const char* paths[] = { late.c_str() };
@@ -189,7 +192,7 @@ TEST_CASE("C API editor commit leaves out files that changed and still writes th
 
     zp_stream_t* out = zp_stream_memory();
     zp_build_result_t* result = nullptr;
-    CHECK(zp_editor_commit_with_options(ed, out, nullptr, nullptr, nullptr, &result) == ZP_SOURCE_CHANGED);
+    CHECK(zp_editor_commit(ed, out, nullptr, nullptr, nullptr, &result) == ZP_SOURCE_CHANGED);
     REQUIRE(result);
     bool reported = false;
     for (std::size_t i = 0; i < zp_build_result_entry_count(result); ++i)
@@ -230,7 +233,7 @@ TEST_CASE("C API editor and atomic file output", "[capi]")
 
     zp_stream_t* src = zp_stream_open_file(path.c_str());
     REQUIRE(src);
-    zp_editor_t* ed = zp_editor_open(c.ctx, src);
+    zp_editor_t* ed = zp_editor_open(c.ctx, src, nullptr);
     REQUIRE(ed);
     REQUIRE(zp_editor_rename(ed, 0, "renamed.txt") == ZP_OK);
     CHECK(zp_editor_rename(ed, 5, "x") == ZP_INVALID_ARGUMENT);
@@ -243,7 +246,7 @@ TEST_CASE("C API editor and atomic file output", "[capi]")
     zp_plan_free(view);
 
     zp_stream_t* dst = zp_stream_create_file(path.c_str());
-    REQUIRE(zp_editor_commit(ed, dst, nullptr, nullptr) == ZP_OK);
+    REQUIRE(zp_editor_commit(ed, dst, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
     REQUIRE(zp_stream_commit(dst) == ZP_OK);
     zp_stream_free(dst);
     zp_editor_free(ed);
@@ -479,7 +482,7 @@ TEST_CASE("C API editor adds into a folder with a prefix", "[capi][prefix][edito
         zp_plan_free(plan);
     }
     zp_stream_t* src = zp_stream_memory_from(zip.data(), zip.size());
-    zp_editor_t* ed = zp_editor_open(c.ctx, src);
+    zp_editor_t* ed = zp_editor_open(c.ctx, src, nullptr);
     REQUIRE(ed);
     zp_input_t* add = zp_input_memory();
     REQUIRE(zp_input_memory_add_file(add, "b.txt", reinterpret_cast<const std::uint8_t*>(x.data()), x.size(), 0, 0644) == ZP_OK);
@@ -518,13 +521,13 @@ TEST_CASE("C API editor options, resolutions and build options", "[capi][editor]
     zp_plan_options_init(&bad);
     bad.flac_level = 99;
     zp_stream_t* src = zp_stream_memory_from(zip.data(), zip.size());
-    CHECK(zp_editor_open_with_options(c.ctx, src, &bad) == nullptr);
+    CHECK(zp_editor_open(c.ctx, src, &bad) == nullptr);
     CHECK(zp_last_status() == ZP_INVALID_ARGUMENT);
 
     zp_plan_options_t no_flac;
     zp_plan_options_init(&no_flac);
     no_flac.flac_enabled = 0;
-    zp_editor_t* ed = zp_editor_open_with_options(c.ctx, src, &no_flac);
+    zp_editor_t* ed = zp_editor_open(c.ctx, src, &no_flac);
     REQUIRE(ed);
 
     const auto wav = zp::test::make_wav({});
@@ -557,7 +560,7 @@ TEST_CASE("C API editor options, resolutions and build options", "[capi][editor]
     zp_stream_t* out = zp_stream_memory();
     zp_build_options_t bo{};
     bo.readme_template = "custom";
-    REQUIRE(zp_editor_commit_with_options(ed, out, &bo, nullptr, nullptr, nullptr) == ZP_OK);
+    REQUIRE(zp_editor_commit(ed, out, &bo, nullptr, nullptr, nullptr) == ZP_OK);
     auto x2 = zp::test::extract_all(memory_bytes(out));
     CHECK(x2.files.contains("take.wav"));
     CHECK(x2.files.contains("b.txt"));

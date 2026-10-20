@@ -296,7 +296,9 @@ std::optional<ExtractChoice> ExtractDialog::run()
         zp_extract_options_init(&options);
         options.restore_wav = choice.settings.restore_audio ? 1 : 0;
         options.include_readme = choice.settings.include_readme ? 1 : 0;
-        zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan_relative(reader.get(), selection_.empty() ? nullptr : selection_.data(), selection_.size(), sink.get(), &options, base_folder_.toStdString().c_str())));
+        const auto base = base_folder_.toStdString();
+        options.base_folder = base.c_str();
+        zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan(reader.get(), selection_.empty() ? nullptr : selection_.data(), selection_.size(), sink.get(), &options)));
         QStringList problems;
         QStringList existing;
         zp_extract_issue_t issue{};

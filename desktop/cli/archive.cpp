@@ -276,7 +276,7 @@ int run_edit(const GlobalOptions& g, const std::string& archive, const std::vect
 {
     auto ctx = make_context(g);
     zpp::Stream in(zpp::not_null(zp_stream_open_file(archive.c_str())));
-    zpp::Editor editor(zpp::not_null(zp_editor_open(ctx.get(), in.get())));
+    zpp::Editor editor(zpp::not_null(zp_editor_open(ctx.get(), in.get(), nullptr)));
     std::vector<zpp::Input> inputs;
 
     const auto index_of = [&](const std::string& name) {
@@ -332,7 +332,7 @@ int run_edit(const GlobalOptions& g, const std::string& archive, const std::vect
     zpp::Stream out(zpp::not_null(zp_stream_create_file(target.c_str())));
     ProgressBar bar("Rewriting", g);
     zp_build_result_t* raw = nullptr;
-    const auto status = zp_editor_commit_with_options(editor.get(), out.get(), nullptr, zpp::ProgressAdapter::call, &bar.adapter(), &raw);
+    const auto status = zp_editor_commit(editor.get(), out.get(), nullptr, zpp::ProgressAdapter::call, &bar.adapter(), &raw);
     const zpp::BuildResult result(raw);
     if (status != ZP_SOURCE_CHANGED)
         zpp::check(status);

@@ -421,14 +421,14 @@ void MainWindow::build_ui()
             a->setChecked(!view_->header()->isSectionHidden(c));
             connect(a, &QAction::toggled, this, [this, c](bool on) {
                 view_->header()->setSectionHidden(c, !on);
-                QSettings().setValue("browser/header", view_->header()->saveState());
+                QSettings().setValue("browser/columns", view_->header()->saveState());
             });
         }
         menu.exec(view_->header()->mapToGlobal(pos));
     });
-    if (!view_->header()->restoreState(QSettings().value("browser/header").toByteArray()))
+    if (!view_->header()->restoreState(QSettings().value("browser/columns").toByteArray()))
         view_->header()->resizeSection(ArchiveModel::Name, 380);
-    connect(view_->header(), &QHeaderView::sectionResized, this, [this] { QSettings().setValue("browser/header", view_->header()->saveState()); });
+    connect(view_->header(), &QHeaderView::sectionResized, this, [this] { QSettings().setValue("browser/columns", view_->header()->saveState()); });
     connect(view_->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this] {
         update_inspector();
         update_actions();

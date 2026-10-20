@@ -193,11 +193,11 @@ A bar at the bottom of the browser, visible while the session has pending change
 - Go commits the editor to `zp_stream_create_file(output)`. The editor and base stream are closed before `zp_stream_commit` swaps the file into place (zip module design, Section 10), then the session reopens on the output with an empty history. On failure the session keeps its changes.
 - The session is not thread-safe. The GUI runs planning and commits on its job thread and does not touch the session meanwhile.
 
-**Core additions:** `zp_input_set_prefix` (items placed under an archive folder), `zp_editor_open_with_options` (planner options for additions), `zp_editor_resolve` (conflict decisions on an edit), `zp_editor_commit_with_options` (build options such as the temp folder).
+**Core additions:** `zp_input_set_prefix` (items placed under an archive folder), planner options on `zp_editor_open` (for additions), `zp_editor_resolve` (conflict decisions on an edit), build options and a build result on `zp_editor_commit` (temp folder; files left out because they changed), `base_folder` in `zp_extract_options_t` (extract relative to a folder).
 
 ## Extracting
 
-Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan. Selected items are extracted relative to the deepest folder holding all of them (`zp_extract_plan_relative`): selecting `docs/b.txt` writes `b.txt`, selecting the folder `docs` writes `docs/…`. Cancelling an extraction removes the files and folders it created; files that already existed are left alone.
+Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan. Selected items are extracted relative to the deepest folder holding all of them (`zp_extract_options_t.base_folder`): selecting `docs/b.txt` writes `b.txt`, selecting the folder `docs` writes `docs/…`. Cancelling an extraction removes the files and folders it created; files that already existed are left alone.
 
 - **Options dialog** (Extract All/Selected): destination, "Restore original audio" (default on) vs keep FLAC, include generated readme (default off), overwrite policy (Ask / Skip / Replace).
 - **Drag-out** uses the saved defaults without a dialog.

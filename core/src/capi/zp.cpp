@@ -1354,14 +1354,10 @@ void zp_extract_options_init(zp_extract_options_t* options)
     options->restore_wav = d.restore_wav ? 1 : 0;
     options->include_readme = d.include_readme ? 1 : 0;
     options->overwrite = static_cast<int>(d.overwrite);
+    options->base_folder = nullptr;
 }
 
 zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options)
-{
-    return zp_extract_plan_relative(reader, sel, n, sink, options, nullptr);
-}
-
-zp_xplan_t* zp_extract_plan_relative(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options, const char* base_folder)
 {
     ZP_REQUIRE(reader && sink && (sel || n == 0), nullptr);
     return guarded(
@@ -1377,9 +1373,9 @@ zp_xplan_t* zp_extract_plan_relative(zp_reader_t* reader, const size_t* sel, siz
                 o.restore_wav = options->restore_wav != 0;
                 o.include_readme = options->include_readme != 0;
                 o.overwrite = static_cast<OverwritePolicy>(options->overwrite);
+                if (options->base_folder)
+                    o.base_folder = options->base_folder;
             }
-            if (base_folder)
-                o.base_folder = base_folder;
             ArchiveExtractor extractor(*reader->reader, *sink->sink, *reader->context, o);
             auto plan = extractor.plan_extraction(std::vector<std::size_t>(sel, sel + n));
             if (!plan)
@@ -1557,12 +1553,7 @@ char* zp_preview(zp_stream_t* input, const char* file_name, int format)
     );
 }
 
-zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input)
-{
-    return zp_editor_open_with_options(ctx, input, nullptr);
-}
-
-zp_editor_t* zp_editor_open_with_options(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options)
+zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options)
 {
     ZP_REQUIRE(ctx && input, nullptr);
     return guarded(
@@ -1674,12 +1665,7 @@ int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, s
     );
 }
 
-int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user)
-{
-    return zp_editor_commit_with_options(editor, output, nullptr, progress, user, nullptr);
-}
-
-int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result)
+int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result)
 {
     ZP_REQUIRE(editor && output, ZP_INVALID_ARGUMENT);
     if (out_result)

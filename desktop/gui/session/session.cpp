@@ -111,7 +111,7 @@ void Session::reset_editor()
     inputs_.clear();
     base_stream_ = zpp::Stream(zpp::not_null(is_new_ ? zp_stream_memory_from(empty_zip.data(), empty_zip.size()) : zp_stream_open_file(utf8(target_).c_str())));
     const auto o = plan_options(options_);
-    editor_ = zpp::Editor(zpp::not_null(zp_editor_open_with_options(context_, base_stream_.get(), &o)));
+    editor_ = zpp::Editor(zpp::not_null(zp_editor_open(context_, base_stream_.get(), &o)));
 }
 
 std::vector<zpp::PlanEntry> Session::entries() const
@@ -498,7 +498,7 @@ std::vector<std::string> Session::commit(const std::filesystem::path& output, co
     zpp::Stream out(zpp::not_null(zp_stream_create_file(utf8(output).c_str())));
     zpp::ProgressAdapter adapter{ progress };
     zp_build_result_t* raw = nullptr;
-    const auto status = zp_editor_commit_with_options(editor_.get(), out.get(), build_options, zpp::ProgressAdapter::call, &adapter, &raw);
+    const auto status = zp_editor_commit(editor_.get(), out.get(), build_options, zpp::ProgressAdapter::call, &adapter, &raw);
     const zpp::BuildResult result(raw);
     if (status != ZP_SOURCE_CHANGED)
         zpp::check(status);

@@ -235,7 +235,9 @@ JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& de
     options.overwrite = replace_existing                        ? ZP_OVERWRITE_REPLACE
         : settings.overwrite == satchel_gui::Overwrite::Replace ? ZP_OVERWRITE_REPLACE
                                                                 : ZP_OVERWRITE_SKIP;
-    zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan_relative(reader.get(), selection.empty() ? nullptr : selection.data(), selection.size(), sink.get(), &options, base_folder.toStdString().c_str())));
+    const auto base = base_folder.toStdString();
+    options.base_folder = base.c_str();
+    zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan(reader.get(), selection.empty() ? nullptr : selection.data(), selection.size(), sink.get(), &options)));
     zp_extract_issue_t issue{};
     for (std::size_t i = 0; i < zp_xplan_issue_count(plan.get()); ++i)
     {

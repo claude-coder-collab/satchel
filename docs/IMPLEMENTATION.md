@@ -557,10 +557,9 @@ only.
   - Extraction: `ExtractDialog` options, then a pre-flight showing issues and existing files.
   - Verify writes nothing and fills the Verified column.
   - Dragging out extracts to a temporary folder first. The Name column is resizable; column
-    layout is saved under `browser/header` (renamed when the Reason column went, since
-    `restoreState` misapplies a layout with a different column count).
+    layout is saved under `browser/columns`.
   - `Session::commit` returns the files the build left out because they changed after planning
-    (`zp_editor_commit_with_options` returns `ZP_SOURCE_CHANGED` with a complete output and a build
+    (`zp_editor_commit` returns `ZP_SOURCE_CHANGED` with a complete output and a build
     result, like `zp_build`); the job reports them as details and a warning.
 - `--smoke-test ARCHIVE` prints the time to list an archive. 100,000 entries list in about
   0.45–0.6 s on the development Mac.
@@ -611,7 +610,7 @@ file + commit, memory, callbacks), input constructors (paths, memory), option in
 accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status_name`,
 `zp_version`, `zp_preview`, `zp_input_set_excludes`, `zp_exclude_preset_pattern`,
 `zp_plan_excluded_count`/`zp_plan_get_excluded`, `zp_input_set_prefix`, `zp_plan_predict_store` (shares `build::sample_pays_off` with the reader, so the prediction and the build agree; files up to 4 MiB are decided on their whole content at build time, so for them it is an estimate). The editor additions
-(`zp_editor_open_with_options`, `zp_editor_resolve`, `zp_editor_commit_with_options`) are in the
+(options on `zp_editor_open` and `zp_editor_commit`, `zp_editor_resolve`) are in the
 design doc. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
 
 ### 4.15 Packaging and releases (main spec 12.3)

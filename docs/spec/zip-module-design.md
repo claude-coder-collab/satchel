@@ -340,22 +340,19 @@ size_t       zp_reader_entry_count(const zp_reader_t*);
 int          zp_reader_get_entry(const zp_reader_t*, size_t i, zp_entry_info_t* out);
 int          zp_reader_get_app_version(const zp_reader_t*, char* buf, size_t len);
 zp_xplan_t*  zp_extract_plan(zp_reader_t*, const size_t* sel, size_t n, zp_sink_t*, const zp_extract_options_t*);
-zp_xplan_t*  zp_extract_plan_relative(zp_reader_t*, const size_t* sel, size_t n, zp_sink_t*, const zp_extract_options_t*, const char* base_folder); // targets relative to an archive folder
 int          zp_extract(zp_xplan_t*, zp_progress_fn, void* user);
 void         zp_xplan_free(zp_xplan_t*);
 void         zp_reader_free(zp_reader_t*);
 
 /* editing */
-zp_editor_t* zp_editor_open(zp_context_t*, zp_stream_t* input);
-zp_editor_t* zp_editor_open_with_options(zp_context_t*, zp_stream_t* input, const zp_plan_options_t*);
+zp_editor_t* zp_editor_open(zp_context_t*, zp_stream_t* input, const zp_plan_options_t*); // options for additions; NULL = defaults
 int          zp_editor_add(zp_editor_t*, zp_input_t*);
 int          zp_editor_remove(zp_editor_t*, size_t i);
 int          zp_editor_rename(zp_editor_t*, size_t i, const char* new_name);
 int          zp_editor_replace(zp_editor_t*, size_t i, zp_input_t*);
 zp_plan_t*   zp_editor_plan(zp_editor_t*);
 int          zp_editor_resolve(zp_editor_t*, const zp_resolution_t*, size_t n);
-int          zp_editor_commit(zp_editor_t*, zp_stream_t* output, zp_progress_fn, void* user);
-int          zp_editor_commit_with_options(zp_editor_t*, zp_stream_t* output, const zp_build_options_t*, zp_progress_fn, void* user, zp_build_result_t** out); // SOURCE_CHANGED: output complete, changed files left out
+int          zp_editor_commit(zp_editor_t*, zp_stream_t* output, const zp_build_options_t*, zp_progress_fn, void* user, zp_build_result_t** out); // SOURCE_CHANGED: output complete, changed files left out
 void         zp_editor_free(zp_editor_t*);
 ```
 
