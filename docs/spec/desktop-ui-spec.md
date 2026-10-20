@@ -214,7 +214,7 @@ Verify checks an archive's integrity without writing any files: CRC32 for every 
 
 - Purpose: a test of the archive as it is on disk, for archives received from elsewhere, copied to other media, or before deleting the originals.
 - Runs on the whole archive; progress in the status bar.
-- Results per entry: OK / CRC mismatch / hash mismatch / incomplete group / unreadable, shown in the Inspector and in the Verified column (hidden by default; shown from the header's column menu).
+- Results per entry: OK / CRC mismatch / hash mismatch / incomplete group / unreadable, shown in the Inspector (files only; folders have no Verification section) and in the Verified column (hidden by default; shown from the header's column menu).
 - Summary: a dialog, "All 1,204 files intact", or a warning listing the damaged files.
 - Optional setting: verify automatically after every build (off by default; it re-reads the whole archive).
 

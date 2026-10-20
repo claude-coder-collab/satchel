@@ -26,6 +26,7 @@
 #include <QSortFilterProxyModel>
 #include <QSpinBox>
 #include <QTemporaryDir>
+#include <QTextBrowser>
 #include <QTimer>
 #include <QTreeView>
 
@@ -437,6 +438,15 @@ private slots:
                 docs = idx;
         }
         QVERIFY(a.isValid() && docs.isValid());
+
+        // Verification applies to files, not folders.
+        auto* view = w->findChild<QTreeView*>();
+        auto* inspector = w->findChild<QTextBrowser*>();
+        const auto proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
+        view->selectionModel()->setCurrentIndex(proxy->mapFromSource(docs), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        QVERIFY(!inspector->toPlainText().contains("Verification"));
+        view->selectionModel()->setCurrentIndex(proxy->mapFromSource(a), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        QVERIFY(inspector->toPlainText().contains("Verification"));
         QVERIFY(model.flags(a) & Qt::ItemIsEditable);
         model.setData(a, "alpha.txt", Qt::EditRole);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->has_changes, 20000);

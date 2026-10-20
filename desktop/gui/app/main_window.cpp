@@ -1673,10 +1673,13 @@ void MainWindow::update_inspector()
             html += "</table>";
         }
     }
-    html += "<h4>" + tr("Verification") + "</h4><p>";
-    const auto v = verification_.value(static_cast<int>(e.index));
-    html += v.isEmpty() ? tr("Not verified") : esc(QString("%1 (%2)").arg(v, verified_at_.value(static_cast<int>(e.index))));
-    html += "</p>";
+    if (e.kind != ZP_KIND_DIRECTORY && !filter_->mapToSource(rows.front()).data(ArchiveModel::FolderRole).toBool())
+    {
+        html += "<h4>" + tr("Verification") + "</h4><p>";
+        const auto v = verification_.value(static_cast<int>(e.index));
+        html += v.isEmpty() ? tr("Not verified") : esc(QString("%1 (%2)").arg(v, verified_at_.value(static_cast<int>(e.index))));
+        html += "</p>";
+    }
     inspector_->setHtml(html);
 }
 
