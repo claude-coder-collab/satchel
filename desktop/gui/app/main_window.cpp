@@ -421,14 +421,17 @@ void MainWindow::build_ui()
             a->setChecked(!view_->header()->isSectionHidden(c));
             connect(a, &QAction::toggled, this, [this, c](bool on) {
                 view_->header()->setSectionHidden(c, !on);
-                QSettings().setValue("browser/columns", view_->header()->saveState());
+                QSettings().setValue("browser/layout", view_->header()->saveState());
             });
         }
         menu.exec(view_->header()->mapToGlobal(pos));
     });
-    if (!view_->header()->restoreState(QSettings().value("browser/columns").toByteArray()))
+    if (!view_->header()->restoreState(QSettings().value("browser/layout").toByteArray()))
+    {
         view_->header()->resizeSection(ArchiveModel::Name, 380);
-    connect(view_->header(), &QHeaderView::sectionResized, this, [this] { QSettings().setValue("browser/columns", view_->header()->saveState()); });
+        view_->header()->setSectionHidden(ArchiveModel::Verified, true);
+    }
+    connect(view_->header(), &QHeaderView::sectionResized, this, [this] { QSettings().setValue("browser/layout", view_->header()->saveState()); });
     connect(view_->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this] {
         update_inspector();
         update_actions();
@@ -1613,7 +1616,6 @@ void MainWindow::on_finished(int id, const QString& title, const JobOutcome& out
                 v.insert(static_cast<int>(i), verification_.value(static_cast<int>(*refs_[i].base)));
         }
         model_->set_verification(v);
-        view_->header()->setSectionHidden(ArchiveModel::Verified, false);
         update_inspector();
     }
     if (id == verify_job_)

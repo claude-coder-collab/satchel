@@ -557,7 +557,7 @@ only.
   - Extraction: `ExtractDialog` options, then a pre-flight showing issues and existing files.
   - Verify writes nothing and fills the Verified column.
   - Dragging out extracts to a temporary folder first. The Name column is resizable; column
-    layout is saved under `browser/columns`.
+    layout is saved under `browser/layout`.
   - `Session::commit` returns the files the build left out because they changed after planning
     (`zp_editor_commit` returns `ZP_SOURCE_CHANGED` with a complete output and a build
     result, like `zp_build`); the job reports them as details and a warning.

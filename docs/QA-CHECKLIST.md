@@ -64,7 +64,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Archive open in the app is modified or deleted by another program
 - [ ] Search and filters expand folders with matches; clearing restores the tree
 - [ ] Extract Selected / drag-out of a file inside a folder gives just the file; of a folder gives the folder
-- [ ] Verify: dialog "All N files intact", Verified column appears
+- [ ] Verify: dialog "All N files intact"; Verified column hidden by default, filled when shown from the header menu
 - [ ] Cancel an extraction (Simple and Full): nothing left behind; message names the archive
 - [ ] Singular/plural: "1 file extracted" vs "2 files extracted"
 - [ ] While planning, Compress with Satchel from Finder compresses on its own and leaves the plan and Full window open

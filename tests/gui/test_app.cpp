@@ -18,6 +18,7 @@
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QHeaderView>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSettings>
@@ -634,6 +635,16 @@ private slots:
         QCOMPARE(verified.status, ZP_OK);
         QCOMPARE(verified.output, archive);
         QCOMPARE(verified.entry_status.size(), 8);
+    }
+
+    void verified_column_is_hidden_by_default()
+    {
+        QSettings().remove("browser/layout");
+        App app;
+        app.show_full();
+        auto* view = app.full()->findChild<QTreeView*>();
+        QVERIFY(view->header()->isSectionHidden(ArchiveModel::Verified));
+        QVERIFY(!view->header()->isSectionHidden(ArchiveModel::Method));
     }
 
     void folder_settings_are_dropdowns()
