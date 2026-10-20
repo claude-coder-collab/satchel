@@ -7,6 +7,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <string>
@@ -128,6 +129,26 @@ TEST_CASE("C API plan, resolve, build, read, extract", "[capi]")
     CHECK(exists);
     CHECK(zp_extract(again, nullptr, nullptr) == ZP_DECISION_REQUIRED);
     zp_xplan_free(again);
+
+    zp::test::TempDir picked;
+    zp_sink_t* picked_sink = zp_sink_filesystem(picked.path().string().c_str());
+    const std::array<std::size_t, 1> just_b{ 2 };
+    zp_xplan_t* relative = zp_extract_plan_relative(reader, just_b.data(), just_b.size(), picked_sink, nullptr, "dir");
+    REQUIRE(relative);
+    REQUIRE(zp_extract(relative, nullptr, nullptr) == ZP_OK);
+    CHECK(zp::test::read_file(picked.path() / "b.txt") == zp::test::text_bytes("beta"));
+    CHECK_FALSE(std::filesystem::exists(picked.path() / "dir"));
+    zp_xplan_free(relative);
+    const std::array<std::size_t, 3> whole_dir{ 0, 1, 2 };
+    zp::test::TempDir folder;
+    zp_sink_t* folder_sink = zp_sink_filesystem(folder.path().string().c_str());
+    zp_xplan_t* kept = zp_extract_plan_relative(reader, whole_dir.data(), whole_dir.size(), folder_sink, nullptr, "");
+    REQUIRE(kept);
+    REQUIRE(zp_extract(kept, nullptr, nullptr) == ZP_OK);
+    CHECK(std::filesystem::exists(folder.path() / "dir" / "a.txt"));
+    zp_xplan_free(kept);
+    zp_sink_free(folder_sink);
+    zp_sink_free(picked_sink);
 
     zp_sink_free(sink);
     zp_reader_free(reader);

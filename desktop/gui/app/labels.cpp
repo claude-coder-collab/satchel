@@ -91,21 +91,4 @@ QString plan_method(const zpp::PlanEntry& e, bool stored)
     return QCoreApplication::translate("Method", "Deflate");
 }
 
-QString plan_reason(const zpp::PlanEntry& e, bool stored)
-{
-    if (e.kind == ZP_KIND_DIRECTORY)
-        return {};
-    if (e.fallback_reason >= 0)
-        return QCoreApplication::translate("Archive", "Stored: %1").arg(QString::fromStdString(e.fallback_detail));
-    if (e.codec == ZP_CODEC_FLAC || e.codec == ZP_CODEC_FLAC_MONO)
-        return QCoreApplication::translate("Archive", "PCM audio; restores to %1").arg(QString::fromStdString(e.restored_name).section('/', -1));
-    if (e.codec == ZP_CODEC_GENERATED)
-        return QCoreApplication::translate("Archive", "Explains how to restore the audio");
-    if (e.codec == ZP_CODEC_GENERAL && stored)
-        return QCoreApplication::translate("Archive", "Already compressed: deflate would save under 20%");
-    if (e.codec == ZP_CODEC_GENERAL)
-        return QCoreApplication::translate("Archive", "Compressible: deflate saves 20% or more");
-    return {};
-}
-
 }

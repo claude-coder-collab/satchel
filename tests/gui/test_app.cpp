@@ -599,6 +599,43 @@ private slots:
         QCOMPARE(session.snapshot()->view.rows.size(), rows);
     }
 
+    void cancelled_extraction_leaves_nothing_behind()
+    {
+        QDir root(dir_.filePath("cancel-extract"));
+        QVERIFY(root.mkpath("src/deep/er"));
+        const QByteArray zeros(32 << 20, 0);
+        for (int i = 0; i < 8; ++i)
+        {
+            QFile f(root.filePath(QString("src/deep/er/f%1.bin").arg(i)));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(zeros);
+        }
+        const auto archive = root.filePath("x.zip");
+        {
+            JobContext jc;
+            const auto plan = make_plan({ root.filePath("src") }, satchel_gui::Settings{});
+            QCOMPARE(compress_job(jc, plan->get(), archive, satchel_gui::Settings{}).status, ZP_OK);
+        }
+        QVERIFY(root.mkpath("out/keep"));
+        QFile keep(root.filePath("out/keep/mine.txt"));
+        QVERIFY(keep.open(QIODevice::WriteOnly));
+        keep.close();
+
+        JobContext jc;
+        jc.progress = [](std::uint64_t, std::uint64_t) { return false; };
+        const auto outcome = extract_job(jc, archive, root.filePath("out"), satchel_gui::Settings{}, {}, false);
+        QCOMPARE(outcome.status, ZP_CANCELLED);
+        QVERIFY(outcome.details.isEmpty());
+        QCOMPARE(QDir(root.filePath("out")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot), QStringList{ "keep" });
+        QVERIFY(QFile::exists(root.filePath("out/keep/mine.txt")));
+
+        JobContext fresh;
+        const auto verified = verify_job(fresh, archive);
+        QCOMPARE(verified.status, ZP_OK);
+        QCOMPARE(verified.output, archive);
+        QCOMPARE(verified.entry_status.size(), 8);
+    }
+
     void folder_settings_are_dropdowns()
     {
         satchel_gui::Settings s;
@@ -632,6 +669,10 @@ private slots:
         QVERIFY(QFile::exists(":/i18n/satchel_en.qm"));
         QTranslator translator;
         QVERIFY(translator.load(QLocale(QLocale::English), "satchel", "_", ":/i18n"));
+        QCoreApplication::installTranslator(&translator);
+        QCOMPARE(QCoreApplication::translate("Jobs", "%n file(s) extracted", nullptr, 1), QString("1 file extracted"));
+        QCOMPARE(QCoreApplication::translate("Jobs", "%n file(s) extracted", nullptr, 44), QString("44 files extracted"));
+        QCoreApplication::removeTranslator(&translator);
 #else
         QSKIP("built without Qt Linguist tools");
 #endif

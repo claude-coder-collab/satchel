@@ -68,7 +68,7 @@ int main(int argc, char** argv)
     if (qt_translator.load(QLocale(), "qtbase", "_", QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
         QApplication::installTranslator(&qt_translator);
     QTranslator translator;
-    if (translator.load(QLocale(), "satchel", "_", ":/i18n"))
+    if (translator.load(QLocale(), "satchel", "_", ":/i18n") || translator.load(QLocale(QLocale::English), "satchel", "_", ":/i18n"))
         QApplication::installTranslator(&translator);
 
     QCommandLineParser parser;

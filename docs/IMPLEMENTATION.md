@@ -511,7 +511,7 @@ which the GUI will reuse.
 **Logic** (`desktop/gui/logic`, no Qt, Catch2-tested): Simple-mode drop rule, output naming with
 " 2"/" 3" suffixes (at the end for folders), multi-mono row grouping, ratio, timecode formatting
 (HH:MM:SS:FF from the iXML rate incl. 29.97/59.94 drop frame, else HH:MM:SS.mmm), Settings
-defaults and "Copy as CLI command".
+defaults.
 
 **Session** (`desktop/gui/session`, library `satchel_gui_session`, no Qt, Catch2-tested in
 `satchel_gui_session_tests`): the staged Full-mode model (desktop UI spec, "Implementation
@@ -637,7 +637,7 @@ design doc. The progress callback returns non-zero to cancel. `zp_last_error` is
 - `.github/workflows/release.yml` runs on `v*` tags, on demand, and on pull requests touching
   packaging. The version is the tag without `v` (else the CMake project version) and goes into
   `ZP_VERSION`. Jobs: Linux (deb, tar.gz, AppImage; installs the deb and starts the AppImage under
-  Xvfb), macOS (Qt 6.8.3 from `install-qt-action`, universal arm64 + x86_64, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
+  Xvfb), macOS (Qt 6.11.3 from `install-qt-action`; 6.8.3 clipped focus rings and drew square buttons on current macOS, universal arm64 + x86_64, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
   stapled when Apple credentials exist; checks the bundle links nothing outside itself and the
   system), Windows (MSI; installs it silently and runs `satchel --version`), web (zip of the browser
   app, npm tarball), Python wheels (Linux, macOS, Windows). `publish` writes `SHA256SUMS` and, for tags, creates a draft GitHub release.

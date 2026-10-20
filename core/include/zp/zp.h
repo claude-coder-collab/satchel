@@ -432,6 +432,10 @@ typedef struct zp_extract_outcome
 
 /* sel = NULL / n = 0: every entry. The plan keeps using reader and sink. */
 ZP_API zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options);
+/* As zp_extract_plan, with targets relative to the archive folder `base_folder` (no trailing
+ * slash; NULL or "" = the archive root): "docs/a.txt" with base "docs" is written as "a.txt", and
+ * the folder entry itself is not written. Entries outside it keep their full path. */
+ZP_API zp_xplan_t* zp_extract_plan_relative(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options, const char* base_folder);
 ZP_API size_t zp_xplan_issue_count(const zp_xplan_t* xplan);
 ZP_API int zp_xplan_get_issue(const zp_xplan_t* xplan, size_t i, zp_extract_issue_t* out);
 ZP_API size_t zp_xplan_item_count(const zp_xplan_t* xplan);

@@ -8,7 +8,6 @@
 
 #include <QApplication>
 #include <QCheckBox>
-#include <QClipboard>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -236,10 +235,11 @@ bool ResolutionSheet::apply()
     return zp_plan_resolve(plan_, res.data(), res.size()) == ZP_OK && zp_plan_executable(plan_) != 0;
 }
 
-ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settings settings, std::vector<std::size_t> selection, QWidget* parent) :
+ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settings settings, std::vector<std::size_t> selection, QString base_folder, QWidget* parent) :
     QDialog(parent),
     archive_(std::move(archive)),
     selection_(std::move(selection)),
+    base_folder_(std::move(base_folder)),
     settings_(std::move(settings))
 {
     setWindowTitle(selection_.empty() ? tr("Extract all") : tr("Extract selected"));
@@ -269,14 +269,6 @@ ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settin
     form->addRow(tr("Existing files"), overwrite_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     buttons->button(QDialogButtonBox::Ok)->setText(tr("Extract"));
-    auto* copy = buttons->addButton(tr("Copy as CLI command"), QDialogButtonBox::HelpRole);
-    connect(copy, &QPushButton::clicked, this, [this] {
-        Settings s = settings_;
-        s.restore_audio = restore_->isChecked();
-        s.include_readme = readme_->isChecked();
-        s.overwrite = static_cast<satchel_gui::Overwrite>(overwrite_->currentIndex());
-        QApplication::clipboard()->setText(QString::fromStdString(satchel_gui::cli_extract_command(s, to_path(archive_), to_path(destination_->text()))));
-    });
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     form->addRow(buttons);
@@ -304,7 +296,7 @@ std::optional<ExtractChoice> ExtractDialog::run()
         zp_extract_options_init(&options);
         options.restore_wav = choice.settings.restore_audio ? 1 : 0;
         options.include_readme = choice.settings.include_readme ? 1 : 0;
-        zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan(reader.get(), selection_.empty() ? nullptr : selection_.data(), selection_.size(), sink.get(), &options)));
+        zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan_relative(reader.get(), selection_.empty() ? nullptr : selection_.data(), selection_.size(), sink.get(), &options, base_folder_.toStdString().c_str())));
         QStringList problems;
         QStringList existing;
         zp_extract_issue_t issue{};
@@ -318,14 +310,14 @@ std::optional<ExtractChoice> ExtractDialog::run()
         }
         if (!problems.isEmpty())
         {
-            QMessageBox box(QMessageBox::Warning, tr("Before extracting"), tr("%1 entr(ies) need attention; refused entries will not be written.").arg(problems.size()), QMessageBox::Ok | QMessageBox::Cancel, parentWidget());
+            QMessageBox box(QMessageBox::Warning, tr("Before extracting"), tr("%n entr(ies) need attention; refused entries will not be written.", nullptr, static_cast<int>(problems.size())), QMessageBox::Ok | QMessageBox::Cancel, parentWidget());
             box.setDetailedText(problems.join('\n'));
             if (box.exec() != QMessageBox::Ok)
                 return std::nullopt;
         }
         if (!existing.isEmpty() && choice.settings.overwrite == satchel_gui::Overwrite::Ask)
         {
-            QMessageBox box(QMessageBox::Question, tr("Files already exist"), tr("%1 file(s) already exist at the destination.").arg(existing.size()), QMessageBox::NoButton, parentWidget());
+            QMessageBox box(QMessageBox::Question, tr("Files already exist"), tr("%n file(s) already exist at the destination.", nullptr, static_cast<int>(existing.size())), QMessageBox::NoButton, parentWidget());
             box.setDetailedText(existing.join('\n'));
             auto* replace = box.addButton(tr("Replace"), QMessageBox::AcceptRole);
             box.addButton(tr("Skip existing"), QMessageBox::RejectRole);
@@ -401,10 +393,6 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
     form->addRow(tr("Integration"), associate_);
     form->addRow(tr("Updates"), updates_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    auto* copy = buttons->addButton(tr("Copy as CLI command"), QDialogButtonBox::HelpRole);
-    connect(copy, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(QString::fromStdString(satchel_gui::cli_create_command(settings(), "archive.zip", { "files" })));
-    });
     connect(buttons, &QDialogButtonBox::accepted, this, [this] {
         if (const auto error = exclude_pattern_error(exclude_patterns(settings())); !error.isEmpty())
         {

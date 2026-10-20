@@ -115,7 +115,7 @@ SimpleWindow::SimpleWindow(App& app) :
     auto* buttons = new QHBoxLayout;
     reveal_ = new QPushButton(done);
     retry_ = new QPushButton(tr("Retry"), done);
-    auto* full = new QPushButton(tr("Open in Full mode"), done);
+    auto* full = new QPushButton(tr("View Contents"), done);
     auto* again = new QPushButton(tr("Done"), done);
     connect(reveal_, &QPushButton::clicked, this, [this] { reveal_in_file_manager(last_output_); });
     connect(retry_, &QPushButton::clicked, this, [this] { handle(last_input_); });
@@ -212,7 +212,7 @@ void SimpleWindow::start_compress(const QStringList& paths)
             return;
     }
     const auto settings = s;
-    mine_ << app_.jobs().enqueue(tr("Compressing to %1").arg(QFileInfo(output).fileName()), [plan, output, settings](JobContext& jc) {
+    const auto id = app_.jobs().enqueue(tr("Compressing to %1").arg(QFileInfo(output).fileName()), [plan, output, settings](JobContext& jc) {
         auto o = compress_job(jc, plan->get(), output, settings);
         if (o.status == ZP_OK && settings.verify_after_build)
         {
@@ -222,6 +222,8 @@ void SimpleWindow::start_compress(const QStringList& paths)
         }
         return o;
     });
+    mine_ << id;
+    cancelled_text_.insert(id, tr("Cancelled. %1 was not created.").arg(QFileInfo(output).fileName()));
 }
 
 void SimpleWindow::start_extract(const QString& archive)
@@ -229,12 +231,17 @@ void SimpleWindow::start_extract(const QString& archive)
     const auto wanted = satchel_gui::extract_output(fs_path(archive), app_.settings().simple_output_folder, exists);
     const auto staging = q_path(satchel_gui::extract_staging(wanted, exists));
     const auto settings = app_.settings();
-    mine_ << app_.jobs().enqueue(tr("Extracting %1").arg(QFileInfo(archive).fileName()), [archive, staging, wanted, settings](JobContext& jc) {
+    const auto id = app_.jobs().enqueue(tr("Extracting %1").arg(QFileInfo(archive).fileName()), [archive, staging, wanted, settings](JobContext& jc) {
         auto o = extract_job(jc, archive, staging, settings, {}, false);
-        if (::exists(fs_path(staging)))
+        std::error_code ec;
+        if (o.status == ZP_CANCELLED)
+            std::filesystem::remove_all(fs_path(staging), ec);
+        else if (::exists(fs_path(staging)))
             o.output = q_path(satchel_gui::finalize_extraction(fs_path(staging), wanted, exists));
         return o;
     });
+    mine_ << id;
+    cancelled_text_.insert(id, tr("Cancelled. Nothing was extracted from %1.").arg(QFileInfo(archive).fileName()));
 }
 
 void SimpleWindow::on_started(int id, const QString& title)
@@ -271,10 +278,12 @@ void SimpleWindow::on_finished(int id, const QString& title, const JobOutcome& o
     if (!mine_.removeOne(id))
         return;
     const bool quit_if_clean = quit_when_clean_.remove(id);
+    const auto cancelled_text = cancelled_text_.take(id);
     last_output_ = outcome.output;
     const bool ok = outcome.status == ZP_OK || outcome.status == ZP_SOURCE_CHANGED;
-    result_->setText(ok ? outcome.summary : (outcome.status == ZP_CANCELLED ? tr("Cancelled") : tr("Failed: %1").arg(outcome.message)));
-    details_->setText(outcome.details.mid(0, 8).join('\n') + (outcome.details.size() > 8 ? tr("\n… and %1 more").arg(outcome.details.size() - 8) : QString()));
+    const bool cancelled = outcome.status == ZP_CANCELLED;
+    result_->setText(ok ? outcome.summary : (cancelled ? cancelled_text : tr("Failed: %1").arg(outcome.message)));
+    details_->setText(cancelled ? QString() : outcome.details.mid(0, 8).join('\n') + (outcome.details.size() > 8 ? tr("\n… and %n more", nullptr, static_cast<int>(outcome.details.size() - 8)) : QString()));
     reveal_->setText(
 #if defined(Q_OS_MACOS)
         tr("Reveal in Finder")

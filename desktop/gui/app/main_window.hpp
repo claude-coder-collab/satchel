@@ -96,6 +96,8 @@ private:
     bool confirm_leave(const std::function<void()>& then);
     [[nodiscard]] satchel_gui::SessionOptions session_options() const;
     [[nodiscard]] std::vector<std::size_t> selected_positions() const;
+    // The deepest archive folder holding every selected row; selected items extract relative to it.
+    [[nodiscard]] QString selection_base() const;
     [[nodiscard]] std::vector<std::size_t> base_ids(const std::vector<std::size_t>& positions) const;
     [[nodiscard]] std::optional<satchel_gui::EntryKey> key_of(std::size_t position) const;
     [[nodiscard]] const satchel_gui::SessionRow* row_of(std::size_t position) const;
@@ -124,6 +126,7 @@ private:
     QHash<std::size_t, std::size_t> base_to_row_;
     bool model_is_base_ = false;
     int commit_job_ = 0;
+    int verify_job_ = 0;
     std::function<void()> after_commit_;
     QString edit_after_update_;
     bool filtering_ = false;

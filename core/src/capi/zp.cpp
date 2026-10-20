@@ -1358,6 +1358,11 @@ void zp_extract_options_init(zp_extract_options_t* options)
 
 zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options)
 {
+    return zp_extract_plan_relative(reader, sel, n, sink, options, nullptr);
+}
+
+zp_xplan_t* zp_extract_plan_relative(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options, const char* base_folder)
+{
     ZP_REQUIRE(reader && sink && (sel || n == 0), nullptr);
     return guarded(
         [&]() -> zp_xplan_t* {
@@ -1373,6 +1378,8 @@ zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp
                 o.include_readme = options->include_readme != 0;
                 o.overwrite = static_cast<OverwritePolicy>(options->overwrite);
             }
+            if (base_folder)
+                o.base_folder = base_folder;
             ArchiveExtractor extractor(*reader->reader, *sink->sink, *reader->context, o);
             auto plan = extractor.plan_extraction(std::vector<std::size_t>(sel, sel + n));
             if (!plan)

@@ -96,13 +96,14 @@ class ExtractDialog : public QDialog
     Q_OBJECT
 
 public:
-    ExtractDialog(QString archive, const QString& destination, satchel_gui::Settings settings, std::vector<std::size_t> selection, QWidget* parent = nullptr);
+    ExtractDialog(QString archive, const QString& destination, satchel_gui::Settings settings, std::vector<std::size_t> selection, QString base_folder = {}, QWidget* parent = nullptr);
     // Options, then the pre-flight check (unsafe paths, links, groups, existing files).
     std::optional<ExtractChoice> run();
 
 private:
     QString archive_;
     std::vector<std::size_t> selection_;
+    QString base_folder_;
     QLineEdit* destination_ = nullptr;
     QCheckBox* restore_ = nullptr;
     QCheckBox* readme_ = nullptr;

@@ -26,6 +26,8 @@ struct ExtractOptions
     bool restore_wav = true;
     bool include_readme = false;
     OverwritePolicy overwrite = OverwritePolicy::Ask;
+    // Archive folder the targets are relative to ("" = root); the folder entry itself is skipped.
+    std::string base_folder;
 };
 
 enum class ExtractIssueKind : std::uint8_t {

@@ -19,26 +19,6 @@
         <source>%1 → %2, %3% larger</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Stored: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>PCM audio; restores to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Explains how to restore the audio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Already compressed: deflate would save under 20%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Compressible: deflate saves 20% or more</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>ArchiveModel</name>
@@ -96,10 +76,6 @@
     </message>
     <message>
         <source>Verified</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Reason</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -191,24 +167,26 @@
         <source>Extract</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Copy as CLI command</source>
-        <translation type="unfinished"></translation>
+    <message numerus="yes">
+        <source>%n entr(ies) need attention; refused entries will not be written.</source>
+        <translation>
+            <numerusform>%n entry needs attention; refused entries will not be written.</numerusform>
+            <numerusform>%n entries need attention; refused entries will not be written.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n file(s) already exist at the destination.</source>
+        <translation>
+            <numerusform>%n file already exists at the destination.</numerusform>
+            <numerusform>%n files already exist at the destination.</numerusform>
+        </translation>
     </message>
     <message>
         <source>Before extracting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>%1 entr(ies) need attention; refused entries will not be written.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Files already exist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 file(s) already exist at the destination.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -232,6 +210,44 @@
     <message>
         <source>Cancelled</source>
         <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>Jobs</name>
+    <message numerus="yes">
+        <source> · %n warning(s)</source>
+        <translation>
+            <numerusform> · %n warning</numerusform>
+            <numerusform> · %n warnings</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n file(s) extracted</source>
+        <translation>
+            <numerusform>%n file extracted</numerusform>
+            <numerusform>%n files extracted</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source> · %n problem(s)</source>
+        <translation>
+            <numerusform> · %n problem</numerusform>
+            <numerusform> · %n problems</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>All %n file(s) intact</source>
+        <translation>
+            <numerusform>%n file intact</numerusform>
+            <numerusform>All %n files intact</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n file(s) damaged</source>
+        <translation>
+            <numerusform>%n file damaged</numerusform>
+            <numerusform>%n files damaged</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -329,27 +345,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Recent archives</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Archive entries</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Inspector</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No jobs</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Jobs</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cancel Job</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -364,14 +364,6 @@
         <source>%1
 
 %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Created by %1 · %2 · %3 · Zip64 %4</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>unknown tool</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -479,6 +471,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>New Folder with Items</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Move To…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -540,6 +536,18 @@
     </message>
     <message>
         <source>New archive · will be written to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Created by %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zip64 yes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zip64 no</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -636,10 +644,6 @@
     </message>
     <message>
         <source>Source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Reason</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -806,18 +810,6 @@
         <source>Cancel running jobs, or keep them running in the background?</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Running: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Jobs running</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No jobs running</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>Method</name>
@@ -933,6 +925,13 @@
         <source>Archive updated (%1)</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <source> · %n file(s) left out: changed after they were added</source>
+        <translation>
+            <numerusform> · %n file left out: changed after it was added</numerusform>
+            <numerusform> · %n files left out: changed after they were added</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Leaves out: %1</source>
         <translation type="unfinished"></translation>
@@ -1005,37 +1004,37 @@
     </message>
     <message numerus="yes">
         <source>%n file(s), %1 · %2 FLAC, %3 deflate, %4 store</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n file, %1 · %2 FLAC, %3 deflate, %4 store</numerusform>
+            <numerusform>%n files, %1 · %2 FLAC, %3 deflate, %4 store</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>+%n file(s) (%1)</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>+%n file (%1)</numerusform>
+            <numerusform>+%n files (%1)</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>−%n removed</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>−%n removed</numerusform>
+            <numerusform>−%n removed</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>%n renamed</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n renamed</numerusform>
+            <numerusform>%n renamed</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>%n replaced</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n replaced</numerusform>
+            <numerusform>%n replaced</numerusform>
         </translation>
     </message>
     <message>
@@ -1044,9 +1043,9 @@
     </message>
     <message numerus="yes">
         <source> · %n left out</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform> · %n left out</numerusform>
+            <numerusform> · %n left out</numerusform>
         </translation>
     </message>
     <message>
@@ -1297,10 +1296,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Copy as CLI command</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Invalid exclude pattern</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1337,8 +1332,18 @@ or drop a .zip to extract it.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Open in Full mode</source>
+        <source>View Contents</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>
+… and %n more</source>
+        <translation>
+            <numerusform>
+… and %n more</numerusform>
+            <numerusform>
+… and %n more</numerusform>
+        </translation>
     </message>
     <message>
         <source>Done</source>
@@ -1353,7 +1358,15 @@ or drop a .zip to extract it.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Cancelled. %1 was not created.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Extracting %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancelled. Nothing was extracted from %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1361,16 +1374,7 @@ or drop a .zip to extract it.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancelled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Failed: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>
-… and %1 more</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -903,11 +903,11 @@ void MainWindow::update_summary()
     QStringList counts;
     for (auto it = methods.begin(); it != methods.end(); ++it)
         counts << QString("%1 %2").arg(it.value()).arg(labels::method(it.key().toStdString()));
-    summary_->setText(tr("Created by %1 · %2 · %3 · Zip64 %4")
-            .arg(ours ? QString::fromUtf8(version.data()) : tr("unknown tool"))
-            .arg(labels::savings(totals.size, totals.packed, totals.ratio_known))
-            .arg(counts.join(", "))
-            .arg(zp_reader_zip64(reader_.get()) ? tr("yes") : tr("no")));
+    QStringList parts;
+    if (ours)
+        parts << tr("Created by %1").arg(QString::fromUtf8(version.data()));
+    parts << labels::savings(totals.size, totals.packed, totals.ratio_known) << counts.join(", ") << (zp_reader_zip64(reader_.get()) ? tr("Zip64 yes") : tr("Zip64 no"));
+    summary_->setText(parts.join(QStringLiteral(" · ")));
 }
 
 std::vector<std::size_t> MainWindow::selected_positions() const
@@ -921,6 +921,25 @@ std::vector<std::size_t> MainWindow::selected_positions() const
     std::ranges::sort(out);
     out.erase(std::ranges::unique(out).begin(), out.end());
     return out;
+}
+
+QString MainWindow::selection_base() const
+{
+    std::optional<QStringList> common;
+    for (const auto& i : view_->selectionModel()->selectedRows())
+    {
+        const auto parts = parent_of(i.data(ArchiveModel::PathRole).toString()).split('/', Qt::SkipEmptyParts);
+        if (!common)
+        {
+            common = parts;
+            continue;
+        }
+        qsizetype n = 0;
+        while (n < common->size() && n < parts.size() && (*common)[n] == parts[n])
+            ++n;
+        common->resize(n);
+    }
+    return common ? common->join('/') : QString();
 }
 
 std::vector<std::size_t> MainWindow::base_ids(const std::vector<std::size_t>& positions) const
@@ -1338,7 +1357,6 @@ void MainWindow::update_inspector()
         {
             html += row_html(tr("Size"), size_text(p.size));
             html += row_html(tr("Method"), labels::plan_method(p, srow->stored));
-            html += row_html(tr("Reason"), labels::plan_reason(p, srow->stored));
         }
         if (!p.restored_name.empty())
             html += row_html(tr("Restores to"), qs(p.restored_name));
@@ -1458,13 +1476,14 @@ void MainWindow::extract(bool selected)
             return;
     }
     const auto dest = QFileInfo(archive_).absolutePath() + "/" + QFileInfo(archive_).completeBaseName();
-    ExtractDialog dialog(archive_, dest, app_.settings(), selection, this);
+    const auto base = selected ? selection_base() : QString();
+    ExtractDialog dialog(archive_, dest, app_.settings(), selection, base, this);
     const auto choice = dialog.run();
     if (!choice)
         return;
     const auto path = archive_;
-    mine_ << app_.jobs().enqueue(tr("Extracting %1").arg(QFileInfo(archive_).fileName()), [path, choice = *choice, selection](JobContext& jc) {
-        return extract_job(jc, path, choice.destination, choice.settings, selection, choice.replace_existing);
+    mine_ << app_.jobs().enqueue(tr("Extracting %1").arg(QFileInfo(archive_).fileName()), [path, choice = *choice, selection, base](JobContext& jc) {
+        return extract_job(jc, path, choice.destination, choice.settings, selection, choice.replace_existing, base);
     });
 }
 
@@ -1473,7 +1492,8 @@ void MainWindow::verify()
     if (archive_.isEmpty() || !reader_)
         return;
     const auto path = archive_;
-    mine_ << app_.jobs().enqueue(tr("Verifying %1").arg(QFileInfo(archive_).fileName()), [path](JobContext& jc) { return verify_job(jc, path); });
+    verify_job_ = app_.jobs().enqueue(tr("Verifying %1").arg(QFileInfo(archive_).fileName()), [path](JobContext& jc) { return verify_job(jc, path); });
+    mine_ << verify_job_;
 }
 
 QString MainWindow::extract_to_temp(const std::vector<std::size_t>& base)
@@ -1495,7 +1515,7 @@ QString MainWindow::extract_to_temp(const std::vector<std::size_t>& base)
     };
     try
     {
-        const auto outcome = extract_job(jc, archive_, dir, app_.settings(), base, true);
+        const auto outcome = extract_job(jc, archive_, dir, app_.settings(), base, true, selection_base());
         if (outcome.status != ZP_OK)
         {
             QMessageBox::warning(this, tr("Cannot extract"), outcome.message);
@@ -1593,7 +1613,14 @@ void MainWindow::on_finished(int id, const QString& title, const JobOutcome& out
                 v.insert(static_cast<int>(i), verification_.value(static_cast<int>(*refs_[i].base)));
         }
         model_->set_verification(v);
+        view_->header()->setSectionHidden(ArchiveModel::Verified, false);
         update_inspector();
+    }
+    if (id == verify_job_)
+    {
+        verify_job_ = 0;
+        if (ok && outcome.details.isEmpty())
+            QMessageBox::information(this, title, outcome.summary);
     }
     if (id == commit_job_)
     {

@@ -283,6 +283,7 @@ typedef struct zp_extract_outcome
     const char* message;
 } zp_extract_outcome_t;
 zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options);
+zp_xplan_t* zp_extract_plan_relative(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options, const char* base_folder);
 size_t zp_xplan_issue_count(const zp_xplan_t* xplan);
 int zp_xplan_get_issue(const zp_xplan_t* xplan, size_t i, zp_extract_issue_t* out);
 size_t zp_xplan_item_count(const zp_xplan_t* xplan);

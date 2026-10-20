@@ -142,6 +142,13 @@ Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::
             plan.issues.push_back({ ExtractIssueKind::UnsafePath, idx, e.name, target.error().message });
             continue;
         }
+        if (!options_.base_folder.empty())
+        {
+            if (*target == options_.base_folder)
+                continue;
+            if (target->starts_with(options_.base_folder + '/'))
+                target->erase(0, options_.base_folder.size() + 1);
+        }
         if (e.kind == ItemKind::File && e.method == EntryMethod::Unsupported)
         {
             plan.issues.push_back({ ExtractIssueKind::UnsupportedMethod, idx, e.name, e.encrypted ? std::string("encrypted entries are not supported") : std::format("compression method {} is not supported", e.raw_method) });

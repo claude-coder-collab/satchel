@@ -157,7 +157,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.3"
+          version: "6.11.3"
           arch: win64_msvc2022_64
           cache: true
       - name: Configure

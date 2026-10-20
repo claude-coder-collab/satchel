@@ -21,7 +21,7 @@ The app opens in the mode last used; first launch opens Simple mode.
 | Decisions | Only when the core requires one | Changes are staged and reviewed in the browser, then written in one step |
 | Settings used | Defaults from Settings | Defaults, overridable per job |
 
-- Switch via View menu, keyboard shortcut, or a "Open in Full mode" link on any Simple-mode result.
+- Switch via View menu, keyboard shortcut, or the **View Contents** button on a Simple-mode result.
 - Both modes share one job queue, so a job started in one mode stays visible in the other.
 
 ## Simple mode
@@ -57,8 +57,8 @@ Drop files on the window (or the app icon) and the job starts immediately: zips 
 
 1. Idle: drop target with a one-line hint.
 2. Running: progress ring, file name, throughput, ETA, Cancel. Further drops queue.
-3. Done: result card with savings (e.g. "4.2 GB → 2.3 GB, 45% smaller"), warning count, Reveal in Finder/Explorer, Open in Full mode.
-4. Error: what failed, which file, Retry / Open in Full mode.
+3. Done: result card with savings (e.g. "4.2 GB → 2.3 GB, 45% smaller"), warning count, Reveal in Finder/Explorer, View Contents (opens the archive in Full mode). Counts use proper singular and plural ("1 file extracted", "44 files extracted"). Cancel leaves no trace: a cancelled extraction removes everything it wrote (including its folders) and the card reads "Cancelled. Nothing was extracted from <archive>." (compression: "Cancelled. <archive> was not created.").
+4. Error: what failed, which file, Retry / View Contents.
 
 A system notification is sent when a job finishes while the window is not focused.
 
@@ -91,7 +91,7 @@ The center pane lists the open archive's entries, read from the central director
 - Third-party entries the core can't read (unsupported method, symlinks) are shown greyed with the reason as a tooltip.
 - The table model is virtualized, so 100,000+ entries scroll smoothly.
 
-**Archive summary** (status bar, expandable): created by (app version from the archive comment, or "unknown tool"), total size → packed size and % saved, entry counts per method, Zip64 yes/no.
+**Archive summary** (status bar, expandable): "Created by" with the app version from the archive comment (left out when unknown), total size → packed size and % saved, entry counts per method, Zip64 yes/no.
 
 ## Inspector
 
@@ -161,7 +161,7 @@ The window holds one **session** at a time: a base archive (none for a new archi
 | Deleted | Struck through and dimmed; View ▸ Show Deleted (on by default) hides them |
 | Unchanged | As today |
 
-- The Inspector shows the plan for an added entry (source path, method, reason) instead of archive metadata. For a deleted or replaced entry it still shows the archive metadata.
+- The Inspector shows the plan for an added entry (source path, method) instead of archive metadata. For a deleted or replaced entry it still shows the archive metadata.
 - Extract, Open and Verify act on the archive as stored on disk: they ignore staged additions (and are disabled when the selection contains only additions), and still include entries staged for deletion.
 
 ### Action bar
@@ -197,7 +197,7 @@ A bar at the bottom of the browser, visible while the session has pending change
 
 ## Extracting
 
-Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan.
+Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan. Selected items are extracted relative to the deepest folder holding all of them (`zp_extract_plan_relative`): selecting `docs/b.txt` writes `b.txt`, selecting the folder `docs` writes `docs/…`. Cancelling an extraction removes the files and folders it created; files that already existed are left alone.
 
 - **Options dialog** (Extract All/Selected): destination, "Restore original audio" (default on) vs keep FLAC, include generated readme (default off), overwrite policy (Ask / Skip / Replace).
 - **Drag-out** uses the saved defaults without a dialog.
@@ -208,9 +208,10 @@ Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three
 
 Verify checks an archive's integrity without writing any files: CRC32 for every entry, plus full restore-in-memory and SHA-256 check for every restorable FLAC.
 
-- Run on the whole archive or a selection; progress and Cancel as for builds.
-- Results per entry: OK / CRC mismatch / hash mismatch / incomplete group / unreadable, shown as a column and in the Inspector.
-- Summary: "1,204 entries verified, 0 errors" with the time taken.
+- Purpose: a test of the archive as it is on disk, for archives received from elsewhere, copied to other media, or before deleting the originals.
+- Runs on the whole archive; progress in the status bar.
+- Results per entry: OK / CRC mismatch / hash mismatch / incomplete group / unreadable, shown in the Verified column (shown when results arrive) and in the Inspector.
+- Summary: a dialog, "All 1,204 files intact", or a warning listing the damaged files.
 - Optional setting: verify automatically after every build (off by default; it re-reads the whole archive).
 
 ## Settings
@@ -235,8 +236,6 @@ Verify checks an archive's integrity without writing any files: CRC32 for every 
 | Updates | Check automatically | On |
 
 Folder settings (Simple mode output location, temp location) are dropdowns: the default, the chosen folder, and "Choose Folder…".
-
-"Copy as CLI command" (in Settings) produces the equivalent CLI invocation for the current options.
 
 Full mode's Options popover has the same "Leave out" controls as Settings, as a per-archive override that is not saved. Items left out are counted in the action bar and listed in its Issues popover ("Left out: …"). Settings refuses to close while a custom pattern is invalid.
 
@@ -304,7 +303,7 @@ All are compatible with the dual license; Qt stays dynamically linked (main spec
 
 UI logic that decides anything lives outside the widgets so it can be unit-tested; the widgets themselves get a manual pass per release.
 
-- **Unit**: Simple-mode drop rule (zips only / mixed / none), output naming and `  2 ` suffixing, multi-mono row grouping, timecode formatting, Settings defaults, "Copy as CLI command" output.
+- **Unit**: Simple-mode drop rule (zips only / mixed / none), output naming and `  2 ` suffixing, multi-mono row grouping, timecode formatting, Settings defaults.
 - **Integration**: each Full-mode flow (create with collisions, extract with every pre-flight error, verify with injected CRC and hash errors, edit) driven through the C API with the same fixtures as the core.
 - **Automated UI smoke tests** (Qt Test): app launches in both modes and opens a 100,000-entry archive within the target.
 - **Previewers**: Quick Look and Windows preview handler render zip and FLAC fixtures, including third-party zips and corrupt files, without crashing or timing out.

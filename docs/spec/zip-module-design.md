@@ -340,6 +340,7 @@ size_t       zp_reader_entry_count(const zp_reader_t*);
 int          zp_reader_get_entry(const zp_reader_t*, size_t i, zp_entry_info_t* out);
 int          zp_reader_get_app_version(const zp_reader_t*, char* buf, size_t len);
 zp_xplan_t*  zp_extract_plan(zp_reader_t*, const size_t* sel, size_t n, zp_sink_t*, const zp_extract_options_t*);
+zp_xplan_t*  zp_extract_plan_relative(zp_reader_t*, const size_t* sel, size_t n, zp_sink_t*, const zp_extract_options_t*, const char* base_folder); // targets relative to an archive folder
 int          zp_extract(zp_xplan_t*, zp_progress_fn, void* user);
 void         zp_xplan_free(zp_xplan_t*);
 void         zp_reader_free(zp_reader_t*);
