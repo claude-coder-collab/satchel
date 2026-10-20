@@ -20,10 +20,12 @@
 #include <QDir>
 #include <QHeaderView>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
 #include <QSpinBox>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QTreeView>
 
 #include <QElapsedTimer>
@@ -64,6 +66,23 @@ private slots:
         QStandardPaths::setTestModeEnabled(true);
         QCoreApplication::setOrganizationName("Venn Audio Test");
         QCoreApplication::setApplicationName("Satchel Test");
+        auto* watchdog = new QTimer(this);
+        connect(watchdog, &QTimer::timeout, this, [] {
+            for (auto* w : QApplication::topLevelWidgets())
+            {
+                auto* box = qobject_cast<QMessageBox*>(w);
+                if (!box || !box->isVisible())
+                    continue;
+                if (!box->property("seen").toBool())
+                {
+                    box->setProperty("seen", true);
+                    continue;
+                }
+                qWarning("unexpected dialog: %s | %s | %s", qPrintable(box->windowTitle()), qPrintable(box->text()), qPrintable(box->detailedText()));
+                box->reject();
+            }
+        });
+        watchdog->start(3000);
         QVERIFY(dir_.isValid());
     }
 
