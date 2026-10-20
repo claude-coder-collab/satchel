@@ -47,6 +47,7 @@ private:
     QLabel* details_ = nullptr;
     QPushButton* reveal_ = nullptr;
     QPushButton* retry_ = nullptr;
+    QPushButton* view_contents_ = nullptr;
     QList<int> mine_;
     QHash<int, QString> cancelled_text_;
     QSet<int> quit_when_clean_;

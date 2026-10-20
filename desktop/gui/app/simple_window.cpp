@@ -115,17 +115,17 @@ SimpleWindow::SimpleWindow(App& app) :
     auto* buttons = new QHBoxLayout;
     reveal_ = new QPushButton(done);
     retry_ = new QPushButton(tr("Retry"), done);
-    auto* full = new QPushButton(tr("View Contents"), done);
+    view_contents_ = new QPushButton(tr("View Contents"), done);
     auto* again = new QPushButton(tr("Done"), done);
     connect(reveal_, &QPushButton::clicked, this, [this] { reveal_in_file_manager(last_output_); });
     connect(retry_, &QPushButton::clicked, this, [this] { handle(last_input_); });
-    connect(full, &QPushButton::clicked, this, [this] {
+    connect(view_contents_, &QPushButton::clicked, this, [this] {
         app_.show_full(last_output_.endsWith(".zip", Qt::CaseInsensitive) ? last_output_ : QString());
     });
     connect(again, &QPushButton::clicked, this, [this] { pages_->setCurrentIndex(0); });
     buttons->addWidget(reveal_);
     buttons->addWidget(retry_);
-    buttons->addWidget(full);
+    buttons->addWidget(view_contents_);
     buttons->addStretch();
     buttons->addWidget(again);
     done_layout->addStretch();
@@ -292,6 +292,7 @@ void SimpleWindow::on_finished(int id, const QString& title, const JobOutcome& o
 #endif
     );
     reveal_->setVisible(ok);
+    view_contents_->setVisible(ok && last_output_.endsWith(".zip", Qt::CaseInsensitive));
     retry_->setVisible(!ok && outcome.status != ZP_CANCELLED);
     if (quit_if_clean && outcome.status == ZP_OK && outcome.details.isEmpty() && mine_.isEmpty() && !app_.jobs().busy() && !(app_.full() && (app_.full()->isVisible() || app_.full()->dirty())))
     {

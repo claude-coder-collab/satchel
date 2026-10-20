@@ -43,6 +43,9 @@ public:
     void add_paths(const QStringList& paths, const QString& folder = {});
     // Create / Apply: returns the job id, or 0 if nothing can be written now.
     int apply_changes();
+    // Moves the selection into the folder of `target` (a source-model index) (a folder row: into it; an entry: beside
+    // it; invalid: the top level). Returns whether that is possible; applies it if `apply`.
+    bool move_to(const QModelIndex& target, bool apply);
 
     [[nodiscard]] QString archive_path() const { return archive_; }
     [[nodiscard]] int visible_rows() const;
@@ -66,6 +69,7 @@ private:
     };
 
     void build_ui();
+    // File ▸ New asks where to write; dropped items default to next to themselves (Simple-mode rule).
     void new_archive(const QStringList& given = {});
     void choose_and_add(bool folders);
     void drop_paths(const QStringList& paths, const QModelIndex& target);
@@ -105,7 +109,8 @@ private:
     // Renames that move the selected entries and folders into `dest`.
     [[nodiscard]] satchel_gui::Change move_change(const QString& dest) const;
     [[nodiscard]] QStringList folders_in_session() const;
-    QString extract_to_temp(const std::vector<std::size_t>& base);
+    // Extracts archive entries to a new temporary folder (drag-out); empty on failure.
+    QString extract_to_temp(const std::vector<std::size_t>& entries, const QString& base_folder);
 
     void on_started(int id, const QString& title);
     void on_progress(int id, quint64 done, quint64 total);
@@ -127,6 +132,7 @@ private:
     bool model_is_base_ = false;
     int commit_job_ = 0;
     int verify_job_ = 0;
+    bool extracting_ = false;
     std::function<void()> after_commit_;
     QString edit_after_update_;
     bool filtering_ = false;
@@ -146,7 +152,6 @@ private:
     QHash<int, QString> verification_; // by archive entry
     QHash<int, QString> verified_at_;
     QList<int> mine_;
-    QAction* tree_action_ = nullptr;
     QAction* show_deleted_ = nullptr;
     QAction* undo_ = nullptr;
     QAction* redo_ = nullptr;

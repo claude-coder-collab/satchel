@@ -57,8 +57,8 @@ Drop files on the window (or the app icon) and the job starts immediately: zips 
 
 1. Idle: drop target with a one-line hint.
 2. Running: progress ring, file name, throughput, ETA, Cancel. Further drops queue.
-3. Done: result card with savings (e.g. "4.2 GB → 2.3 GB, 45% smaller"), warning count, Reveal in Finder/Explorer, View Contents (opens the archive in Full mode). Counts use proper singular and plural ("1 file extracted", "44 files extracted"). Cancel leaves no trace: a cancelled extraction removes everything it wrote (including its folders) and the card reads "Cancelled. Nothing was extracted from <archive>." (compression: "Cancelled. <archive> was not created.").
-4. Error: what failed, which file, Retry / View Contents.
+3. Done: result card with savings (e.g. "4.2 GB → 2.3 GB, 45% smaller"), warning count, Reveal in Finder/Explorer, and after compressing View Contents (opens the archive in Full mode). Counts use proper singular and plural ("1 file extracted", "44 files extracted"). Cancel leaves no trace: a cancelled extraction removes everything it wrote (including its folders) and the card reads "Cancelled. Nothing was extracted from <archive>." (compression: "Cancelled. <archive> was not created.").
+4. Error: what failed, which file, Retry.
 
 A system notification is sent when a job finishes while the window is not focused.
 
@@ -86,7 +86,8 @@ The center pane lists the open archive's entries, read from the central director
 
 - Converted audio carries a "restorable" badge.
 - A multi-mono set is one row (`take2.wav — 16 channels`), expandable to its `_chNN.flac` members. Selecting, extracting, renaming or deleting the row acts on the whole group.
-- Tree view (the default) and flat list toggle; sorting on every column; column visibility saved.
+- A folder tree (the only view); sorting on every column; column visibility saved. Left on an entry or a collapsed folder selects the enclosing folder.
+- Right-click menu: Extract Selected, Rename, Move To…, New Folder with Items, Delete (on a row), then New Folder, Add Files…, Add Folder….
 - Search field filters by name; filter chips by method and by "restorable only". While any of them is active, every folder holding a match is expanded; clearing them restores the earlier expansion.
 - Third-party entries the core can't read (unsupported method, symlinks) are shown greyed with the reason as a tooltip.
 - The table model is virtualized, so 100,000+ entries scroll smoothly.
@@ -121,10 +122,10 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | | New archive | Edit archive |
 | --- | --- | --- |
-| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
+| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Files or folders dropped on an empty window start a session without asking, written next to them by the Simple-mode rule (`<item>.zip`). The action bar shows the destination ("Save as *name* in *folder*…"); clicking it changes it. While the dropped items are scanned, the bar shows "Scanning files…" with an indeterminate progress bar. Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
 | Browser shows | Only the staged additions | The archive's entries with pending changes overlaid |
 | Go action | **Create Archive** | **Apply Changes** (also **Save As…**) |
-| Writes | A new zip at the path chosen at the start | Rewrites the archive in place (temp file, then atomic swap), or writes a copy for Save As |
+| Writes | A new zip at the destination | Rewrites the archive in place (temp file, then atomic swap), or writes a copy for Save As |
 | Afterwards | The window opens the new archive as an Edit session with no pending changes | Same archive reopened, no pending changes |
 
 - The window title shows the archive name and the platform's edited marker (macOS: dot in the close button; elsewhere: `*`) while there are pending changes. A new archive's title is its chosen name, marked as edited from the start.
@@ -137,11 +138,11 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | Change | How |
 | --- | --- |
-| Add files / folders | Archive ▸ Add Files… (⌘⇧A) or Add Folder…, or drag from Finder/Explorer onto the browser. In tree view they go into the selected folder (or the selected entry's folder), or the folder or entry row they are dropped on; in flat view, and when dropped on empty space, to the top level |
+| Add files / folders | Archive ▸ Add Files… (⌘⇧A) or Add Folder…, or drag from Finder/Explorer onto the browser. They go into the selected folder (or the selected entry's folder), or the folder or entry row they are dropped on; dropped on empty space, to the top level |
 | New folder | Archive ▸ New Folder (⌘⇧N): an empty folder next to the selection (beside a selected folder, not inside it), or at the top level with nothing selected, named in place |
 | New folder with items | Archive ▸ New Folder with Items (⌃⌘N; Ctrl+Alt+N elsewhere): a new folder next to the selection with the selected items moved into it, named in place |
 | Rename | F2 / Enter on macOS, edited in place; works on folders, which renames everything below them. A multi-mono set is renamed through a dialog asking for the channel files' stem. A name containing `/` is refused (use Move To…) |
-| Move | Archive ▸ Move To…: pick an existing folder or type a new path (stored as renames). Dragging rows is reserved for dragging out to Finder/Explorer, which extracts them first |
+| Move | Drag rows onto a folder (into it), an entry (beside it) or empty space (top level); a folder cannot go into itself. Or Archive ▸ Move To…: pick an existing folder or type a new path. Stored as renames |
 | Delete | Delete key; no confirmation, because it is only staged and can be undone |
 | Replace | Drop a single file onto a file row with the same name and confirm "Replace *name*?" |
 
@@ -200,7 +201,7 @@ A bar at the bottom of the browser, visible while the session has pending change
 Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan. Selected items are extracted relative to the deepest folder holding all of them (`zp_extract_options_t.base_folder`): selecting `docs/b.txt` writes `b.txt`, selecting the folder `docs` writes `docs/…`. Cancelling an extraction removes the files and folders it created; files that already existed are left alone.
 
 - **Options dialog** (Extract All/Selected): destination, "Restore original audio" (default on) vs keep FLAC, include generated readme (default off), overwrite policy (Ask / Skip / Replace).
-- **Drag-out** uses the saved defaults without a dialog.
+- **Drag-out** uses the saved defaults without a dialog. The entries are extracted to a temporary folder only when the drop target asks for the files, so a drag that ends inside the browser (a move) extracts nothing. No events are processed during that extraction (a busy cursor shows instead).
 - **Pre-flight**: the extraction plan's warnings and errors (unsafe paths, symlinks, incomplete multi-mono groups, case-only duplicates) are shown before writing; existing files prompt per the overwrite policy.
 - **Result**: files written, restored and hash-verified count, any failures with reasons; hash mismatch is shown as an error with the file name and the partial output already deleted.
 

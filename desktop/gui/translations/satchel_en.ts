@@ -285,10 +285,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Tree View</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>&amp;View</source>
         <translation type="unfinished"></translation>
     </message>
@@ -791,14 +787,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Preparing files…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Cannot extract</source>
         <translation type="unfinished"></translation>
     </message>
@@ -983,11 +971,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Reveal</source>
+        <source>Destination</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Reading…</source>
+        <source>Reveal</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -995,7 +983,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Scanning…</source>
+        <source>Save as %1 in %2…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scanning files…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

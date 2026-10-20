@@ -10,6 +10,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -23,6 +24,7 @@
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QStyle>
+#include <QTimer>
 #include <QVBoxLayout>
 
 using satchel_gui::ExistingEntries;
@@ -96,11 +98,21 @@ SessionBar::SessionBar(QWidget* parent) :
     progress_->setAccessibleName(tr("Writing progress"));
     cancel_write_ = new QPushButton(tr("Cancel"), this);
     cancel_write_->setAccessibleName(tr("Cancel writing the archive"));
+    destination_ = new QPushButton(this);
+    destination_->setAccessibleName(tr("Destination"));
     result_ = new QLabel(this);
     reveal_ = new QPushButton(tr("Reveal"), this);
+    scan_delay_ = new QTimer(this);
+    scan_delay_->setSingleShot(true);
+    scan_delay_->setInterval(300);
+    connect(scan_delay_, &QTimer::timeout, this, [this] {
+        scanning_ = busy_ && !committing_;
+        update_visibility();
+    });
     layout->addWidget(result_);
     layout->addWidget(reveal_);
     layout->addWidget(summary_, 1);
+    layout->addWidget(destination_);
     layout->addWidget(issues_);
     layout->addWidget(options_);
     layout->addWidget(discard_);
@@ -111,6 +123,7 @@ SessionBar::SessionBar(QWidget* parent) :
     reveal_->hide();
 
     connect(go_, &QPushButton::clicked, this, &SessionBar::go);
+    connect(destination_, &QPushButton::clicked, this, &SessionBar::change_destination);
     connect(discard_, &QPushButton::clicked, this, [this] {
         if (snapshot_ && snapshot_->is_new)
             emit cancel_new();
@@ -142,9 +155,24 @@ void SessionBar::show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, 
         cancel_write_->setEnabled(true);
     }
     committing_ = committing;
+    busy_ = busy;
+    if (!busy || committing)
+    {
+        scan_delay_->stop();
+        scanning_ = false;
+    }
+    else if (!scanning_ && !scan_delay_->isActive())
+        scan_delay_->start();
+    if (snapshot_ && snapshot_->is_new)
+    {
+        const QFileInfo target(snapshot_->target);
+        const auto text = tr("Save as %1 in %2…").arg(target.fileName(), target.dir().dirName());
+        destination_->setText(destination_->fontMetrics().elidedText(text, Qt::ElideMiddle, 320));
+        destination_->setToolTip(QDir::toNativeSeparators(snapshot_->target));
+    }
     if (!snapshot_)
     {
-        summary_->setText(busy ? tr("Reading…") : QString());
+        summary_->setText(busy ? tr("Scanning files…") : QString());
         go_->setEnabled(false);
         update_visibility();
         return;
@@ -155,7 +183,7 @@ void SessionBar::show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, 
     if (committing)
         text = tr("Writing…");
     else if (busy)
-        text = tr("Scanning…");
+        text = tr("Scanning files…");
     else if (snapshot_->is_new)
     {
         std::size_t flac = 0;
@@ -228,13 +256,18 @@ void SessionBar::update_visibility()
 {
     const auto* v = snapshot_ ? &snapshot_->view : nullptr;
     const bool staged = v && (snapshot_->is_new || snapshot_->has_changes || !v->conflicts.empty() || !v->problems.empty());
-    summary_->setVisible(staged || committing_);
+    summary_->setVisible(staged || committing_ || scanning_);
     for (auto* w : std::initializer_list<QWidget*>{ options_, discard_, go_ })
         w->setVisible(staged && !committing_);
-    progress_->setVisible(committing_);
+    destination_->setVisible(staged && snapshot_->is_new && !committing_);
+    if (scanning_ && !committing_)
+        progress_->setRange(0, 0);
+    else
+        progress_->setRange(0, 1000);
+    progress_->setVisible(committing_ || scanning_);
     cancel_write_->setVisible(committing_);
     issues_->setVisible(staged && !committing_ && (!v->conflicts.empty() || !v->warnings.empty() || !v->excluded.empty() || !v->problems.empty()));
-    setVisible(staged || committing_ || !result_output_.isEmpty() || !result_->isHidden());
+    setVisible(staged || committing_ || scanning_ || !result_output_.isEmpty() || !result_->isHidden());
 }
 
 void SessionBar::open_issues()

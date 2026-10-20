@@ -10,6 +10,7 @@
 
 class QLabel;
 class QProgressBar;
+class QTimer;
 class QPushButton;
 
 // Full mode's action bar below the browser: what the staged changes add up to, the Issues and
@@ -38,6 +39,8 @@ signals:
     void resolve(const satchel_gui::op::Resolve& resolution);
     void options_changed(const satchel_gui::Settings& settings, satchel_gui::ExistingEntries existing);
     void reveal(const QString& path);
+    // A new archive: choose where it is written.
+    void change_destination();
 
 private:
     void open_issues();
@@ -55,6 +58,10 @@ private:
     QProgressBar* progress_ = nullptr;
     QPushButton* cancel_write_ = nullptr;
     bool committing_ = false;
+    bool busy_ = false;
+    bool scanning_ = false;
+    QTimer* scan_delay_ = nullptr;
+    QPushButton* destination_ = nullptr;
     QLabel* result_ = nullptr;
     QPushButton* reveal_ = nullptr;
     QString result_output_;

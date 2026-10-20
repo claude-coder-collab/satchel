@@ -142,16 +142,6 @@ const BrowserEntry* ArchiveModel::entry_of(const Node* n) const
     return i < entries_.size() ? &entries_[i] : nullptr;
 }
 
-void ArchiveModel::set_tree(bool tree)
-{
-    if (tree == tree_)
-        return;
-    beginResetModel();
-    tree_ = tree;
-    rebuild();
-    endResetModel();
-}
-
 void ArchiveModel::set_verification(const QHash<int, QString>& results)
 {
     verification_ = results;
@@ -188,12 +178,6 @@ void ArchiveModel::rebuild()
         }
         return n;
     };
-    if (!tree_)
-    {
-        for (const auto& r : rows_)
-            root_->add(make_row_node(r, labels::row_name(r)));
-        return;
-    }
     std::map<QString, Node*> folders;
     const auto folder_for = [&](const QString& path) {
         Node* parent = root_.get();
@@ -312,9 +296,9 @@ QVariant ArchiveModel::data(const QModelIndex& index, int role) const
                 case Name:
                     return n->name;
                 case Size:
-                    return folder && !tree_ ? QVariant() : QString::fromStdString(satchel_gui::human_size(n->size));
+                    return QString::fromStdString(satchel_gui::human_size(n->size));
                 case Packed:
-                    return (folder && !tree_) || !n->packed_known ? QVariant() : QString::fromStdString(satchel_gui::human_size(n->packed));
+                    return !n->packed_known ? QVariant() : QString::fromStdString(satchel_gui::human_size(n->packed));
                 case Ratio:
                     return n->size && n->ratio_known && n->packed_known ? QString("%1%").arg(satchel_gui::percent_saved(n->size, n->packed)) : QString();
                 case Method:

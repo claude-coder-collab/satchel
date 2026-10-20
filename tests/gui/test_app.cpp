@@ -23,6 +23,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QSortFilterProxyModel>
 #include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -198,12 +199,22 @@ private slots:
         QCOMPARE(outcome.status, ZP_OK);
         QCOMPARE(QDir::fromNativeSeparators(outcome.output), dir_.filePath("notes.txt.zip"));
         QVERIFY(QFile::exists(outcome.output));
+        const auto view_contents = [&app] {
+            for (auto* b : app.simple()->findChildren<QPushButton*>())
+            {
+                if (b->text() == "View Contents")
+                    return b->isVisibleTo(app.simple());
+            }
+            return false;
+        };
+        QVERIFY(view_contents());
 
         // Dropping the zip extracts it next to itself.
         app.simple()->handle({ outcome.output });
         QVERIFY(finished.wait(20000));
         const auto extracted = finished.take();
         QCOMPARE(extracted.status, ZP_OK);
+        QVERIFY(!view_contents());
         // "notes.txt" exists as a file, so the folder gets a suffix instead of clashing.
         QCOMPARE(QDir::fromNativeSeparators(extracted.output), dir_.filePath("notes.txt 2"));
         QVERIFY(QFile::exists(dir_.filePath("notes.txt 2/notes.txt")));
@@ -692,6 +703,61 @@ private slots:
         auto* view = app.full()->findChild<QTreeView*>();
         QVERIFY(view->header()->isSectionHidden(ArchiveModel::Verified));
         QVERIFY(!view->header()->isSectionHidden(ArchiveModel::Method));
+    }
+
+    void tree_moves_entries_and_left_selects_the_enclosing_folder()
+    {
+        QDir root(dir_.filePath("moves"));
+        QVERIFY(root.mkpath("src/docs"));
+        for (const auto* name : { "src/a.txt", "src/docs/b.txt" })
+        {
+            QFile f(root.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(name);
+        }
+        App app;
+        app.show_full();
+        auto* w = app.full();
+        auto& session = w->session();
+        const auto settled = [&] { return !session.busy() && session.snapshot(); };
+
+        // Dropped items need no dialog: the archive goes next to them.
+        w->add_paths({ root.filePath("src") });
+        QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
+        QCOMPARE(QDir::fromNativeSeparators(session.snapshot()->target), root.filePath("src.zip"));
+
+        auto* view = w->findChild<QTreeView*>();
+        auto& model = w->model();
+        const auto find = [&](const QString& path) {
+            std::function<QModelIndex(const QModelIndex&)> walk = [&](const QModelIndex& parent) -> QModelIndex {
+                for (int r = 0; r < model.rowCount(parent); ++r)
+                {
+                    const auto idx = model.index(r, 0, parent);
+                    if (idx.data(ArchiveModel::PathRole).toString() == path)
+                        return idx;
+                    if (auto found = walk(idx); found.isValid())
+                        return found;
+                }
+                return {};
+            };
+            return walk({});
+        };
+        const auto proxy = [view](const QModelIndex& source) { return qobject_cast<QSortFilterProxyModel*>(view->model())->mapFromSource(source); };
+        const auto select = [&](const QString& path) { view->selectionModel()->setCurrentIndex(proxy(find(path)), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows); };
+
+        view->expandAll();
+        select("src/docs/b.txt");
+        view->setFocus();
+        QTest::keyClick(view, Qt::Key_Left);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs"));
+
+        // A folder cannot move into itself; a file moves into the folder it is dropped on.
+        select("src/docs");
+        QVERIFY(!w->move_to(find("src/docs"), false));
+        select("src/a.txt");
+        QVERIFY(w->move_to(find("src/docs"), true));
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && find("src/docs/a.txt").isValid(), 20000);
+        QVERIFY(!find("src/a.txt").isValid());
     }
 
     void folder_settings_are_dropdowns()

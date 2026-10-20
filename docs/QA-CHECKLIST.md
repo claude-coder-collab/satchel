@@ -40,7 +40,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 ## 4. Full mode
 
 - [ ] Open a 100,000-entry archive: lists in under 1 s, scrolls smoothly
-- [ ] Tree and flat view; sort every column; column visibility saved; search; method and restorable filters
+- [ ] Tree; Left selects the enclosing folder; right-click menu; drag rows to move them (not a folder into itself); drag out to Finder; sort every column; column visibility saved; search; method and restorable filters
 - [ ] Multi-mono set is one row, expands to channels; select, extract, rename, delete act on the whole group
 - [ ] Greyed rows with tooltip for unreadable third-party entries
 - [ ] Ratio blank where unknown, and for folders or selections containing such entries
@@ -63,6 +63,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Extract / Verify with staged changes act on the archive on disk; double-click does nothing
 - [ ] Archive open in the app is modified or deleted by another program
 - [ ] Search and filters expand folders with matches; clearing restores the tree
+- [ ] Drop a big folder on an empty window: no dialog, "Scanning files…" bar, destination button next to the folder, change it
 - [ ] Extract Selected / drag-out of a file inside a folder gives just the file; of a folder gives the folder
 - [ ] Verify: dialog "All N files intact"; Verified column hidden by default, filled when shown from the header menu
 - [ ] Cancel an extraction (Simple and Full): nothing left behind; message names the archive

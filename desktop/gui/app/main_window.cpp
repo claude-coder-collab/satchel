@@ -161,14 +161,64 @@ QStringList local_paths(const QMimeData* mime)
 
 }
 
-// Tree view that drags entries out as files (extracted to a temporary folder first) and takes
-// files dropped from outside onto a folder or entry.
+constexpr auto entries_mime = "application/x-satchel-entries";
+
+// A drag of archive entries. Inside the browser it moves them; elsewhere the entries are extracted
+// to a temporary folder when the drop target first asks for the files.
+class EntriesMime : public QMimeData
+{
+public:
+    explicit EntriesMime(std::function<QString()> extract) :
+        extract_(std::move(extract))
+    {
+    }
+
+    [[nodiscard]] QStringList formats() const override { return { entries_mime, QStringLiteral("text/uri-list") }; }
+    [[nodiscard]] bool hasFormat(const QString& type) const override { return formats().contains(type); }
+
+protected:
+    [[nodiscard]] QVariant retrieveData(const QString& type, QMetaType meta) const override
+    {
+        if (type == entries_mime)
+            return QByteArray("1");
+        if (type != QLatin1String("text/uri-list"))
+            return {};
+        if (!extracted_)
+        {
+            extracted_ = true;
+            if (const auto dir = extract_(); !dir.isEmpty())
+            {
+                for (const auto& name : QDir(dir).entryList(QDir::AllEntries | QDir::NoDotAndDotDot))
+                    urls_ << QUrl::fromLocalFile(QDir(dir).filePath(name));
+            }
+        }
+        if (meta.id() == QMetaType::QByteArray || meta.id() == QMetaType::QString)
+        {
+            QByteArray list;
+            for (const auto& u : urls_)
+                list += u.toEncoded() + "\r\n";
+            return list;
+        }
+        return QVariant::fromValue(urls_);
+    }
+
+private:
+    std::function<QString()> extract_;
+    mutable bool extracted_ = false;
+    mutable QList<QUrl> urls_;
+};
+
+// Folder tree of the archive: drags entries out (extracted on demand) or onto a folder to move
+// them, takes files dropped from outside onto a folder or entry, and Left selects the enclosing
+// folder.
 class ArchiveView : public QTreeView
 {
 public:
-    std::function<QString(const std::vector<std::size_t>&)> extract;
+    std::function<QString(const std::vector<std::size_t>&, const QString&)> extract;
     std::function<std::vector<std::size_t>(const std::vector<std::size_t>&)> on_disk;
+    std::function<QString()> selection_base;
     std::function<void(const QStringList&, const QModelIndex&)> dropped;
+    std::function<bool(const QModelIndex&, bool apply)> moved;
 
     using QTreeView::QTreeView;
 
@@ -181,25 +231,18 @@ protected:
             for (const auto& v : i.data(ArchiveModel::EntriesRole).toList())
                 positions.push_back(static_cast<std::size_t>(v.toULongLong()));
         }
+        if (positions.empty())
+            return;
         const auto entries = on_disk ? on_disk(positions) : positions;
-        if (entries.empty() || !extract)
-            return;
-        const auto dir = extract(entries);
-        if (dir.isEmpty())
-            return;
-        QList<QUrl> urls;
-        for (const auto& name : QDir(dir).entryList(QDir::AllEntries | QDir::NoDotAndDotDot))
-            urls << QUrl::fromLocalFile(QDir(dir).filePath(name));
-        auto* mime = new QMimeData;
-        mime->setUrls(urls);
+        const auto base = selection_base ? selection_base() : QString();
         auto* drag = new QDrag(this);
-        drag->setMimeData(mime);
-        drag->exec(Qt::CopyAction);
+        drag->setMimeData(new EntriesMime([this, entries, base] { return entries.empty() || !extract ? QString() : extract(entries, base); }));
+        drag->exec(Qt::CopyAction | Qt::MoveAction, Qt::CopyAction);
     }
 
     void dragEnterEvent(QDragEnterEvent* e) override
     {
-        if (e->source() != this && e->mimeData()->hasUrls() && dropped)
+        if (accepts(e))
             e->acceptProposedAction();
         else
             e->ignore();
@@ -207,19 +250,64 @@ protected:
 
     void dragMoveEvent(QDragMoveEvent* e) override
     {
-        if (e->source() != this && e->mimeData()->hasUrls() && dropped)
-            e->acceptProposedAction();
-        else
+        QTreeView::dragMoveEvent(e);
+        if (!accepts(e))
+        {
             e->ignore();
+            return;
+        }
+        if (internal(e))
+        {
+            e->setDropAction(Qt::MoveAction);
+            e->accept();
+        }
+        else
+            e->acceptProposedAction();
     }
 
     void dropEvent(QDropEvent* e) override
     {
+        const auto target = indexAt(e->position().toPoint());
+        if (internal(e))
+        {
+            if (moved && moved(target, true))
+            {
+                e->setDropAction(Qt::MoveAction);
+                e->accept();
+            }
+            else
+                e->ignore();
+            return;
+        }
         const auto paths = local_paths(e->mimeData());
         if (paths.isEmpty() || !dropped)
             return;
         e->acceptProposedAction();
-        dropped(paths, indexAt(e->position().toPoint()));
+        dropped(paths, target);
+    }
+
+    void keyPressEvent(QKeyEvent* e) override
+    {
+        const auto current = currentIndex();
+        const bool open_folder = model() && model()->hasChildren(current) && isExpanded(current);
+        if (e->key() == Qt::Key_Left && (e->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier && current.isValid() && !open_folder && current.parent().isValid())
+        {
+            const auto parent = current.parent();
+            selectionModel()->setCurrentIndex(parent, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            scrollTo(parent);
+            return;
+        }
+        QTreeView::keyPressEvent(e);
+    }
+
+private:
+    [[nodiscard]] bool internal(const QDropEvent* e) const { return e->source() == this && e->mimeData()->hasFormat(entries_mime); }
+
+    bool accepts(const QDropEvent* e) const
+    {
+        if (internal(e))
+            return moved && moved(indexAt(e->position().toPoint()), false);
+        return e->source() != this && e->mimeData()->hasUrls() && dropped;
     }
 };
 
@@ -317,14 +405,10 @@ void MainWindow::build_ui()
     for (auto* a : disk_actions_)
         archive_menu->addAction(a);
 
-    tree_action_ = action(tr("Tree View"), QKeySequence(), [this] { model_->set_tree(tree_action_->isChecked()); });
-    tree_action_->setCheckable(true);
-    tree_action_->setChecked(true);
     show_deleted_ = action(tr("Show Deleted"), QKeySequence(), [this] { filter_->set_show_deleted(show_deleted_->isChecked()); });
     show_deleted_->setCheckable(true);
     show_deleted_->setChecked(true);
     auto* view_menu = menuBar()->addMenu(tr("&View"));
-    view_menu->addAction(tree_action_);
     view_menu->addAction(show_deleted_);
     view_menu->addAction(action(tr("Switch to Simple Mode"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [this] { app_.toggle_mode(); }));
     if ((app_.updater() && app_.updater()->available()) || uninstall_available() || user_data_cleanup_available())
@@ -409,7 +493,9 @@ void MainWindow::build_ui()
     view_->header()->setStretchLastSection(false);
     view_->header()->setSectionResizeMode(QHeaderView::Interactive);
     view_->header()->setContextMenuPolicy(Qt::CustomContextMenu);
-    view_->extract = [this](const std::vector<std::size_t>& e) { return extract_to_temp(e); };
+    view_->extract = [this](const std::vector<std::size_t>& e, const QString& base) { return extract_to_temp(e, base); };
+    view_->selection_base = [this] { return selection_base(); };
+    view_->moved = [this](const QModelIndex& index, bool apply) { return move_to(filter_->mapToSource(index), apply); };
     view_->on_disk = [this](const std::vector<std::size_t>& p) { return base_ids(p); };
     view_->dropped = [this](const QStringList& paths, const QModelIndex& index) { drop_paths(paths, filter_->mapToSource(index)); };
     connect(view_->header(), &QHeaderView::customContextMenuRequested, this, [this](const QPoint& pos) {
@@ -432,12 +518,30 @@ void MainWindow::build_ui()
         view_->header()->setSectionHidden(ArchiveModel::Verified, true);
     }
     connect(view_->header(), &QHeaderView::sectionResized, this, [this] { QSettings().setValue("browser/layout", view_->header()->saveState()); });
+    view_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(view_, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        const auto clicked = view_->indexAt(pos);
+        if (clicked.isValid() && !view_->selectionModel()->isRowSelected(clicked.row(), clicked.parent()))
+            view_->selectionModel()->setCurrentIndex(clicked, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        update_actions();
+        QMenu menu(this);
+        if (clicked.isValid())
+        {
+            menu.addAction(disk_actions_[1]);
+            menu.addSeparator();
+            menu.addActions({ edit_actions_[4], edit_actions_[5], edit_actions_[3], edit_actions_[6] });
+            menu.addSeparator();
+        }
+        menu.addActions({ edit_actions_[2], edit_actions_[0], edit_actions_[1] });
+        menu.exec(view_->viewport()->mapToGlobal(pos));
+    });
     connect(view_->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this] {
         update_inspector();
         update_actions();
     });
     bar_ = new SessionBar(browser);
     connect(bar_, &SessionBar::go, this, [this] { apply_changes(); });
+    connect(bar_, &SessionBar::change_destination, this, &MainWindow::save_as);
     connect(bar_, &SessionBar::discard, controller_, &SessionController::discard);
     connect(bar_, &SessionBar::cancel_new, this, &MainWindow::cancel_new);
     connect(bar_, &SessionBar::cancel_write, this, [this] {
@@ -654,13 +758,7 @@ void MainWindow::new_archive(const QStringList& given)
 {
     if (!confirm_leave([this, given] { new_archive(given); }))
         return;
-    QString suggested;
-    if (given.isEmpty())
-    {
-        const auto dir = QSettings().value("new/folder", QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).toString();
-        suggested = QDir(dir).filePath(tr("Archive.zip"));
-    }
-    else
+    if (!given.isEmpty())
     {
         std::vector<std::filesystem::path> items;
         for (const auto& i : given)
@@ -669,9 +767,11 @@ void MainWindow::new_archive(const QStringList& given)
             std::error_code ec;
             return std::filesystem::exists(p, ec);
         };
-        suggested = QString::fromStdU16String(satchel_gui::compress_output(items, std::nullopt, exists).u16string());
+        start_new_archive(QString::fromStdU16String(satchel_gui::compress_output(items, std::nullopt, exists).u16string()), given);
+        return;
     }
-    auto path = QFileDialog::getSaveFileName(this, tr("New archive"), suggested, tr("Zip archives (*.zip)"));
+    const auto dir = QSettings().value("new/folder", QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).toString();
+    auto path = QFileDialog::getSaveFileName(this, tr("New archive"), QDir(dir).filePath(tr("Archive.zip")), tr("Zip archives (*.zip)"));
     if (path.isEmpty())
         return;
     if (QFileInfo(path).suffix().isEmpty())
@@ -984,7 +1084,7 @@ std::optional<satchel_gui::EntryKey> MainWindow::key_of(std::size_t position) co
 
 QString MainWindow::folder_for(const QModelIndex& index) const
 {
-    if (!index.isValid() || !model_->tree())
+    if (!index.isValid())
         return {};
     const auto path = index.data(ArchiveModel::PathRole).toString();
     if (index.data(ArchiveModel::FolderRole).toBool())
@@ -1094,7 +1194,7 @@ void MainWindow::new_folder(bool with_selection)
     if (with_selection && rows.isEmpty())
         return;
     QString parent;
-    if (!rows.isEmpty() && model_->tree())
+    if (!rows.isEmpty())
     {
         const auto current = view_->currentIndex();
         const auto anchor = current.isValid() && view_->selectionModel()->isRowSelected(current.row(), current.parent()) ? current : rows.front();
@@ -1224,7 +1324,8 @@ satchel_gui::Change MainWindow::move_change(const QString& dest) const
             continue;
         const auto path = idx.data(ArchiveModel::PathRole).toString();
         moved_folders << path;
-        change.emplace_back(op::RenameFolder{ path.toStdString(), join_path(dest, path.section('/', -1)).toStdString() });
+        if (const auto to = join_path(dest, path.section('/', -1)); to != path)
+            change.emplace_back(op::RenameFolder{ path.toStdString(), to.toStdString() });
     }
     for (const auto p : selected_positions())
     {
@@ -1234,7 +1335,8 @@ satchel_gui::Change MainWindow::move_change(const QString& dest) const
         const auto name = qs(key->name);
         if (std::ranges::any_of(moved_folders, [&](const QString& f) { return name == f || name.startsWith(f + '/'); }))
             continue;
-        change.emplace_back(op::Rename{ *key, join_path(dest, name.section('/', -1)).toStdString() });
+        if (const auto to = join_path(dest, name.section('/', -1)); to != name)
+            change.emplace_back(op::Rename{ *key, to.toStdString() });
     }
     return change;
 }
@@ -1499,37 +1601,52 @@ void MainWindow::verify()
     mine_ << verify_job_;
 }
 
-QString MainWindow::extract_to_temp(const std::vector<std::size_t>& base)
+QString MainWindow::extract_to_temp(const std::vector<std::size_t>& entries, const QString& base_folder)
 {
-    if (archive_.isEmpty() || base.empty())
+    if (archive_.isEmpty() || entries.empty() || extracting_)
         return {};
+    extracting_ = true;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
     auto dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QString("/satchel-%1").arg(QDateTime::currentMSecsSinceEpoch());
     QDir().mkpath(dir);
-    QProgressDialog progress(tr("Preparing files…"), tr("Cancel"), 0, 1000, this);
-    progress.setWindowModality(Qt::WindowModal);
-    progress.setMinimumDuration(300);
-    JobContext jc;
-    std::atomic<bool> cancelled{ false };
-    jc.cancelled = &cancelled;
-    jc.progress = [&](std::uint64_t done, std::uint64_t total) {
-        progress.setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
-        QApplication::processEvents();
-        return !progress.wasCanceled();
-    };
+    QString error;
     try
     {
-        const auto outcome = extract_job(jc, archive_, dir, app_.settings(), base, true, selection_base());
+        JobContext jc;
+        const auto outcome = extract_job(jc, archive_, dir, app_.settings(), entries, true, base_folder);
         if (outcome.status != ZP_OK)
-        {
-            QMessageBox::warning(this, tr("Cannot extract"), outcome.message);
-            return {};
-        }
+            error = outcome.message;
     } catch (const zpp::Error& e)
     {
-        QMessageBox::warning(this, tr("Cannot extract"), QString::fromUtf8(e.what()));
-        return {};
+        error = QString::fromUtf8(e.what());
     }
-    return dir;
+    QApplication::restoreOverrideCursor();
+    extracting_ = false;
+    if (error.isEmpty())
+        return dir;
+    QDir(dir).removeRecursively();
+    QMetaObject::invokeMethod(this, [this, error] { QMessageBox::warning(this, tr("Cannot extract"), error); }, Qt::QueuedConnection);
+    return {};
+}
+
+bool MainWindow::move_to(const QModelIndex& target, bool apply)
+{
+    if (!snap_ || controller_->busy() || !view_->selectionModel()->hasSelection())
+        return false;
+    const auto dest = folder_for(target);
+    for (const auto& proxy : view_->selectionModel()->selectedRows())
+    {
+        const auto idx = filter_->mapToSource(proxy);
+        const auto path = idx.data(ArchiveModel::PathRole).toString();
+        if (idx.data(ArchiveModel::FolderRole).toBool() && (dest == path || dest.startsWith(path + '/')))
+            return false;
+    }
+    auto change = move_change(dest);
+    if (change.empty())
+        return false;
+    if (apply)
+        controller_->apply(std::move(change));
+    return true;
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* e)
