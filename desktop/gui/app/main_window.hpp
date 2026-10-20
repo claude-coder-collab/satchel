@@ -43,6 +43,9 @@ public:
     void add_paths(const QStringList& paths, const QString& folder = {});
     // Create / Apply: returns the job id, or 0 if nothing can be written now.
     int apply_changes();
+    // Drag-out: the top-level names the selected on-disk entries extract to; none if nothing on
+    // disk is selected (a new archive), so the drag offers no files.
+    [[nodiscard]] QStringList drag_names() const;
     // Moves the selection into the folder of `target` (a source-model index) (a folder row: into it; an entry: beside
     // it; invalid: the top level). Returns whether that is possible; applies it if `apply`.
     bool move_to(const QModelIndex& target, bool apply);
@@ -85,6 +88,8 @@ private:
     void save_as();
     // Leaves a new archive without creating it.
     void cancel_new();
+    // Closes the archive or new archive (asking about unwritten changes) and shows the drop zone.
+    void close_archive();
     void show_empty();
     void update_inspector();
     void update_summary();
@@ -109,8 +114,8 @@ private:
     // Renames that move the selected entries and folders into `dest`.
     [[nodiscard]] satchel_gui::Change move_change(const QString& dest) const;
     [[nodiscard]] QStringList folders_in_session() const;
-    // Extracts archive entries to a new temporary folder (drag-out); empty on failure.
-    QString extract_to_temp(const std::vector<std::size_t>& entries, const QString& base_folder);
+    // Drag-out: the extraction of the selected on-disk entries (no event processing while it runs).
+    void extract_to(const std::vector<std::size_t>& entries, const QString& base_folder, const QString& dir);
 
     void on_started(int id, const QString& title);
     void on_progress(int id, quint64 done, quint64 total);
@@ -157,6 +162,7 @@ private:
     QAction* redo_ = nullptr;
     QAction* go_ = nullptr;
     QAction* save_as_ = nullptr;
+    QAction* close_ = nullptr;
     QAction* discard_ = nullptr;
     QList<QAction*> edit_actions_;
     QList<QAction*> disk_actions_;

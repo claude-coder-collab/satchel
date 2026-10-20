@@ -63,7 +63,11 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Extract / Verify with staged changes act on the archive on disk; double-click does nothing
 - [ ] Archive open in the app is modified or deleted by another program
 - [ ] Search and filters expand folders with matches; clearing restores the tree
-- [ ] Drop a big folder on an empty window: no dialog, "Scanning files…" bar, destination button next to the folder, change it
+- [ ] Drop a big folder on an empty window: no dialog, "Scanning files…" bar, Location pop-up next to the folder, change it
+- [ ] File ▸ Close (⌘W) back to the drop zone; asks first with unwritten changes
+- [ ] Keys: Down/Up with nothing selected, ⌥Up/⌥Down, ⌘Down extracts, Left to the enclosing folder
+- [ ] Inspector can be widened; divider position remembered
+- [ ] New archive: rows can be dragged to move but not out of the window
 - [ ] Extract Selected / drag-out of a file inside a folder gives just the file; of a folder gives the folder
 - [ ] Verify: dialog "All N files intact"; Verified column hidden by default, filled when shown from the header menu
 - [ ] Cancel an extraction (Simple and Full): nothing left behind; message names the archive

@@ -86,7 +86,10 @@ The center pane lists the open archive's entries, read from the central director
 
 - Converted audio carries a "restorable" badge.
 - A multi-mono set is one row (`take2.wav — 16 channels`), expandable to its `_chNN.flac` members. Selecting, extracting, renaming or deleting the row acts on the whole group.
-- A folder tree (the only view); sorting on every column; column visibility saved. Left on an entry or a collapsed folder selects the enclosing folder.
+- A folder tree (the only view); sorting on every column; column visibility saved.
+- Keys as in Finder: Left on an entry or a collapsed folder selects the enclosing folder; with nothing selected Down selects the first row and Up the last; ⌥Up / ⌥Down select the first / last row; ⌘Down extracts the selection (Extract Selected).
+- File ▸ Close (⌘W) closes the archive or new archive (asking about unwritten changes, as for Open) and shows the drop zone.
+- The browser and Inspector are split by a movable divider whose position is saved; the action bar never widens the browser (its summary line shortens with "…").
 - Right-click menu: Extract Selected, Rename, Move To…, New Folder with Items, Delete (on a row), then New Folder, Add Files…, Add Folder….
 - Search field filters by name; filter chips by method and by "restorable only". While any of them is active, every folder holding a match is expanded; clearing them restores the earlier expansion.
 - Third-party entries the core can't read (unsupported method, symlinks) are shown greyed with the reason as a tooltip.
@@ -122,7 +125,7 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | | New archive | Edit archive |
 | --- | --- | --- |
-| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Files or folders dropped on an empty window start a session without asking, written next to them by the Simple-mode rule (`<item>.zip`). The action bar shows the destination ("Save as *name* in *folder*…"); clicking it changes it. While the dropped items are scanned, the bar shows "Scanning files…" with an indeterminate progress bar. Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
+| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Files or folders dropped on an empty window start a session without asking, written next to them by the Simple-mode rule (`<item>.zip`). The action bar's **Location** pop-up (like a save panel's "Where" menu: the folder and its parents, Desktop, Documents, Downloads, Choose Folder…) changes the folder; File ▸ Save As… changes name and folder. While the dropped items are scanned, the bar shows "Scanning files…" with an indeterminate progress bar. Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
 | Browser shows | Only the staged additions | The archive's entries with pending changes overlaid |
 | Go action | **Create Archive** | **Apply Changes** (also **Save As…**) |
 | Writes | A new zip at the destination | Rewrites the archive in place (temp file, then atomic swap), or writes a copy for Save As |
@@ -201,7 +204,7 @@ A bar at the bottom of the browser, visible while the session has pending change
 Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan. Selected items are extracted relative to the deepest folder holding all of them (`zp_extract_options_t.base_folder`): selecting `docs/b.txt` writes `b.txt`, selecting the folder `docs` writes `docs/…`. Cancelling an extraction removes the files and folders it created; files that already existed are left alone.
 
 - **Options dialog** (Extract All/Selected): destination, "Restore original audio" (default on) vs keep FLAC, include generated readme (default off), overwrite policy (Ask / Skip / Replace).
-- **Drag-out** uses the saved defaults without a dialog. The entries are extracted to a temporary folder only when the drop target asks for the files, so a drag that ends inside the browser (a move) extracts nothing. No events are processed during that extraction (a busy cursor shows instead).
+- **Drag-out** uses the saved defaults without a dialog. The drag carries the paths the entries will have in a new temporary folder; they are extracted there when the drag leaves the browser (or a target asks for the data first), so a drag that stays inside the browser (a move) extracts nothing. No events are processed during that extraction (a busy cursor shows instead). Only entries already in the archive on disk can be dragged out: while planning a new archive, a drag can only move.
 - **Pre-flight**: the extraction plan's warnings and errors (unsafe paths, symlinks, incomplete multi-mono groups, case-only duplicates) are shown before writing; existing files prompt per the overwrite policy.
 - **Result**: files written, restored and hash-verified count, any failures with reasons; hash mismatch is shown as an error with the file name and the partial output already deleted.
 
@@ -271,6 +274,7 @@ Each platform gets a native previewer and context-menu entries; these are separa
 | --- | --- | --- |
 | New archive | ⌘N | Ctrl+N |
 | Open archive | ⌘O | Ctrl+O |
+| Close archive | ⌘W | Ctrl+W |
 | Add files | ⌘⇧A | Ctrl+Shift+A |
 | New folder | ⌘⇧N | Ctrl+Shift+N |
 | New folder with items | ⌃⌘N | Ctrl+Alt+N |

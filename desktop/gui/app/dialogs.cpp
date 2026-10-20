@@ -27,6 +27,7 @@
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStandardItemModel>
+#include <QStandardPaths>
 #include <QTableView>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -124,6 +125,60 @@ void FolderChoice::rebuild()
     }
     insertSeparator(count());
     addItem(tr("Choose Folder…"));
+}
+
+LocationChoice::LocationChoice(QWidget* parent) :
+    QComboBox(parent)
+{
+    setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    setMinimumContentsLength(12);
+    setAccessibleName(tr("Location"));
+    connect(this, &QComboBox::activated, this, [this](int index) {
+        auto chosen = itemData(index).toString();
+        if (chosen.isEmpty())
+            chosen = QFileDialog::getExistingDirectory(this, tr("Location"), folder_);
+        if (chosen.isEmpty() || QDir(chosen) == QDir(folder_))
+        {
+            set_folder(folder_);
+            return;
+        }
+        set_folder(chosen);
+        emit folder_chosen(folder_);
+    });
+}
+
+void LocationChoice::set_folder(const QString& folder)
+{
+    folder_ = QDir::cleanPath(folder);
+    const QSignalBlocker block(this);
+    clear();
+    const QFileIconProvider icons;
+    const auto add = [&](const QString& path) {
+        for (int i = 0; i < count(); ++i)
+        {
+            if (!itemData(i).toString().isEmpty() && QDir(itemData(i).toString()) == QDir(path))
+                return;
+        }
+        const auto name = QFileInfo(path).fileName();
+        addItem(icons.icon(QFileInfo(path)), name.isEmpty() ? QDir::toNativeSeparators(path) : name, path);
+        setItemData(count() - 1, QDir::toNativeSeparators(path), Qt::ToolTipRole);
+    };
+    for (QDir d(folder_);;)
+    {
+        add(d.absolutePath());
+        if (!d.cdUp())
+            break;
+    }
+    insertSeparator(count());
+    for (const auto where : { QStandardPaths::DesktopLocation, QStandardPaths::DocumentsLocation, QStandardPaths::DownloadLocation })
+    {
+        if (const auto path = QStandardPaths::writableLocation(where); !path.isEmpty())
+            add(path);
+    }
+    insertSeparator(count());
+    addItem(tr("Choose Folder…"));
+    setCurrentIndex(0);
+    setToolTip(QDir::toNativeSeparators(folder_));
 }
 
 ExcludeEditor::ExcludeEditor(const Settings& settings, QWidget* parent) :

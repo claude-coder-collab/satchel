@@ -5,13 +5,31 @@
 #include "session_controller.hpp"
 
 #include <QFrame>
+#include <QLabel>
 
 #include <memory>
 
-class QLabel;
+class LocationChoice;
 class QProgressBar;
 class QTimer;
 class QPushButton;
+
+// A label that shortens its text with "…" instead of widening its layout.
+class ElidedLabel : public QLabel
+{
+public:
+    explicit ElidedLabel(QWidget* parent = nullptr);
+    void set_full_text(const QString& text);
+    [[nodiscard]] QSize minimumSizeHint() const override;
+
+protected:
+    void resizeEvent(QResizeEvent* e) override;
+
+private:
+    void update_text();
+
+    QString full_;
+};
 
 // Full mode's action bar below the browser: what the staged changes add up to, the Issues and
 // Options popovers, Discard and the Go button, and the result of the last write.
@@ -39,8 +57,8 @@ signals:
     void resolve(const satchel_gui::op::Resolve& resolution);
     void options_changed(const satchel_gui::Settings& settings, satchel_gui::ExistingEntries existing);
     void reveal(const QString& path);
-    // A new archive: choose where it is written.
-    void change_destination();
+    // A new archive: write it to this path instead.
+    void target_changed(const QString& path);
 
 private:
     void open_issues();
@@ -50,7 +68,7 @@ private:
     std::shared_ptr<const SessionSnapshot> snapshot_;
     satchel_gui::Settings settings_;
     satchel_gui::ExistingEntries existing_ = satchel_gui::ExistingEntries::Ask;
-    QLabel* summary_ = nullptr;
+    ElidedLabel* summary_ = nullptr;
     QPushButton* issues_ = nullptr;
     QPushButton* options_ = nullptr;
     QPushButton* discard_ = nullptr;
@@ -61,7 +79,8 @@ private:
     bool busy_ = false;
     bool scanning_ = false;
     QTimer* scan_delay_ = nullptr;
-    QPushButton* destination_ = nullptr;
+    QLabel* location_label_ = nullptr;
+    LocationChoice* location_ = nullptr;
     QLabel* result_ = nullptr;
     QPushButton* reveal_ = nullptr;
     QString result_output_;

@@ -251,6 +251,17 @@
     </message>
 </context>
 <context>
+    <name>LocationChoice</name>
+    <message>
+        <source>Location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose Folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <source>Satchel</source>
@@ -428,6 +439,10 @@
     </message>
     <message>
         <source>New Archive…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -971,10 +986,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Destination</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Reveal</source>
         <translation type="unfinished"></translation>
     </message>
@@ -983,7 +994,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Save as %1 in %2…</source>
+        <source>Location</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

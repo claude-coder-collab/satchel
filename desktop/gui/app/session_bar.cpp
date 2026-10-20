@@ -77,13 +77,48 @@ protected:
 
 }
 
+ElidedLabel::ElidedLabel(QWidget* parent) :
+    QLabel(parent)
+{
+    setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+}
+
+void ElidedLabel::set_full_text(const QString& text)
+{
+    full_ = text;
+    update_text();
+}
+
+QSize ElidedLabel::minimumSizeHint() const
+{
+    return { 0, QLabel::minimumSizeHint().height() };
+}
+
+void ElidedLabel::resizeEvent(QResizeEvent* e)
+{
+    QLabel::resizeEvent(e);
+    update_text();
+}
+
+void ElidedLabel::update_text()
+{
+    const auto shown = fontMetrics().elidedText(full_, Qt::ElideRight, std::max(0, contentsRect().width()));
+    setText(shown);
+    setToolTip(shown == full_ ? QString() : full_);
+}
+
 SessionBar::SessionBar(QWidget* parent) :
     QFrame(parent)
 {
     setFrameShape(QFrame::StyledPanel);
-    auto* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(8, 4, 8, 4);
-    summary_ = new QLabel(this);
+    auto* rows = new QVBoxLayout(this);
+    rows->setContentsMargins(8, 4, 8, 4);
+    rows->setSpacing(2);
+    auto* top = new QHBoxLayout;
+    auto* layout = new QHBoxLayout;
+    rows->addLayout(top);
+    rows->addLayout(layout);
+    summary_ = new ElidedLabel(this);
     summary_->setAccessibleName(tr("Staged changes"));
     issues_ = new QPushButton(this);
     issues_->setAccessibleName(tr("Issues"));
@@ -98,8 +133,8 @@ SessionBar::SessionBar(QWidget* parent) :
     progress_->setAccessibleName(tr("Writing progress"));
     cancel_write_ = new QPushButton(tr("Cancel"), this);
     cancel_write_->setAccessibleName(tr("Cancel writing the archive"));
-    destination_ = new QPushButton(this);
-    destination_->setAccessibleName(tr("Destination"));
+    location_label_ = new QLabel(tr("Location"), this);
+    location_ = new LocationChoice(this);
     result_ = new QLabel(this);
     reveal_ = new QPushButton(tr("Reveal"), this);
     scan_delay_ = new QTimer(this);
@@ -109,10 +144,12 @@ SessionBar::SessionBar(QWidget* parent) :
         scanning_ = busy_ && !committing_;
         update_visibility();
     });
-    layout->addWidget(result_);
-    layout->addWidget(reveal_);
-    layout->addWidget(summary_, 1);
-    layout->addWidget(destination_);
+    top->addWidget(result_);
+    top->addWidget(reveal_);
+    top->addWidget(summary_, 1);
+    layout->addWidget(location_label_);
+    layout->addWidget(location_);
+    layout->addStretch(1);
     layout->addWidget(issues_);
     layout->addWidget(options_);
     layout->addWidget(discard_);
@@ -123,7 +160,10 @@ SessionBar::SessionBar(QWidget* parent) :
     reveal_->hide();
 
     connect(go_, &QPushButton::clicked, this, &SessionBar::go);
-    connect(destination_, &QPushButton::clicked, this, &SessionBar::change_destination);
+    connect(location_, &LocationChoice::folder_chosen, this, [this](const QString& folder) {
+        if (snapshot_)
+            emit target_changed(QDir(folder).filePath(QFileInfo(snapshot_->target).fileName()));
+    });
     connect(discard_, &QPushButton::clicked, this, [this] {
         if (snapshot_ && snapshot_->is_new)
             emit cancel_new();
@@ -164,15 +204,10 @@ void SessionBar::show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, 
     else if (!scanning_ && !scan_delay_->isActive())
         scan_delay_->start();
     if (snapshot_ && snapshot_->is_new)
-    {
-        const QFileInfo target(snapshot_->target);
-        const auto text = tr("Save as %1 in %2…").arg(target.fileName(), target.dir().dirName());
-        destination_->setText(destination_->fontMetrics().elidedText(text, Qt::ElideMiddle, 320));
-        destination_->setToolTip(QDir::toNativeSeparators(snapshot_->target));
-    }
+        location_->set_folder(QFileInfo(snapshot_->target).absolutePath());
     if (!snapshot_)
     {
-        summary_->setText(busy ? tr("Scanning files…") : QString());
+        summary_->set_full_text(busy ? tr("Scanning files…") : QString());
         go_->setEnabled(false);
         update_visibility();
         return;
@@ -214,7 +249,7 @@ void SessionBar::show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, 
     }
     if (!v.excluded.empty() && !busy)
         text += tr(" · %n left out", nullptr, static_cast<int>(v.excluded.size()));
-    summary_->setText(text);
+    summary_->set_full_text(text);
 
     const auto notes = v.warnings.size() + v.excluded.size() + v.problems.size();
     issues_->setText(v.conflicts.empty() ? tr("Notes (%1)").arg(notes) : tr("Issues (%1)").arg(v.conflicts.size()));
@@ -259,7 +294,8 @@ void SessionBar::update_visibility()
     summary_->setVisible(staged || committing_ || scanning_);
     for (auto* w : std::initializer_list<QWidget*>{ options_, discard_, go_ })
         w->setVisible(staged && !committing_);
-    destination_->setVisible(staged && snapshot_->is_new && !committing_);
+    location_label_->setVisible(staged && snapshot_->is_new && !committing_);
+    location_->setVisible(location_label_->isVisibleTo(this));
     if (scanning_ && !committing_)
         progress_->setRange(0, 0);
     else

@@ -51,6 +51,24 @@ private:
     int previous_ = 0;
 };
 
+// Where a file goes, as in a save panel's "Where" menu: the folder and its parents, the
+// Desktop, Documents and Downloads folders, and "Choose Folder…".
+class LocationChoice : public QComboBox
+{
+    Q_OBJECT
+
+public:
+    explicit LocationChoice(QWidget* parent = nullptr);
+    [[nodiscard]] QString folder() const { return folder_; }
+    void set_folder(const QString& folder);
+
+signals:
+    void folder_chosen(const QString& folder);
+
+private:
+    QString folder_;
+};
+
 // Exclude settings: the system and DAW cache presets and an editable list of custom patterns.
 class ExcludeEditor : public QWidget
 {

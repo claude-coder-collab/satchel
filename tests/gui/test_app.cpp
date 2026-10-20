@@ -751,6 +751,21 @@ private slots:
         QTest::keyClick(view, Qt::Key_Left);
         QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs"));
 
+        // Finder's keys: with nothing selected Down/Up pick the first/last row; Option jumps.
+        view->selectionModel()->clear();
+        QTest::keyClick(view, Qt::Key_Down);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src"));
+        view->selectionModel()->clear();
+        QTest::keyClick(view, Qt::Key_Up);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs/b.txt"));
+        QTest::keyClick(view, Qt::Key_Up, Qt::AltModifier);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src"));
+        QTest::keyClick(view, Qt::Key_Down, Qt::AltModifier);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs/b.txt"));
+
+        // Nothing of a new archive is on disk, so nothing can be dragged out of the window.
+        QVERIFY(w->drag_names().isEmpty());
+
         // A folder cannot move into itself; a file moves into the folder it is dropped on.
         select("src/docs");
         QVERIFY(!w->move_to(find("src/docs"), false));
@@ -758,6 +773,34 @@ private slots:
         QVERIFY(w->move_to(find("src/docs"), true));
         QTRY_VERIFY_WITH_TIMEOUT(settled() && find("src/docs/a.txt").isValid(), 20000);
         QVERIFY(!find("src/a.txt").isValid());
+
+        // The Location menu offers the folder, its parents and Choose Folder…; File ▸ Close goes
+        // back to the drop zone.
+        auto* location = w->findChild<LocationChoice*>();
+        QVERIFY(location);
+        QCOMPARE(location->folder(), root.path());
+        QCOMPARE(location->itemData(1).toString(), dir_.path());
+        QCOMPARE(location->itemText(location->count() - 1), QString("Choose Folder…"));
+        QTimer::singleShot(100, [] {
+            for (auto* top : QApplication::topLevelWidgets())
+            {
+                if (auto* box = qobject_cast<QMessageBox*>(top); box && box->isVisible())
+                {
+                    for (auto* b : box->buttons())
+                    {
+                        if (b->text() == "Discard")
+                            b->click();
+                    }
+                }
+            }
+        });
+        for (auto* a : w->findChildren<QAction*>())
+        {
+            if (a->text() == "Close")
+                a->trigger();
+        }
+        QVERIFY(!session.active());
+        QVERIFY(w->archive_path().isEmpty());
     }
 
     void folder_settings_are_dropdowns()
