@@ -384,8 +384,18 @@ private slots:
         QVERIFY(w->windowTitle().startsWith("made.zip"));
 
         QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        QSignalSpy started(&app.jobs(), &JobQueue::started);
+        QSignalSpy progress(&app.jobs(), &JobQueue::progress);
         QVERIFY(w->apply_changes() != 0);
-        QVERIFY(finished.wait(20000));
+        const bool done = finished.wait(20000);
+        if (!done)
+        {
+            QStringList last;
+            for (const auto& p : progress)
+                last << QString("%1/%2").arg(p.at(1).toULongLong()).arg(p.at(2).toULongLong());
+            qWarning("started %lld, progress %lld (%s), jobs busy %d, committing %d, files %s", static_cast<long long>(started.size()), static_cast<long long>(progress.size()), qPrintable(last.mid(std::max<qsizetype>(0, last.size() - 5)).join(' ')), app.jobs().busy(), session.committing(), qPrintable(QDir(root.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot).join(',')));
+        }
+        QVERIFY(done);
         QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->is_new, 20000);
         QVERIFY(QFile::exists(target));
