@@ -7,6 +7,8 @@
 #include <format>
 #include <iostream>
 #include <set>
+#include <string>
+#include <vector>
 
 namespace satchel_cli
 {
@@ -274,7 +276,7 @@ int run_edit(const GlobalOptions& g, const std::string& archive, const std::vect
 {
     auto ctx = make_context(g);
     zpp::Stream in(zpp::not_null(zp_stream_open_file(archive.c_str())));
-    zpp::Editor editor(zpp::not_null(zp_editor_open(ctx.get(), in.get())));
+    zpp::Editor editor(zpp::not_null(zp_editor_open(ctx.get(), in.get(), nullptr)));
     std::vector<zpp::Input> inputs;
 
     const auto index_of = [&](const std::string& name) {
@@ -329,15 +331,31 @@ int run_edit(const GlobalOptions& g, const std::string& archive, const std::vect
     const auto target = output.empty() ? archive : output;
     zpp::Stream out(zpp::not_null(zp_stream_create_file(target.c_str())));
     ProgressBar bar("Rewriting", g);
-    zpp::check(zp_editor_commit(editor.get(), out.get(), zpp::ProgressAdapter::call, &bar.adapter()));
+    zp_build_result_t* raw = nullptr;
+    const auto status = zp_editor_commit(editor.get(), out.get(), nullptr, zpp::ProgressAdapter::call, &bar.adapter(), &raw);
+    const zpp::BuildResult result(raw);
+    if (status != ZP_SOURCE_CHANGED)
+        zpp::check(status);
+    std::vector<std::string> left_out;
+    for (std::size_t i = 0; result && i < zp_build_result_entry_count(result.get()); ++i)
+    {
+        zp_entry_result_t r{};
+        zpp::check(zp_build_result_get_entry(result.get(), i, &r));
+        if (r.status != ZP_OK)
+            left_out.push_back(std::format("{}: {}", r.name ? r.name : "", r.message ? r.message : ""));
+    }
     editor.reset();
     in.reset();
     zpp::check(zp_stream_commit(out.get()));
     if (g.json)
-        print_json({ { "status", "OK" }, { "output", target } });
+        print_json({ { "status", left_out.empty() ? "OK" : "SOURCE_CHANGED" }, { "output", target }, { "left_out", left_out } });
     else if (!g.quiet)
+    {
+        for (const auto& l : left_out)
+            std::cerr << "left out: " << l << '\n';
         std::cerr << "updated " << target << '\n';
-    return exit_ok;
+    }
+    return left_out.empty() ? exit_ok : exit_partial;
 }
 
 int run_preview(const std::string& file, bool html)

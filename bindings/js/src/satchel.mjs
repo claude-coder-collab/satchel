@@ -494,7 +494,7 @@ export class Archive {
         m.setValue(cb + 24, fn(guard((user, handle) => sink.discard?.(Number(handle)), undefined), 'vij'), '*');
         const sinkPtr = m._zp_sink_from_callbacks(cb);
         m._free(cb);
-        const opts = m._malloc(12);
+        const opts = m._malloc(16);
         m._zp_extract_options_init(opts);
         m.setValue(opts, restoreWav ? 1 : 0, 'i32');
         m.setValue(opts + 4, includeReadme ? 1 : 0, 'i32');
@@ -539,7 +539,7 @@ export class Archive {
         const sink = m._zp_sink_filesystem(p);
         m._free(p);
         this.s._notNull(sink);
-        const opts = m._malloc(12);
+        const opts = m._malloc(16);
         m._zp_extract_options_init(opts);
         m.setValue(opts, restoreWav ? 1 : 0, 'i32');
         m.setValue(opts + 4, includeReadme ? 1 : 0, 'i32');

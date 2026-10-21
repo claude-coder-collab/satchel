@@ -21,7 +21,7 @@ The app opens in the mode last used; first launch opens Simple mode.
 | Decisions | Only when the core requires one | Changes are staged and reviewed in the browser, then written in one step |
 | Settings used | Defaults from Settings | Defaults, overridable per job |
 
-- Switch via View menu, keyboard shortcut, or a "Open in Full mode" link on any Simple-mode result.
+- Switch via View menu, keyboard shortcut, or the **View Contents** button on a Simple-mode result.
 - Both modes share one job queue, so a job started in one mode stays visible in the other.
 
 ## Simple mode
@@ -57,18 +57,18 @@ Drop files on the window (or the app icon) and the job starts immediately: zips 
 
 1. Idle: drop target with a one-line hint.
 2. Running: progress ring, file name, throughput, ETA, Cancel. Further drops queue.
-3. Done: result card with savings (e.g. "4.2 GB → 2.3 GB, 45% smaller"), warning count, Reveal in Finder/Explorer, Open in Full mode.
-4. Error: what failed, which file, Retry / Open in Full mode.
+3. Done: result card with savings (e.g. "4.2 GB → 2.3 GB, 45% smaller"), warning count, Reveal in Finder/Explorer, and after compressing View Contents (opens the archive in Full mode). Counts use proper singular and plural ("1 file extracted", "44 files extracted"). Cancel leaves no trace: a cancelled extraction removes everything it wrote (including its folders) and the card reads "Cancelled. Nothing was extracted from <archive>." (compression: "Cancelled. <archive> was not created.").
+4. Error: what failed, which file, Retry.
 
 A system notification is sent when a job finishes while the window is not focused.
 
 ## Full mode window
 
-One window: archive browser on the left, Inspector on the right, archive summary and Jobs in the status bar. All commands live in the native menu bar (File, Archive, View, Help) rather than a toolbar. Simple mode has a View menu with Switch to Full Mode (Ctrl/Cmd+Shift+M); in Full mode the same shortcut switches back.
+One window: archive browser on the left, Inspector on the right, archive summary in the status bar (with a progress bar while an extract or verify runs). All commands live in the native menu bar (File, Archive, View, Help) rather than a toolbar. Simple mode has a View menu with Switch to Full Mode (Ctrl/Cmd+Shift+M); in Full mode the same shortcut switches back.
 
 &#91;embedded content: Full mode main window · browser, inspector, status bar\]
 
-Selecting a row fills the Inspector; a multi-mono set is one row that expands to its channel files. With no archive open, the browser area shows a drop zone and recent archives. Dropping one zip there opens it. Dropping anything else asks for a name and location, as New does (the default name follows the Simple-mode output rule, e.g. `<item>.zip` next to the items), then starts a new archive with those items added (see Building and editing archives).
+Selecting a row fills the Inspector; a multi-mono set is one row that expands to its channel files. With no archive open, the browser area shows a drop zone. Dropping one zip there opens it. Dropping anything else asks for a name and location, as New does (the default name follows the Simple-mode output rule, e.g. `<item>.zip` next to the items), then starts a new archive with those items added (see Building and editing archives).
 
 ## Archive browser
 
@@ -86,12 +86,16 @@ The center pane lists the open archive's entries, read from the central director
 
 - Converted audio carries a "restorable" badge.
 - A multi-mono set is one row (`take2.wav — 16 channels`), expandable to its `_chNN.flac` members. Selecting, extracting, renaming or deleting the row acts on the whole group.
-- Tree view (the default) and flat list toggle; sorting on every column; column visibility saved.
-- Search field filters by name; filter chips by method and by "restorable only".
+- A folder tree (the only view); sorting on every column; column visibility saved.
+- Keys as in Finder: Left on an entry or a collapsed folder selects the enclosing folder; with nothing selected Down selects the first row and Up the last; ⌥Up / ⌥Down select the first / last row; ⌘Down extracts the selection (Extract Selected).
+- File ▸ Close (⌘W) closes the archive or new archive (asking about unwritten changes, as for Open) and shows the drop zone.
+- The browser and Inspector are split by a movable divider whose position is saved; the action bar never widens the browser (its summary line shortens with "…").
+- Right-click menu: Extract Selected, Rename, Move To…, New Folder with Items, Delete (on a row), then New Folder, Add Files…, Add Folder….
+- Search field filters by name; filter chips by method and by "restorable only". While any of them is active, every folder holding a match is expanded; clearing them restores the earlier expansion.
 - Third-party entries the core can't read (unsupported method, symlinks) are shown greyed with the reason as a tooltip.
 - The table model is virtualized, so 100,000+ entries scroll smoothly.
 
-**Archive summary** (status bar, expandable): created by (app version from the archive comment, or "unknown tool"), total size → packed size and % saved, entry counts per method, Zip64 yes/no.
+**Archive summary** (status bar, expandable): "Created by" with the app version from the archive comment (left out when unknown), total size → packed size and % saved, entry counts per method, Zip64 yes/no.
 
 ## Inspector
 
@@ -121,10 +125,10 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | | New archive | Edit archive |
 | --- | --- | --- |
-| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
+| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Files or folders dropped on an empty window start a session without asking, written next to them by the Simple-mode rule (`<item>.zip`). The action bar's **Location** pop-up (like a save panel's "Where" menu: the folder and its parents, Desktop, Documents, Downloads, Choose Folder…) changes the folder; File ▸ Save As… changes name and folder. While the dropped items are scanned, the bar shows "Scanning files…" with an indeterminate progress bar. Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
 | Browser shows | Only the staged additions | The archive's entries with pending changes overlaid |
 | Go action | **Create Archive** | **Apply Changes** (also **Save As…**) |
-| Writes | A new zip at the path chosen at the start | Rewrites the archive in place (temp file, then atomic swap), or writes a copy for Save As |
+| Writes | A new zip at the destination | Rewrites the archive in place (temp file, then atomic swap), or writes a copy for Save As |
 | Afterwards | The window opens the new archive as an Edit session with no pending changes | Same archive reopened, no pending changes |
 
 - The window title shows the archive name and the platform's edited marker (macOS: dot in the close button; elsewhere: `*`) while there are pending changes. A new archive's title is its chosen name, marked as edited from the start.
@@ -137,10 +141,11 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | Change | How |
 | --- | --- |
-| Add files / folders | Archive ▸ Add Files… (⌘⇧A) or Add Folder…, or drag from Finder/Explorer onto the browser. In tree view they go into the selected folder (or the selected entry's folder), or the folder or entry row they are dropped on; in flat view, and when dropped on empty space, to the top level |
-| New folder | Archive ▸ New Folder (⌘⇧N), named in place |
+| Add files / folders | Archive ▸ Add Files… (⌘⇧A) or Add Folder…, or drag from Finder/Explorer onto the browser. They go into the selected folder (or the selected entry's folder), or the folder or entry row they are dropped on; dropped on empty space, to the top level |
+| New folder | Archive ▸ New Folder (⌘⇧N): an empty folder next to the selection (beside a selected folder, not inside it), or at the top level with nothing selected, named in place |
+| New folder with items | Archive ▸ New Folder with Items (⌃⌘N; Ctrl+Alt+N elsewhere): a new folder next to the selection with the selected items moved into it, named in place |
 | Rename | F2 / Enter on macOS, edited in place; works on folders, which renames everything below them. A multi-mono set is renamed through a dialog asking for the channel files' stem. A name containing `/` is refused (use Move To…) |
-| Move | Archive ▸ Move To…: pick an existing folder or type a new path (stored as renames). Dragging rows is reserved for dragging out to Finder/Explorer, which extracts them first |
+| Move | Drag rows onto a folder (into it), an entry (beside it) or empty space (top level); a folder cannot go into itself. Or Archive ▸ Move To…: pick an existing folder or type a new path. Stored as renames |
 | Delete | Delete key; no confirmation, because it is only staged and can be undone |
 | Replace | Drop a single file onto a file row with the same name and confirm "Replace *name*?" |
 
@@ -154,21 +159,20 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | Row state | Display |
 | --- | --- |
-| Added | "New" badge; Size from the source file; Packed blank; Method and **Reason** from the plan. For files that are not converted to FLAC, Store or Deflate is predicted by the build's own sampling (`zp_plan_predict_store`), so already-compressed media shows Store before anything is written |
-| Renamed / moved | New name, with the old name in the tooltip and Inspector |
+| Added | "New" badge, right-aligned in the Name column; Size from the source file; Packed blank; Method from the plan. For files that are not converted to FLAC, Store or Deflate is predicted by the build's own sampling (`zp_plan_predict_store`), so already-compressed media shows Store before anything is written |
+| Renamed / moved | New name, with the old name in the tooltip; the Inspector says "Renamed from *name*", "Moved from *folder*" or "Moved and renamed from *path*" |
 | Replaced | "Replaced" badge; columns show the new source |
 | Deleted | Struck through and dimmed; View ▸ Show Deleted (on by default) hides them |
 | Unchanged | As today |
 
-- The Reason column is shown only while there are additions.
-- The Inspector shows the plan for an added entry (source path, method, reason) instead of archive metadata. For a deleted or replaced entry it still shows the archive metadata.
+- The Inspector shows the plan for an added entry (source path, method) instead of archive metadata. For a deleted or replaced entry it still shows the archive metadata.
 - Extract, Open and Verify act on the archive as stored on disk: they ignore staged additions (and are disabled when the selection contains only additions), and still include entries staged for deletion.
 
 ### Action bar
 
 A bar at the bottom of the browser, visible while the session has pending changes (always visible for a new archive):
 
-- Summary: "+12 files (4.2 GB) · −3 · 2 renamed". New archive: file count, input size, entries per method.
+- Summary: "+12 files (4.2 GB) · −3 · 1 moved · 2 renamed". Moves and renames are counted where they happened: same folder with a new name is a rename, same name in another folder a move; renaming a folder counts once (recognised by its old path being gone and its new path being new), as does moving a folder. New archive: file count, input size, entries per method.
 - **Issues** button with a count, which opens the issues panel (a popover over the bar):
   - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls. The rows involved get a warning badge in the browser.
   - Skipped symlinks and leave-out matches (warning), FLAC fallbacks (info), listed with paths.
@@ -179,8 +183,8 @@ A bar at the bottom of the browser, visible while the session has pending change
 ### Go
 
 1. Create and Apply need no dialog. For an Edit session, **Save As…** (⌘⇧S) asks for a path and writes a copy, leaving the original untouched.
-2. The job runs in the background queue, with progress and Cancel in the action bar (and in the Jobs panel). A job cancelled while still queued is reported as cancelled. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
-3. On success: a result card in the action bar (savings, per-method breakdown, warnings, Reveal), and the session reopens the written archive. With "verify after build" on, Verify runs on the written archive.
+2. The job runs in the background queue, with progress and Cancel in the action bar. A job cancelled while still queued is reported as cancelled. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
+3. On success: a result card in the action bar (savings, per-method breakdown, warnings, Reveal). Added files that changed on disk after they were added are left out of the written archive; the card is marked with a warning and a dialog lists them, and the session reopens the written archive. With "verify after build" on, Verify runs on the written archive.
 4. On failure or Cancel: the original archive is untouched, and the pending changes stay staged so the user can retry.
 
 ### Implementation model
@@ -193,25 +197,25 @@ A bar at the bottom of the browser, visible while the session has pending change
 - Go commits the editor to `zp_stream_create_file(output)`. The editor and base stream are closed before `zp_stream_commit` swaps the file into place (zip module design, Section 10), then the session reopens on the output with an empty history. On failure the session keeps its changes.
 - The session is not thread-safe. The GUI runs planning and commits on its job thread and does not touch the session meanwhile.
 
-**Core additions:** `zp_input_set_prefix` (items placed under an archive folder), `zp_editor_open_with_options` (planner options for additions), `zp_editor_resolve` (conflict decisions on an edit), `zp_editor_commit_with_options` (build options such as the temp folder).
+**Core additions:** `zp_input_set_prefix` (items placed under an archive folder), planner options on `zp_editor_open` (for additions), `zp_editor_resolve` (conflict decisions on an edit), build options and a build result on `zp_editor_commit` (temp folder; files left out because they changed), `base_folder` in `zp_extract_options_t` (extract relative to a folder).
 
 ## Extracting
 
-Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan.
+Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan. Selected items are extracted relative to the deepest folder holding all of them (`zp_extract_options_t.base_folder`): selecting `docs/b.txt` writes `b.txt`, selecting the folder `docs` writes `docs/…`. Cancelling an extraction removes the files and folders it created; files that already existed are left alone.
 
 - **Options dialog** (Extract All/Selected): destination, "Restore original audio" (default on) vs keep FLAC, include generated readme (default off), overwrite policy (Ask / Skip / Replace).
-- **Drag-out** uses the saved defaults without a dialog.
+- **Drag-out** uses the saved defaults without a dialog. The drag carries the paths the entries will have in a new temporary folder; they are extracted there when the drag leaves the browser (or a target asks for the data first), so a drag that stays inside the browser (a move) extracts nothing. No events are processed during that extraction (a busy cursor shows instead). The drag image is the first row's icon and name with "+N more" (never the temporary path). Only entries already in the archive on disk can be dragged out: while planning a new archive, a drag can only move.
 - **Pre-flight**: the extraction plan's warnings and errors (unsafe paths, symlinks, incomplete multi-mono groups, case-only duplicates) are shown before writing; existing files prompt per the overwrite policy.
-- **Open with default app**: double-click extracts that one entry (restored if audio) to a temp folder and opens it.
 - **Result**: files written, restored and hash-verified count, any failures with reasons; hash mismatch is shown as an error with the file name and the partial output already deleted.
 
 ## Verify
 
 Verify checks an archive's integrity without writing any files: CRC32 for every entry, plus full restore-in-memory and SHA-256 check for every restorable FLAC.
 
-- Run on the whole archive or a selection; progress and Cancel as for builds.
-- Results per entry: OK / CRC mismatch / hash mismatch / incomplete group / unreadable, shown as a column and in the Inspector.
-- Summary: "1,204 entries verified, 0 errors" with the time taken.
+- Purpose: a test of the archive as it is on disk, for archives received from elsewhere, copied to other media, or before deleting the originals.
+- Runs on the whole archive; progress in the status bar.
+- Results per entry: OK / CRC mismatch / hash mismatch / incomplete group / unreadable, shown in the Inspector (files only; folders have no Verification section) and in the Verified column (hidden by default; shown from the header's column menu).
+- Summary: a dialog, "All 1,204 files intact", or a warning listing the damaged files.
 - Optional setting: verify automatically after every build (off by default; it re-reads the whole archive).
 
 ## Settings
@@ -235,7 +239,7 @@ Verify checks an archive's integrity without writing any files: CRC32 for every 
 | Integration | Associate with .zip | Off (offered, never forced) |
 | Updates | Check automatically | On |
 
-"Copy as CLI command" (in Settings) produces the equivalent CLI invocation for the current options.
+Folder settings (Simple mode output location, temp location) are dropdowns: the default, the chosen folder, and "Choose Folder…".
 
 Full mode's Options popover has the same "Leave out" controls as Settings, as a per-archive override that is not saved. Items left out are counted in the action bar and listed in its Issues popover ("Left out: …"). Settings refuses to close while a custom pattern is invalid.
 
@@ -263,15 +267,17 @@ Each platform gets a native previewer and context-menu entries; these are separa
 
 ## General
 
-- **Jobs**: one background queue for builds, extracts, verifies and edits; a Jobs panel lists running and finished jobs with Cancel and Reveal. Closing the window while a job runs asks whether to cancel or keep running.
+- **Jobs**: one background queue for builds, extracts, verifies and edits; Simple and Full mode show their own jobs (Simple: the progress page; Full: the action bar for writes, the status bar for extract and verify). Files sent from the file manager (Compress/Extract with Satchel, the Dock icon) are handled by the Simple window, opened alongside a visible Full window, which keeps its session; the app never quits on its own while Full mode has unwritten changes. Closing the window while a job runs asks whether to cancel or keep running.
 - **Keyboard shortcuts**:
 
 | Action | macOS | Windows / Linux |
 | --- | --- | --- |
 | New archive | ⌘N | Ctrl+N |
 | Open archive | ⌘O | Ctrl+O |
+| Close archive | ⌘W | Ctrl+W |
 | Add files | ⌘⇧A | Ctrl+Shift+A |
 | New folder | ⌘⇧N | Ctrl+Shift+N |
+| New folder with items | ⌃⌘N | Ctrl+Alt+N |
 | Create archive / Apply changes | ⌘S | Ctrl+S |
 | Save as | ⌘⇧S | Ctrl+Shift+S |
 | Undo / Redo | ⌘Z / ⌘⇧Z | Ctrl+Z / Ctrl+Shift+Z |
@@ -302,7 +308,7 @@ All are compatible with the dual license; Qt stays dynamically linked (main spec
 
 UI logic that decides anything lives outside the widgets so it can be unit-tested; the widgets themselves get a manual pass per release.
 
-- **Unit**: Simple-mode drop rule (zips only / mixed / none), output naming and `  2 ` suffixing, multi-mono row grouping, timecode formatting, Settings defaults, "Copy as CLI command" output.
+- **Unit**: Simple-mode drop rule (zips only / mixed / none), output naming and `  2 ` suffixing, multi-mono row grouping, timecode formatting, Settings defaults.
 - **Integration**: each Full-mode flow (create with collisions, extract with every pre-flight error, verify with injected CRC and hash errors, edit) driven through the C API with the same fixtures as the core.
 - **Automated UI smoke tests** (Qt Test): app launches in both modes and opens a 100,000-entry archive within the target.
 - **Previewers**: Quick Look and Windows preview handler render zip and FLAC fixtures, including third-party zips and corrupt files, without crashing or timing out.

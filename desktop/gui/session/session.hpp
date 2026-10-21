@@ -142,7 +142,10 @@ struct SessionSummary
     std::size_t added = 0;
     std::uint64_t added_bytes = 0;
     std::size_t removed = 0;
+    // Name changes, counted where they happened (see count_moves): renaming a folder is one
+    // rename, moving a folder one move. A change of both name and folder counts in both.
     std::size_t renamed = 0;
+    std::size_t moved = 0;
     std::size_t replaced = 0;
     std::size_t entries = 0;
     std::uint64_t input_bytes = 0;
@@ -161,6 +164,19 @@ struct SessionView
 };
 
 using CommitProgress = std::function<bool(std::uint64_t done, std::uint64_t total)>;
+
+struct MoveCount
+{
+    std::size_t renamed = 0;
+    std::size_t moved = 0;
+};
+
+// Classifies path changes ("old" -> "new" archive paths, folders with or without a trailing
+// slash) as renames (same folder, new name) or moves (same name, other folder). Changes are counted
+// once per item that changed: entries whose folder was renamed count as that folder's rename, which
+// is recognised by the old folder being gone (`after` has no entry under it) and the new one being
+// new (`before` had none).
+MoveCount count_moves(const std::vector<std::pair<std::string, std::string>>& changes, const std::vector<std::string>& before, const std::vector<std::string>& after);
 
 class Session
 {
@@ -200,8 +216,10 @@ public:
 
     // Writes the merged plan to `output` (the archive itself for Apply: temp file, then atomic
     // swap) and reopens the session on `output` with no changes. Throws zpp::Error; on failure
-    // or cancel the session keeps its staged changes and nothing at `output` changes.
-    void commit(const std::filesystem::path& output, const zp_build_options_t* build_options = nullptr, const CommitProgress& progress = {});
+    // or cancel the session keeps its staged changes and nothing at `output` changes. Added files
+    // that changed since they were staged are left out of the written archive; returns them as
+    // "name: reason".
+    std::vector<std::string> commit(const std::filesystem::path& output, const zp_build_options_t* build_options = nullptr, const CommitProgress& progress = {});
 
 private:
     Session(zp_context_t* context, std::filesystem::path target, bool is_new, SessionOptions options);

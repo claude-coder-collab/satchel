@@ -258,6 +258,7 @@ typedef struct zp_extract_options
     int restore_wav;
     int include_readme;
     int overwrite;
+    const char* base_folder;
 } zp_extract_options_t;
 void zp_extract_options_init(zp_extract_options_t* options);
 typedef struct zp_extract_issue
@@ -299,14 +300,12 @@ enum {
     ZP_PREVIEW_HTML = 1
 };
 char* zp_preview(zp_stream_t* input, const char* file_name, int format);
-zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input);
-zp_editor_t* zp_editor_open_with_options(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options);
+zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options);
 int zp_editor_add(zp_editor_t* editor, zp_input_t* input);
 int zp_editor_remove(zp_editor_t* editor, size_t i);
 int zp_editor_rename(zp_editor_t* editor, size_t i, const char* new_name);
 int zp_editor_replace(zp_editor_t* editor, size_t i, zp_input_t* input);
 zp_plan_t* zp_editor_plan(zp_editor_t* editor);
 int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, size_t count);
-int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user);
-int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user);
+int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result);
 void zp_editor_free(zp_editor_t* editor);

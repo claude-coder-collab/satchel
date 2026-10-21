@@ -6,7 +6,11 @@
 
 #include "labels.hpp"
 
+#include <QCoreApplication>
+
 #include <condition_variable>
+#include <filesystem>
+#include <set>
 
 namespace
 {
@@ -19,6 +23,16 @@ QString qs(const std::string& s)
 std::string utf8(const QString& s)
 {
     return s.toStdString();
+}
+
+QString counted(const char* text, std::size_t n)
+{
+    return QCoreApplication::translate("Jobs", text, nullptr, static_cast<int>(n));
+}
+
+std::filesystem::path fs_path(const QString& s)
+{
+    return { s.toStdU16String() };
 }
 
 }
@@ -202,12 +216,12 @@ JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, 
         zpp::check(zp_stream_commit(stream.get()));
         out.summary = labels::savings(out.input_bytes, out.output_bytes);
         if (!out.details.isEmpty())
-            out.summary += QString(" · %1 warning(s)").arg(out.details.size());
+            out.summary += counted(QT_TRANSLATE_N_NOOP("Jobs", " · %n warning(s)"), static_cast<std::size_t>(out.details.size()));
     }
     return out;
 }
 
-JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& destination, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, bool replace_existing)
+JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& destination, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, bool replace_existing, const QString& base_folder)
 {
     JobOutcome out;
     out.output = destination;
@@ -221,6 +235,8 @@ JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& de
     options.overwrite = replace_existing                        ? ZP_OVERWRITE_REPLACE
         : settings.overwrite == satchel_gui::Overwrite::Replace ? ZP_OVERWRITE_REPLACE
                                                                 : ZP_OVERWRITE_SKIP;
+    const auto base = base_folder.toStdString();
+    options.base_folder = base.c_str();
     zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan(reader.get(), selection.empty() ? nullptr : selection.data(), selection.size(), sink.get(), &options)));
     zp_extract_issue_t issue{};
     for (std::size_t i = 0; i < zp_xplan_issue_count(plan.get()); ++i)
@@ -229,22 +245,56 @@ JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& de
         if (issue.kind != ZP_ISSUE_EXISTS_AT_DESTINATION)
             out.details << QString("%1: %2").arg(QString::fromUtf8(issue.name), QString::fromUtf8(issue.detail));
     }
+    const auto root = fs_path(destination);
+    std::vector<std::filesystem::path> new_dirs;
+    std::set<std::filesystem::path> existing_files;
+    for (std::size_t i = 0; i < zp_xplan_item_count(plan.get()); ++i)
+    {
+        zp_extract_item_t item{};
+        zpp::check(zp_xplan_get_item(plan.get(), i, &item));
+        const auto target = root / std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(item.target)));
+        std::error_code ec;
+        if (item.kind != ZP_KIND_DIRECTORY && std::filesystem::exists(target, ec))
+            existing_files.insert(target);
+        for (auto d = item.kind == ZP_KIND_DIRECTORY ? target : target.parent_path(); d != root && d.has_relative_path(); d = d.parent_path())
+        {
+            if (!std::filesystem::exists(d, ec))
+                new_dirs.push_back(d);
+        }
+    }
     zpp::ProgressAdapter adapter{ jc.progress };
     out.status = zp_extract(plan.get(), zpp::ProgressAdapter::call, &adapter);
     out.message = QString::fromUtf8(zp_last_error());
     std::size_t written = 0;
+    std::vector<std::filesystem::path> files;
     zp_extract_outcome_t o{};
     for (std::size_t i = 0; i < zp_xplan_outcome_count(plan.get()); ++i)
     {
         zpp::check(zp_xplan_get_outcome(plan.get(), i, &o));
         if (o.status == ZP_OK)
+        {
             ++written;
-        else
+            files.push_back(root / std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(o.target))));
+        }
+        else if (out.status != ZP_CANCELLED)
             out.details << QString("%1: %2").arg(QString::fromUtf8(o.target), QString::fromUtf8(o.message));
     }
-    out.summary = QString("%1 file(s) written").arg(written);
+    if (out.status == ZP_CANCELLED)
+    {
+        std::error_code ec;
+        for (const auto& f : files)
+        {
+            if (!existing_files.contains(f))
+                std::filesystem::remove(f, ec);
+        }
+        std::ranges::sort(new_dirs, std::greater<>{});
+        for (const auto& d : new_dirs)
+            std::filesystem::remove(d, ec);
+        return out;
+    }
+    out.summary = counted(QT_TRANSLATE_N_NOOP("Jobs", "%n file(s) extracted"), written);
     if (!out.details.isEmpty())
-        out.summary += QString(" · %1 problem(s)").arg(out.details.size());
+        out.summary += counted(QT_TRANSLATE_N_NOOP("Jobs", " · %n problem(s)"), static_cast<std::size_t>(out.details.size()));
     return out;
 }
 
@@ -273,6 +323,7 @@ JobOutcome verify_job(JobContext& jc, const QString& archive)
         else
             out.details << QString("%1: %2 (%3)").arg(QString::fromUtf8(o.target), QString::fromUtf8(zp_status_name(o.status)), QString::fromUtf8(o.message));
     }
-    out.summary = QString("%1 entries verified, %2 error(s)").arg(ok).arg(out.details.size());
+    out.output = archive;
+    out.summary = out.details.isEmpty() ? counted(QT_TRANSLATE_N_NOOP("Jobs", "All %n file(s) intact"), ok) : counted(QT_TRANSLATE_N_NOOP("Jobs", "%n file(s) damaged"), static_cast<std::size_t>(out.details.size()));
     return out;
 }

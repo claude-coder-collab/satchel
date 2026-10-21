@@ -89,5 +89,6 @@ std::shared_ptr<zpp::Plan> make_plan(const QStringList& inputs, const satchel_gu
 
 // Job bodies.
 JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, const satchel_gui::Settings& settings);
-JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& destination, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, bool replace_existing);
+// base_folder: the selection is extracted relative to this archive folder ("" = the root).
+JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& destination, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, bool replace_existing, const QString& base_folder = {});
 JobOutcome verify_job(JobContext& jc, const QString& archive);

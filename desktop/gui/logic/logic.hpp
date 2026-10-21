@@ -135,12 +135,6 @@ struct Settings
     bool check_updates = true;
 };
 
-// ---- "Copy as CLI command" -------------------------------------------------------------------
-
-std::string shell_quote(const std::string& arg);
-std::string cli_create_command(const Settings& s, const std::filesystem::path& archive, const std::vector<std::filesystem::path>& inputs);
-std::string cli_extract_command(const Settings& s, const std::filesystem::path& archive, const std::filesystem::path& destination);
-
 // ---- Formatting ------------------------------------------------------------------------------
 
 std::string human_size(std::uint64_t bytes);

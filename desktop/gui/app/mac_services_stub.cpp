@@ -19,3 +19,18 @@ bool uninstall_available()
 void run_uninstall_dialog(QWidget*) {}
 
 void add_uninstall_action(QMenu*, QWidget*) {}
+
+QStringList uninstall_helper_arguments(const UninstallRequest&)
+{
+    return {};
+}
+
+std::optional<UninstallRequest> parse_uninstall_helper(int, char**)
+{
+    return std::nullopt;
+}
+
+int run_uninstall_helper(const UninstallRequest&, std::chrono::milliseconds)
+{
+    return 1;
+}

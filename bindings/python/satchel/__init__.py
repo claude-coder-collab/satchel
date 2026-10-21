@@ -508,7 +508,7 @@ class Editor:
         self._ctx = ctx
         self._path = Path(path)
         self._stream = ffi.gc(_not_null(lib.zp_stream_open_file(_path(path))), lib.zp_stream_free)
-        self._ptr = ffi.gc(_not_null(lib.zp_editor_open(ctx._ptr, self._stream)), lib.zp_editor_free)
+        self._ptr = ffi.gc(_not_null(lib.zp_editor_open(ctx._ptr, self._stream, ffi.NULL)), lib.zp_editor_free)
         self._inputs = []
 
     def _plan(self):
@@ -546,7 +546,7 @@ class Editor:
         out = ffi.gc(_not_null(lib.zp_stream_create_file(_path(target))), lib.zp_stream_free)
         try:
             handle = _ProgressHandle(progress)
-            status = lib.zp_editor_commit(self._ptr, out, handle.cfunc, ffi.NULL)
+            status = lib.zp_editor_commit(self._ptr, out, ffi.NULL, handle.cfunc, ffi.NULL, ffi.NULL)
             handle.reraise()
             _check(status)
             _check(lib.zp_stream_commit(out))

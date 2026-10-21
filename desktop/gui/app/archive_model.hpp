@@ -23,7 +23,6 @@ struct BrowserEntry
     bool pending = false; // packed size not known yet (staged additions)
     bool conflicted = false;
     QString previous_name;
-    QString reason;
 };
 
 // The open archive, with staged changes, as rows: a flat list or a folder tree; multi-mono groups
@@ -39,7 +38,6 @@ public:
         Packed,
         Ratio,
         Method,
-        Reason,
         RestoresTo,
         Modified,
         Verified,
@@ -63,8 +61,6 @@ public:
     [[nodiscard]] static satchel_gui::ListedEntry listed(const zpp::EntryInfo& e);
     // Allows renaming in place (Name column); edits are reported, not applied.
     void set_editable(bool editable) { editable_ = editable; }
-    void set_tree(bool tree);
-    [[nodiscard]] bool tree() const { return tree_; }
     void set_verification(const QHash<int, QString>& results);
     void clear();
 
@@ -91,7 +87,6 @@ private:
     std::vector<satchel_gui::Row> rows_;
     std::unique_ptr<Node> root_;
     QHash<int, QString> verification_;
-    bool tree_ = true;
     bool editable_ = false;
 };
 

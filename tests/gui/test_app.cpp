@@ -18,22 +18,33 @@
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QHeaderView>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QSortFilterProxyModel>
+#include <QSpinBox>
 #include <QTemporaryDir>
+#include <QTextBrowser>
+#include <QTimer>
+#include <QTreeView>
 
 #include <QElapsedTimer>
 #include <QFile>
-#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTranslator>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <format>
+#include <functional>
 #include <thread>
+#include <utility>
 
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 constexpr qint64 limit_ms = 15000;
@@ -47,6 +58,28 @@ constexpr qint64 limit_ms = 3000;
 constexpr qint64 limit_ms = 3000;
 #endif
 
+// Job results as they reach the test's thread. A QSignalSpy on JobQueue::finished records on the
+// job thread, so a job that ends before wait() starts is missed.
+class JobResults : public QObject
+{
+public:
+    explicit JobResults(JobQueue& jobs)
+    {
+        connect(&jobs, &JobQueue::finished, this, [this](int, const QString&, const JobOutcome& outcome) { pending_ << outcome; });
+    }
+
+    // Waits until a result is pending.
+    bool wait(int timeout_ms)
+    {
+        return QTest::qWaitFor([this] { return !pending_.isEmpty(); }, timeout_ms);
+    }
+    [[nodiscard]] bool isEmpty() const { return pending_.isEmpty(); }
+    JobOutcome take() { return pending_.takeFirst(); }
+
+private:
+    QList<JobOutcome> pending_;
+};
+
 class AppTest : public QObject
 {
     Q_OBJECT
@@ -57,7 +90,30 @@ private slots:
         QStandardPaths::setTestModeEnabled(true);
         QCoreApplication::setOrganizationName("Venn Audio Test");
         QCoreApplication::setApplicationName("Satchel Test");
+        auto* watchdog = new QTimer(this);
+        connect(watchdog, &QTimer::timeout, this, [this] {
+            for (auto* w : QApplication::topLevelWidgets())
+            {
+                auto* box = qobject_cast<QMessageBox*>(w);
+                if (!box || !box->isVisible())
+                    continue;
+                if (!box->property("seen").toBool())
+                {
+                    box->setProperty("seen", true);
+                    continue;
+                }
+                unexpected_dialogs_ << QString("%1 | %2 | %3").arg(box->windowTitle(), box->text(), box->detailedText());
+                box->reject();
+            }
+        });
+        watchdog->start(3000);
         QVERIFY(dir_.isValid());
+    }
+
+    void cleanup()
+    {
+        const auto dialogs = std::exchange(unexpected_dialogs_, {});
+        QVERIFY2(dialogs.isEmpty(), qPrintable("unexpected dialog: " + dialogs.join(" / ")));
     }
 
     void both_modes_launch()
@@ -137,19 +193,29 @@ private slots:
         }
         App app;
         app.show_simple();
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        JobResults finished(app.jobs());
         app.simple()->handle({ input });
         QVERIFY(finished.wait(20000));
-        const auto outcome = finished.takeFirst().at(2).value<JobOutcome>();
+        const auto outcome = finished.take();
         QCOMPARE(outcome.status, ZP_OK);
         QCOMPARE(QDir::fromNativeSeparators(outcome.output), dir_.filePath("notes.txt.zip"));
         QVERIFY(QFile::exists(outcome.output));
+        const auto view_contents = [&app] {
+            for (auto* b : app.simple()->findChildren<QPushButton*>())
+            {
+                if (b->text() == "View Contents")
+                    return b->isVisibleTo(app.simple());
+            }
+            return false;
+        };
+        QVERIFY(view_contents());
 
         // Dropping the zip extracts it next to itself.
         app.simple()->handle({ outcome.output });
         QVERIFY(finished.wait(20000));
-        const auto extracted = finished.takeFirst().at(2).value<JobOutcome>();
+        const auto extracted = finished.take();
         QCOMPARE(extracted.status, ZP_OK);
+        QVERIFY(!view_contents());
         // "notes.txt" exists as a file, so the folder gets a suffix instead of clashing.
         QCOMPARE(QDir::fromNativeSeparators(extracted.output), dir_.filePath("notes.txt 2"));
         QVERIFY(QFile::exists(dir_.filePath("notes.txt 2/notes.txt")));
@@ -214,10 +280,10 @@ private slots:
             f.write(QByteArray("service ").repeated(500));
         }
         App app;
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        JobResults finished(app.jobs());
         QVERIFY(perform_mac_service(app, "compressFiles", { input }));
         QVERIFY(finished.wait(20000));
-        const auto outcome = finished.takeFirst().at(2).value<JobOutcome>();
+        const auto outcome = finished.take();
         QCOMPARE(outcome.status, ZP_OK);
         QCOMPARE(QDir::fromNativeSeparators(outcome.output), dir_.filePath("service.txt.zip"));
         QVERIFY(!perform_mac_service(app, "unknownMessage", { input }));
@@ -231,16 +297,52 @@ private slots:
         App app;
         app.show_simple();
         app.show_full();
+        // One item for the whole app: the macOS application menu is shared by both windows.
+        int found = 0;
+        for (auto* action : qApp->findChildren<QAction*>(Qt::FindDirectChildrenOnly))
+            found += action->text() == "Uninstall Satchel…";
         for (QWidget* window : { static_cast<QWidget*>(app.simple()), static_cast<QWidget*>(app.full()) })
         {
-            int found = 0;
             for (auto* action : window->findChildren<QAction*>())
                 found += action->text() == "Uninstall Satchel…";
-            QCOMPARE(found, uninstall_available() ? 1 : 0);
         }
+        QCOMPARE(found, uninstall_available() ? 1 : 0);
 #ifdef Q_OS_MACOS
         QVERIFY(uninstall_available());
 #endif
+    }
+
+    void uninstall_helper_arguments_round_trip()
+    {
+        if (!uninstall_available())
+            QSKIP("macOS only");
+        const UninstallRequest request{ 4242, true, "/Applications/Satchel copy.app" };
+        auto args = uninstall_helper_arguments(request);
+        args.prepend("Satchel");
+        std::vector<QByteArray> bytes;
+        for (const auto& a : args)
+            bytes.push_back(a.toUtf8());
+        std::vector<char*> argv;
+        for (auto& b : bytes)
+            argv.push_back(b.data());
+        const auto parsed = parse_uninstall_helper(static_cast<int>(argv.size()), argv.data());
+        QVERIFY(parsed);
+        QCOMPARE(parsed->pid, 4242LL);
+        QVERIFY(parsed->keep_settings);
+        QCOMPARE(QString::fromStdString(parsed->app), QString("/Applications/Satchel copy.app"));
+
+        std::array<char*, 3> bad{ argv[0], bytes[1].data(), const_cast<char*>("12x") };
+        QVERIFY(!parse_uninstall_helper(3, bad.data()));
+        std::array<char*, 2> plain{ argv[0], const_cast<char*>("--version") };
+        QVERIFY(!parse_uninstall_helper(2, plain.data()));
+    }
+
+    void uninstall_helper_gives_up_while_the_app_runs()
+    {
+        if (!uninstall_available())
+            QSKIP("macOS only");
+        const UninstallRequest request{ QCoreApplication::applicationPid(), true, "/nonexistent/Satchel.app" };
+        QCOMPARE(run_uninstall_helper(request, std::chrono::milliseconds(300)), 2);
     }
 
     void cleanup_menu_item_exists_where_available()
@@ -314,10 +416,10 @@ private slots:
         QVERIFY(!QFile::exists(target));
         QVERIFY(w->windowTitle().startsWith("made.zip"));
 
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        JobResults finished(app.jobs());
         QVERIFY(w->apply_changes() != 0);
         QVERIFY(finished.wait(20000));
-        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
+        QCOMPARE(finished.take().status, ZP_OK);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->is_new, 20000);
         QVERIFY(QFile::exists(target));
         QCOMPARE(w->archive_path(), target);
@@ -325,17 +427,44 @@ private slots:
 
         // Rename in place, delete, add into a folder: staged until Apply.
         auto& model = w->model();
-        QModelIndex a;
-        QModelIndex docs;
-        for (int r = 0; r < model.rowCount(); ++r)
-        {
-            const auto idx = model.index(r, ArchiveModel::Name);
-            if (idx.data(ArchiveModel::PathRole).toString() == "a.txt")
-                a = idx;
-            if (idx.data(ArchiveModel::PathRole).toString() == "docs")
-                docs = idx;
-        }
+        const auto find = [&model](const QString& path) {
+            std::function<QModelIndex(const QModelIndex&)> walk = [&](const QModelIndex& parent) -> QModelIndex {
+                for (int r = 0; r < model.rowCount(parent); ++r)
+                {
+                    const auto idx = model.index(r, ArchiveModel::Name, parent);
+                    if (idx.data(ArchiveModel::PathRole).toString() == path)
+                        return idx;
+                    if (auto found = walk(idx); found.isValid())
+                        return found;
+                }
+                return {};
+            };
+            return walk({});
+        };
+        auto a = find("a.txt");
+        auto docs = find("docs");
         QVERIFY(a.isValid() && docs.isValid());
+
+        // Verification applies to files, not folders.
+        auto* view = w->findChild<QTreeView*>();
+        auto* inspector = w->findChild<QTextBrowser*>();
+        const auto proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
+        view->selectionModel()->setCurrentIndex(proxy->mapFromSource(docs), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        QVERIFY(!inspector->toPlainText().contains("Verification"));
+        view->selectionModel()->setCurrentIndex(proxy->mapFromSource(a), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        QVERIFY(inspector->toPlainText().contains("Verification"));
+
+        // Dropping a file on a folder of an existing archive is a move, not a rename.
+        QVERIFY(w->move_to(docs, true));
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->has_changes, 20000);
+        QCOMPARE(session.snapshot()->view.summary.moved, std::size_t{ 1 });
+        QCOMPARE(session.snapshot()->view.summary.renamed, std::size_t{ 0 });
+        view->selectionModel()->setCurrentIndex(proxy->mapFromSource(find("docs/a.txt")), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        QVERIFY(inspector->toPlainText().contains("Moved from the top level"));
+        session.undo();
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->has_changes, 20000);
+        a = find("a.txt");
+        QVERIFY(a.isValid());
         QVERIFY(model.flags(a) & Qt::ItemIsEditable);
         model.setData(a, "alpha.txt", Qt::EditRole);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->has_changes, 20000);
@@ -358,7 +487,7 @@ private slots:
 
         QVERIFY(w->apply_changes() != 0);
         QVERIFY(finished.wait(20000));
-        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_OK);
+        QCOMPARE(finished.take().status, ZP_OK);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->has_changes, 20000);
         QStringList names;
         for (const auto& e : session.snapshot()->view.rows)
@@ -446,12 +575,12 @@ private slots:
         const auto target = dir_.filePath("cancelled.zip");
         w->start_new_archive(target, { source.fileName() });
         QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->view.summary.added == 1, 20000);
-        QSignalSpy finished(&app.jobs(), &JobQueue::finished);
+        JobResults finished(app.jobs());
         QVERIFY(w->apply_changes() != 0);
         QTRY_VERIFY(button("Cancel"));
         button("Cancel")->click();
         QTRY_VERIFY(!finished.isEmpty());
-        QCOMPARE(finished.takeFirst().at(2).value<JobOutcome>().status, ZP_CANCELLED);
+        QCOMPARE(finished.take().status, ZP_CANCELLED);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.committing(), 20000);
         QVERIFY(session.snapshot()->is_new);
         QCOMPARE(session.snapshot()->view.summary.added, std::size_t{ 1 });
@@ -460,12 +589,285 @@ private slots:
         QVERIFY(finished.wait(20000));
     }
 
+    void full_mode_folders_search_and_files_from_the_file_manager()
+    {
+        QDir root(dir_.filePath("folders"));
+        QVERIFY(root.mkpath("src/docs"));
+        for (const auto* name : { "src/a.txt", "src/docs/b.txt", "outside.txt" })
+        {
+            QFile f(root.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(name);
+        }
+        App app;
+        app.show_full();
+        auto* w = app.full();
+        auto& session = w->session();
+        const auto settled = [&] { return !session.busy() && session.snapshot(); };
+        w->start_new_archive(root.filePath("folders.zip"), { root.filePath("src/a.txt"), root.filePath("src/docs") });
+        QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
+
+        auto* view = w->findChild<QTreeView*>();
+        QVERIFY(view);
+        const auto find = [view](const QString& path) {
+            std::function<QModelIndex(const QModelIndex&)> walk = [&](const QModelIndex& parent) -> QModelIndex {
+                for (int r = 0; r < view->model()->rowCount(parent); ++r)
+                {
+                    const auto idx = view->model()->index(r, 0, parent);
+                    if (idx.data(ArchiveModel::PathRole).toString() == path)
+                        return idx;
+                    if (auto found = walk(idx); found.isValid())
+                        return found;
+                }
+                return {};
+            };
+            return walk({});
+        };
+        const auto select = [view](const QModelIndex& idx) {
+            view->selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        };
+        const auto trigger = [w](const QString& text) {
+            for (auto* a : w->findChildren<QAction*>())
+            {
+                if (a->text() == text)
+                {
+                    QVERIFY(a->isEnabled());
+                    a->trigger();
+                    return;
+                }
+            }
+            QFAIL(qPrintable(text));
+        };
+        const auto has_entry = [&](const QString& name) {
+            const auto bare = [](std::string n) {
+                if (n.ends_with('/'))
+                    n.pop_back();
+                return QString::fromStdString(n);
+            };
+            return std::ranges::any_of(session.snapshot()->view.rows, [&](const satchel_gui::SessionRow& r) { return r.state != satchel_gui::RowState::Deleted && r.plan && bare(r.plan->output_name) == name; });
+        };
+
+        // Searching expands the folders that hold matches, and clearing restores the tree.
+        QVERIFY(!view->isExpanded(find("docs")));
+        QLineEdit* search = nullptr;
+        for (auto* e : w->findChildren<QLineEdit*>())
+        {
+            if (e->accessibleName() == "Search")
+                search = e;
+        }
+        QVERIFY(search);
+        search->setText("b.txt");
+        QVERIFY(view->isExpanded(find("docs")));
+        QVERIFY(find("docs/b.txt").isValid());
+        search->clear();
+        QVERIFY(!view->isExpanded(find("docs")));
+
+        // New Folder goes next to the selection: beside a folder, not inside it.
+        select(find("docs"));
+        trigger("New Folder");
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && has_entry("New Folder"), 20000);
+        QVERIFY(!has_entry("docs/New Folder"));
+
+        // New Folder with Items moves the selection into a new sibling folder.
+        select(find("a.txt"));
+        trigger("New Folder with Items");
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && has_entry("New Folder 2/a.txt"), 20000);
+        QVERIFY(!has_entry("a.txt"));
+
+        // Files sent from the file manager are compressed on their own; the plan stays.
+        const auto rows = session.snapshot()->view.rows.size();
+        JobResults finished(app.jobs());
+        app.open_paths({ root.filePath("outside.txt") }, satchel_gui::Intent::Compress);
+        QVERIFY(finished.wait(20000));
+        QCOMPARE(finished.take().status, ZP_OK);
+        QVERIFY(QFile::exists(root.filePath("outside.txt.zip")));
+        QVERIFY(w->isVisible());
+        QVERIFY(session.snapshot()->is_new);
+        QCOMPARE(session.snapshot()->view.rows.size(), rows);
+    }
+
+    void cancelled_extraction_leaves_nothing_behind()
+    {
+        QDir root(dir_.filePath("cancel-extract"));
+        QVERIFY(root.mkpath("src/deep/er"));
+        const QByteArray zeros(1 << 20, 0);
+        for (int i = 0; i < 8; ++i)
+        {
+            QFile f(root.filePath(QString("src/deep/er/f%1.bin").arg(i)));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(zeros);
+        }
+        const auto archive = root.filePath("x.zip");
+        {
+            JobContext jc;
+            const auto plan = make_plan({ root.filePath("src") }, satchel_gui::Settings{});
+            QCOMPARE(compress_job(jc, plan->get(), archive, satchel_gui::Settings{}).status, ZP_OK);
+        }
+        QVERIFY(root.mkpath("out/keep"));
+        QFile keep(root.filePath("out/keep/mine.txt"));
+        QVERIFY(keep.open(QIODevice::WriteOnly));
+        keep.close();
+
+        JobContext jc;
+        jc.progress = [](std::uint64_t, std::uint64_t) { return false; };
+        const auto outcome = extract_job(jc, archive, root.filePath("out"), satchel_gui::Settings{}, {}, false);
+        QCOMPARE(outcome.status, ZP_CANCELLED);
+        QVERIFY(outcome.details.isEmpty());
+        QCOMPARE(QDir(root.filePath("out")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot), QStringList{ "keep" });
+        QVERIFY(QFile::exists(root.filePath("out/keep/mine.txt")));
+
+        JobContext fresh;
+        const auto verified = verify_job(fresh, archive);
+        QCOMPARE(verified.status, ZP_OK);
+        QCOMPARE(verified.output, archive);
+        QCOMPARE(verified.entry_status.size(), 8);
+    }
+
+    void verified_column_is_hidden_by_default()
+    {
+        QSettings().remove("browser/layout");
+        App app;
+        app.show_full();
+        auto* view = app.full()->findChild<QTreeView*>();
+        QVERIFY(view->header()->isSectionHidden(ArchiveModel::Verified));
+        QVERIFY(!view->header()->isSectionHidden(ArchiveModel::Method));
+    }
+
+    void tree_moves_entries_and_left_selects_the_enclosing_folder()
+    {
+        QDir root(dir_.filePath("moves"));
+        QVERIFY(root.mkpath("src/docs"));
+        for (const auto* name : { "src/a.txt", "src/docs/b.txt" })
+        {
+            QFile f(root.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(name);
+        }
+        App app;
+        app.show_full();
+        auto* w = app.full();
+        auto& session = w->session();
+        const auto settled = [&] { return !session.busy() && session.snapshot(); };
+
+        // Dropped items need no dialog: the archive goes next to them.
+        w->add_paths({ root.filePath("src") });
+        QTRY_VERIFY_WITH_TIMEOUT(settled(), 20000);
+        QCOMPARE(QDir::fromNativeSeparators(session.snapshot()->target), root.filePath("src.zip"));
+
+        auto* view = w->findChild<QTreeView*>();
+        auto& model = w->model();
+        const auto find = [&](const QString& path) {
+            std::function<QModelIndex(const QModelIndex&)> walk = [&](const QModelIndex& parent) -> QModelIndex {
+                for (int r = 0; r < model.rowCount(parent); ++r)
+                {
+                    const auto idx = model.index(r, 0, parent);
+                    if (idx.data(ArchiveModel::PathRole).toString() == path)
+                        return idx;
+                    if (auto found = walk(idx); found.isValid())
+                        return found;
+                }
+                return {};
+            };
+            return walk({});
+        };
+        const auto proxy = [view](const QModelIndex& source) { return qobject_cast<QSortFilterProxyModel*>(view->model())->mapFromSource(source); };
+        const auto select = [&](const QString& path) { view->selectionModel()->setCurrentIndex(proxy(find(path)), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows); };
+
+        view->expandAll();
+        select("src/docs/b.txt");
+        view->setFocus();
+        QTest::keyClick(view, Qt::Key_Left);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs"));
+
+        // Finder's keys: with nothing selected Down/Up pick the first/last row; Option jumps.
+        view->selectionModel()->clear();
+        QTest::keyClick(view, Qt::Key_Down);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src"));
+        view->selectionModel()->clear();
+        QTest::keyClick(view, Qt::Key_Up);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs/b.txt"));
+        QTest::keyClick(view, Qt::Key_Up, Qt::AltModifier);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src"));
+        QTest::keyClick(view, Qt::Key_Down, Qt::AltModifier);
+        QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs/b.txt"));
+
+        // Nothing of a new archive is on disk, so nothing can be dragged out of the window.
+        QVERIFY(w->drag_names().isEmpty());
+
+        // A folder cannot move into itself; a file moves into the folder it is dropped on.
+        select("src/docs");
+        QVERIFY(!w->move_to(find("src/docs"), false));
+        select("src/a.txt");
+        QVERIFY(w->move_to(find("src/docs"), true));
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && find("src/docs/a.txt").isValid(), 20000);
+        QVERIFY(!find("src/a.txt").isValid());
+
+        // The Location menu offers the folder, its parents and Choose Folder…; File ▸ Close goes
+        // back to the drop zone.
+        auto* location = w->findChild<LocationChoice*>();
+        QVERIFY(location);
+        QCOMPARE(location->folder(), root.path());
+        QCOMPARE(location->itemData(1).toString(), dir_.path());
+        QCOMPARE(location->itemText(location->count() - 1), QString("Choose Folder…"));
+        QTimer::singleShot(100, [] {
+            for (auto* top : QApplication::topLevelWidgets())
+            {
+                if (auto* box = qobject_cast<QMessageBox*>(top); box && box->isVisible())
+                {
+                    for (auto* b : box->buttons())
+                    {
+                        if (b->text() == "Discard")
+                            b->click();
+                    }
+                }
+            }
+        });
+        for (auto* a : w->findChildren<QAction*>())
+        {
+            if (a->text() == "Close")
+                a->trigger();
+        }
+        QVERIFY(!session.active());
+        QVERIFY(w->archive_path().isEmpty());
+    }
+
+    void folder_settings_are_dropdowns()
+    {
+        satchel_gui::Settings s;
+        s.simple_output_folder = std::filesystem::path(dir_.path().toStdU16String());
+        SettingsDialog dialog(s);
+        const auto choices = dialog.findChildren<FolderChoice*>();
+        QCOMPARE(choices.size(), 2);
+        QCOMPARE(dialog.settings().simple_output_folder, s.simple_output_folder);
+        QCOMPARE(dialog.settings().temp_folder, std::optional<std::filesystem::path>{});
+        for (auto* c : choices)
+        {
+            if (c->folder())
+            {
+                c->setCurrentIndex(0);
+                QVERIFY(!c->folder());
+                c->setCurrentIndex(1);
+                QCOMPARE(c->folder(), s.simple_output_folder);
+                QCOMPARE(c->itemText(c->count() - 1), QString("Choose Folder…"));
+            }
+        }
+        for (auto* spin : dialog.findChildren<QSpinBox*>())
+        {
+            if (spin->specialValueText() == "All cores")
+                QVERIFY(spin->minimumWidth() > spin->fontMetrics().horizontalAdvance("All cores"));
+        }
+    }
+
     void translations_are_embedded()
     {
 #ifdef ZP_HAS_TRANSLATIONS
         QVERIFY(QFile::exists(":/i18n/satchel_en.qm"));
         QTranslator translator;
         QVERIFY(translator.load(QLocale(QLocale::English), "satchel", "_", ":/i18n"));
+        QCoreApplication::installTranslator(&translator);
+        QCOMPARE(QCoreApplication::translate("Jobs", "%n file(s) extracted", nullptr, 1), QString("1 file extracted"));
+        QCOMPARE(QCoreApplication::translate("Jobs", "%n file(s) extracted", nullptr, 44), QString("44 files extracted"));
+        QCoreApplication::removeTranslator(&translator);
 #else
         QSKIP("built without Qt Linguist tools");
 #endif
@@ -473,6 +875,7 @@ private slots:
 
 private:
     QTemporaryDir dir_;
+    QStringList unexpected_dialogs_;
 };
 
 QTEST_MAIN(AppTest)

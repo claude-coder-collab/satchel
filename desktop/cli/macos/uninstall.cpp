@@ -199,12 +199,20 @@ UninstallReport uninstall(const UninstallOptions& options, const Runner& runner)
     if (options.quit_running)
         steps.command("quit Satchel", { "osascript", "-e", script }, false);
 
+    // Unregister what pluginkit reports as registered (unregistering anything else fails). Only
+    // if it cannot be asked, try the extensions inside the bundles.
     std::set<fs::path> extensions;
-    for (const auto& app : existing)
-        extensions.insert(app / "Contents" / "PlugIns" / "SatchelPreview.appex");
     if (const auto registered = runner({ "pluginkit", "-mAvvv", "-i", bundle_id + ".preview" }); registered.status == 0)
+    {
         for (auto& path : parse_registered_extensions(registered.output))
             extensions.insert(std::move(path));
+    }
+    else
+    {
+        for (const auto& app : existing)
+            if (auto appex = app / "Contents" / "PlugIns" / "SatchelPreview.appex"; fs::exists(appex))
+                extensions.insert(std::move(appex));
+    }
     for (const auto& extension : extensions)
         steps.command("unregister Quick Look extension " + extension.string(), { "pluginkit", "-r", extension.string() });
 

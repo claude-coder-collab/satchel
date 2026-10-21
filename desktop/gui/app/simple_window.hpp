@@ -5,6 +5,7 @@
 #include "jobs.hpp"
 
 #include <QElapsedTimer>
+#include <QHash>
 #include <QSet>
 #include <QStringList>
 #include <QWidget>
@@ -46,7 +47,9 @@ private:
     QLabel* details_ = nullptr;
     QPushButton* reveal_ = nullptr;
     QPushButton* retry_ = nullptr;
+    QPushButton* view_contents_ = nullptr;
     QList<int> mine_;
+    QHash<int, QString> cancelled_text_;
     QSet<int> quit_when_clean_;
     int current_ = 0;
     QElapsedTimer timer_;

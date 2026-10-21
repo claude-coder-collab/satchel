@@ -162,24 +162,8 @@ TEST_CASE("settings defaults match the spec", "[gui]")
     CHECK_FALSE(s.simple_output_folder);
 }
 
-TEST_CASE("copy as CLI command", "[gui]")
+TEST_CASE("savings text", "[gui]")
 {
-    Settings s;
-    CHECK(cli_create_command(s, "/out/a b.zip", { "/in/x.wav", "/in/it's" }) == "satchel create '/out/a b.zip' /in/x.wav '/in/it'\\''s'");
-    s.flac = false;
-    s.deflate_level = 9;
-    s.threads = 4;
-    CHECK(cli_create_command(s, "o.zip", { "i" }) == "satchel create --no-flac --deflate-level 9 --threads 4 o.zip i");
-    Settings x;
-    x.exclude_system = false;
-    x.exclude_daw_caches = true;
-    x.exclude_patterns = { "*.tmp", "old stuff/" };
-    CHECK(cli_create_command(x, "o.zip", { "i" }) == "satchel create --no-default-excludes --exclude-daw-caches --exclude '*.tmp' --exclude 'old stuff/' o.zip i");
-    Settings e;
-    e.restore_audio = false;
-    e.include_readme = true;
-    e.overwrite = Overwrite::Replace;
-    CHECK(cli_extract_command(e, "a.zip", "out") == "satchel extract --keep-flac --include-readme --overwrite replace a.zip -d out");
     CHECK(savings_text(4200000000, 2300000000) == "4.2 GB → 2.3 GB, 45% smaller");
 }
 

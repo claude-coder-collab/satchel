@@ -511,7 +511,7 @@ which the GUI will reuse.
 **Logic** (`desktop/gui/logic`, no Qt, Catch2-tested): Simple-mode drop rule, output naming with
 " 2"/" 3" suffixes (at the end for folders), multi-mono row grouping, ratio, timecode formatting
 (HH:MM:SS:FF from the iXML rate incl. 29.97/59.94 drop frame, else HH:MM:SS.mmm), Settings
-defaults and "Copy as CLI command".
+defaults.
 
 **Session** (`desktop/gui/session`, library `satchel_gui_session`, no Qt, Catch2-tested in
 `satchel_gui_session_tests`): the staged Full-mode model (desktop UI spec, "Implementation
@@ -540,7 +540,7 @@ only.
     clicked: sorting 100k rows up front cost about 1.3 s.
   - Inspector (HTML) uses `zp_reader_flac_describe` for audio, original, production metadata,
     tracks and the chunk list.
-  - Status-bar summary and a Jobs dock (cancel, reveal).
+  - Status-bar summary, with a progress bar for the window's own extract and verify jobs.
   - Staged editing (desktop UI spec, "Building and editing archives"): `SessionController` owns the
     `Session` on its own worker thread (a FIFO of tasks) and publishes immutable `SessionSnapshot`s
     to the window; Create / Apply / Save As run `Session::commit` as a `JobQueue` job, and the
@@ -550,14 +550,17 @@ only.
     browser is rebuilt from snapshots only once there are changes. Each browser entry keeps a
     `Ref` (session row and/or archive entry index) for keys, Inspector, extraction and verify
     results. Expanded folders, selection and scroll position survive the rebuilds.
-  - `ArchiveModel` takes `BrowserEntry` rows (state, pending packed size, reason, conflict); the
-    `BadgeDelegate` draws New / Replaced after the name. Renames in place go through
+  - `ArchiveModel` takes `BrowserEntry` rows (state, pending packed size, conflict); the
+    `BadgeDelegate` draws New / Replaced right-aligned in the Name cell (the selection background
+    is drawn once across the cell, then the text in the narrowed rect). Renames in place go through
     `rename_requested`; the model never changes itself.
   - Extraction: `ExtractDialog` options, then a pre-flight showing issues and existing files.
   - Verify writes nothing and fills the Verified column.
-  - Double-click opens an entry through a temporary extraction (an added file: its source);
-    dragging out extracts to a temporary folder first. The Name column is resizable; column
-    layout is saved under `browser/columns`.
+  - Dragging out extracts to a temporary folder first. The Name column is resizable; column
+    layout is saved under `browser/layout`.
+  - `Session::commit` returns the files the build left out because they changed after planning
+    (`zp_editor_commit` returns `ZP_SOURCE_CHANGED` with a complete output and a build
+    result, like `zp_build`); the job reports them as details and a warning.
 - `--smoke-test ARCHIVE` prints the time to list an archive. 100,000 entries list in about
   0.45–0.6 s on the development Mac.
 - Tests: `satchel_gui_logic_tests` (Catch2) and `satchel_gui_tests` (Qt Test, offscreen): both
@@ -607,7 +610,7 @@ file + commit, memory, callbacks), input constructors (paths, memory), option in
 accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status_name`,
 `zp_version`, `zp_preview`, `zp_input_set_excludes`, `zp_exclude_preset_pattern`,
 `zp_plan_excluded_count`/`zp_plan_get_excluded`, `zp_input_set_prefix`, `zp_plan_predict_store` (shares `build::sample_pays_off` with the reader, so the prediction and the build agree; files up to 4 MiB are decided on their whole content at build time, so for them it is an estimate). The editor additions
-(`zp_editor_open_with_options`, `zp_editor_resolve`, `zp_editor_commit_with_options`) are in the
+(options on `zp_editor_open` and `zp_editor_commit`, `zp_editor_resolve`) are in the
 design doc. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
 
 ### 4.15 Packaging and releases (main spec 12.3)
@@ -633,7 +636,7 @@ design doc. The progress callback returns non-zero to cancel. `zp_last_error` is
 - `.github/workflows/release.yml` runs on `v*` tags, on demand, and on pull requests touching
   packaging. The version is the tag without `v` (else the CMake project version) and goes into
   `ZP_VERSION`. Jobs: Linux (deb, tar.gz, AppImage; installs the deb and starts the AppImage under
-  Xvfb), macOS (Qt 6.8.3 from `install-qt-action`, universal arm64 + x86_64, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
+  Xvfb), macOS (Qt 6.11.3 from `install-qt-action`; 6.8.3 clipped focus rings and drew square buttons on current macOS; Windows stays on 6.10.3 because aqtinstall cannot fetch 6.11 for Windows, universal arm64 + x86_64, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
   stapled when Apple credentials exist; checks the bundle links nothing outside itself and the
   system), Windows (MSI; installs it silently and runs `satchel --version`), web (zip of the browser
   app, npm tarball), Python wheels (Linux, macOS, Windows). `publish` writes `SHA256SUMS` and, for tags, creates a draft GitHub release.
@@ -751,8 +754,9 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   `satchel_macos_uninstall`; no Python or other runtime needed). The dmg also holds
   `Uninstall Satchel.command`, a two-line `sh` wrapper that runs the CLI of the `Satchel.app` beside it;
   an installed copy is `/Applications/Satchel.app/Contents/Helpers/satchel uninstall`. Steps: quit the app
-  (`osascript`, only if running), `pluginkit -r` for the bundled and every registered
-  `<bundle id>.preview` extension, `lsregister -u`, move each `Satchel.app` (`/Applications`,
+  (`osascript`, only if running), `pluginkit -r` for every registered `<bundle id>.preview` extension
+  (only those: unregistering one that is not registered fails; the bundled extension is tried only
+  if `pluginkit -m` cannot be run), `lsregister -u`, move each `Satchel.app` (`/Applications`,
   `~/Applications`, `--app`) to `~/.Trash`, `defaults delete` the preferences domain, remove
   `~/Library` data (Preferences, Application Support, Caches, HTTPStorages, Saved Application State,
   Logs; skipped by `--keep-settings`), then `pbs -flush` so the Finder services disappear. The bundle
@@ -761,17 +765,23 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   `-y` it asks for confirmation (declined exit code 4 when stdin is not a terminal). Commands go through
   an injectable `Runner`; `tests/macos/test_uninstall.cpp` (Catch2, `satchel_uninstall_tests`) drives it
   with a fake runner in a temporary home. Not yet run against a real dmg install.
-  The apps also offer **Satchel > Uninstall Satchel…** (Help menu action with
-  `ApplicationSpecificRole`, in both Simple and Full mode; `desktop/gui/app/mac_uninstall.cpp`, stubbed
-  elsewhere). It asks "Uninstall and Delete Settings" / "Uninstall and Keep Settings" / Cancel, runs the
-  same `uninstall()` with `quit_running` off and the running bundle added to the app list, shows any
-  failed steps, and otherwise quits. No background daemon: considered and rejected as unusual for this
-  kind of app.
+  The apps also offer **Satchel > Uninstall Satchel…** (`ApplicationSpecificRole`;
+  `desktop/gui/app/mac_uninstall.cpp`, stubbed elsewhere). Qt adds one application-menu item per menu
+  bar that holds such an action and never removes it, so the action is added once per process, from
+  the first window (Simple and Full mode each have a menu bar). It asks "Uninstall and Delete
+  Settings" / "Uninstall and Keep Settings" / Cancel. Removing the app while it runs does not work
+  (it writes its settings while quitting, after they were deleted), so it starts its own executable
+  detached as a helper, `Satchel --uninstall-after <pid> --app <bundle> [--keep-settings]`, and quits.
+  `main` checks for that before creating any Qt application; the helper polls the pid (up to two
+  minutes), runs the same `uninstall()` with `quit_running` off, and shows failed steps in an
+  `osascript` alert, since the app is gone by then. A bundle on a read-only volume (running from the
+  dmg) is refused up front with a hint to eject instead. No background daemon: considered and
+  rejected as unusual for this kind of app.
 - User-data cleanup (Windows and Linux; `desktop/gui/app/user_data.{hpp,cpp}`): the Windows MSI and the
   `.deb` leave per-user data behind, so Help has **Delete Settings and Temporary Files…** (not on macOS,
   where the uninstaller covers it). What the app leaves per user: the `QSettings` store (organisation
   `Venn Audio`, application `Satchel`: `HKCU\Software\Venn Audio\Satchel` on Windows,
-  `~/.config/Venn Audio/Satchel.conf` on Linux; recent files, header layout, last mode, options);
+  `~/.config/Venn Audio/Satchel.conf` on Linux; header layout, last mode, options);
   WinSparkle's own key `HKCU\Software\<ZP_VENDOR>\Satchel\WinSparkle` (the path comes from WinSparkle's
   documentation and the exe's version resource, not yet seen on a real Windows machine); and temp
   leftovers `satchel-<ms>` (entries extracted for opening or dragging, never deleted by the app) and

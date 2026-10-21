@@ -92,7 +92,7 @@ ArchiveExtractor::ArchiveExtractor(ArchiveReader& reader, OutputSink& sink, Cont
     reader_(reader),
     sink_(sink),
     context_(context),
-    options_(options)
+    options_(std::move(options))
 {
 }
 
@@ -141,6 +141,13 @@ Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::
         {
             plan.issues.push_back({ ExtractIssueKind::UnsafePath, idx, e.name, target.error().message });
             continue;
+        }
+        if (!options_.base_folder.empty())
+        {
+            if (*target == options_.base_folder)
+                continue;
+            if (target->starts_with(options_.base_folder + '/'))
+                target->erase(0, options_.base_folder.size() + 1);
         }
         if (e.kind == ItemKind::File && e.method == EntryMethod::Unsupported)
         {
@@ -418,11 +425,11 @@ ExtractResult ArchiveExtractor::execute(const ExtractionPlan& plan, ProgressSink
         });
     }
 
-    while (!tasks.wait_for(std::chrono::milliseconds(100)))
+    do
     {
         if (!cancelled.load() && !progress.on_progress(done.load(), total))
             cancelled.store(true);
-    }
+    } while (!tasks.wait_for(std::chrono::milliseconds(100)));
     progress.on_progress(done.load(), total);
 
     std::ranges::sort(result.outcomes, {}, &EntryOutcome::entry);

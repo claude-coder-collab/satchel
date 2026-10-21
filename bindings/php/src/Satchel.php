@@ -458,7 +458,7 @@ final class Editor
     {
         $ffi = Lib::get();
         $this->stream = Lib::notNull($ffi->zp_stream_open_file($path));
-        $ptr = $ffi->zp_editor_open($ctx->ptr, $this->stream);
+        $ptr = $ffi->zp_editor_open($ctx->ptr, $this->stream, null);
         if ($ptr === null || FFI::isNull($ptr)) {
             $e = Lib::error();
             $ffi->zp_stream_free($this->stream);
@@ -514,7 +514,7 @@ final class Editor
         $ffi = Lib::get();
         $out = Lib::notNull($ffi->zp_stream_create_file($destination ?? $this->path));
         try {
-            Lib::check($ffi->zp_editor_commit($this->ptr, $out, Lib::progress($progress), null));
+            Lib::check($ffi->zp_editor_commit($this->ptr, $out, null, Lib::progress($progress), null, null));
             Lib::check($ffi->zp_stream_commit($out));
         } finally {
             $ffi->zp_stream_free($out);

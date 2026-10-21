@@ -116,6 +116,22 @@ TEST_CASE("a new session stages additions and writes nothing until commit", "[se
     CHECK(s.base_entries().size() == 2);
 }
 
+TEST_CASE("files that change after they are added are left out and the archive is still written", "[session]")
+{
+    Fixture f;
+    const auto target = f.path("out.zip");
+    auto s = Session::create(f.ctx, target);
+    s.apply({ op::Add{ { f.write("in/one.txt", "1"), f.write("in/two.txt", "2") }, "" } });
+    f.write("in/two.txt", "changed after it was added");
+
+    const auto left_out = s.commit(target);
+    REQUIRE(left_out.size() == 1);
+    CHECK(left_out.front().starts_with("two.txt: "));
+    CHECK(fs::exists(target));
+    CHECK_FALSE(s.is_new());
+    CHECK(names_in(target) == std::set<std::string>{ "one.txt" });
+}
+
 TEST_CASE("edits are staged, shown as row states and applied in place", "[session]")
 {
     Fixture f;
@@ -198,6 +214,25 @@ TEST_CASE("a rename onto an existing name is refused and changes nothing", "[ses
     CHECK(s.can_undo());
 }
 
+TEST_CASE("path changes count as moves or renames where they happened", "[session]")
+{
+    const std::vector<std::string> before{ "a.txt", "docs/", "docs/b.txt", "docs/c.txt", "x/y.txt" };
+    // A file into an existing folder: one move.
+    CHECK(count_moves({ { "a.txt", "docs/a.txt" } }, before, { "docs/", "docs/a.txt", "docs/b.txt", "docs/c.txt", "x/y.txt" }).moved == 1);
+    // A folder renamed: one rename, not a move of each entry in it.
+    const auto folder = count_moves({ { "docs/", "papers/" }, { "docs/b.txt", "papers/b.txt" }, { "docs/c.txt", "papers/c.txt" } }, before, { "a.txt", "papers/", "papers/b.txt", "papers/c.txt", "x/y.txt" });
+    CHECK(folder.renamed == 1);
+    CHECK(folder.moved == 0);
+    // A file renamed in place, and a file moved between existing folders.
+    const auto both = count_moves({ { "a.txt", "alpha.txt" }, { "docs/b.txt", "x/b.txt" } }, before, { "alpha.txt", "docs/", "docs/c.txt", "x/b.txt", "x/y.txt" });
+    CHECK(both.renamed == 1);
+    CHECK(both.moved == 1);
+    // A folder moved into another: one move.
+    const auto nested = count_moves({ { "docs/", "x/docs/" }, { "docs/b.txt", "x/docs/b.txt" }, { "docs/c.txt", "x/docs/c.txt" } }, before, { "a.txt", "x/docs/", "x/docs/b.txt", "x/docs/c.txt", "x/y.txt" });
+    CHECK(nested.moved == 1);
+    CHECK(nested.renamed == 0);
+}
+
 TEST_CASE("folders rename and remove with everything below them", "[session]")
 {
     Fixture f;
@@ -205,7 +240,8 @@ TEST_CASE("folders rename and remove with everything below them", "[session]")
     s.apply({ op::RenameFolder{ "docs", "papers/" } });
     CHECK(row(s, "papers/b.txt").state == RowState::Renamed);
     CHECK(row(s, "papers/c.txt").previous_name == "docs/c.txt");
-    CHECK(s.view().summary.renamed == 2);
+    CHECK(s.view().summary.renamed == 1);
+    CHECK(s.view().summary.moved == 0);
 
     s.apply({ op::RemoveFolder{ "papers" } });
     CHECK(row(s, "docs/b.txt").state == RowState::Deleted);

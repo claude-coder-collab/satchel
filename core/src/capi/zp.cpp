@@ -1354,6 +1354,7 @@ void zp_extract_options_init(zp_extract_options_t* options)
     options->restore_wav = d.restore_wav ? 1 : 0;
     options->include_readme = d.include_readme ? 1 : 0;
     options->overwrite = static_cast<int>(d.overwrite);
+    options->base_folder = nullptr;
 }
 
 zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options)
@@ -1372,6 +1373,8 @@ zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp
                 o.restore_wav = options->restore_wav != 0;
                 o.include_readme = options->include_readme != 0;
                 o.overwrite = static_cast<OverwritePolicy>(options->overwrite);
+                if (options->base_folder)
+                    o.base_folder = options->base_folder;
             }
             ArchiveExtractor extractor(*reader->reader, *sink->sink, *reader->context, o);
             auto plan = extractor.plan_extraction(std::vector<std::size_t>(sel, sel + n));
@@ -1384,7 +1387,7 @@ zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp
             x->context = reader->context;
             x->reader = reader;
             x->sink = sink;
-            x->options = o;
+            x->options = std::move(o);
             x->plan = std::move(*plan);
             return x;
         },
@@ -1550,12 +1553,7 @@ char* zp_preview(zp_stream_t* input, const char* file_name, int format)
     );
 }
 
-zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input)
-{
-    return zp_editor_open_with_options(ctx, input, nullptr);
-}
-
-zp_editor_t* zp_editor_open_with_options(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options)
+zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options)
 {
     ZP_REQUIRE(ctx && input, nullptr);
     return guarded(
@@ -1667,21 +1665,22 @@ int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, s
     );
 }
 
-int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user)
-{
-    return zp_editor_commit_with_options(editor, output, nullptr, progress, user);
-}
-
-int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user)
+int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user, zp_build_result_t** out_result)
 {
     ZP_REQUIRE(editor && output, ZP_INVALID_ARGUMENT);
+    if (out_result)
+        *out_result = nullptr;
     return guarded(
         [&]() -> int {
             CallbackProgress p(progress, user);
-            const auto r = editor->editor->commit(*output->stream, p, builder_options(options));
-            if (r.status != Status::Ok)
-                return set_error(r.status, r.message);
-            return ZP_OK;
+            auto result = std::make_unique<zp_build_result>();
+            result->result = editor->editor->commit(*output->stream, p, builder_options(options));
+            const auto status = result->result.status;
+            if (status != Status::Ok)
+                set_error(status, result->result.message);
+            if (out_result)
+                *out_result = result.release();
+            return static_cast<int>(status);
         },
         ZP_INTERNAL
     );

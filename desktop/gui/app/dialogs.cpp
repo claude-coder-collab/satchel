@@ -4,12 +4,16 @@
 
 #include "jobs.hpp"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QCheckBox>
-#include <QClipboard>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFileDialog>
+#include <QFileIconProvider>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -20,8 +24,10 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStandardItemModel>
+#include <QStandardPaths>
 #include <QTableView>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -41,14 +47,138 @@ std::filesystem::path to_path(const QString& s)
     return { s.toStdU16String() };
 }
 
+// Rich text, so Qt wraps the tooltip instead of showing one long line.
+QString wrapped(const QString& text)
+{
+    return QStringLiteral("<p>%1</p>").arg(text.toHtmlEscaped());
+}
+
 QString preset_tooltip(int preset)
 {
     QStringList names;
     for (const auto& p : zpp::exclude_preset(preset))
         names << qs(p).replace('\r', QStringLiteral("\\r"));
-    return names.join(QStringLiteral("  "));
+    return wrapped(QObject::tr("Leaves out: %1").arg(names.join(QStringLiteral(", "))));
 }
 
+}
+
+void pad_spin_box(QAbstractSpinBox* spin)
+{
+    if (auto* edit = spin->findChild<QLineEdit*>())
+        edit->setTextMargins(6, 0, 6, 0);
+    spin->setMinimumWidth(std::max(spin->sizeHint().width() + 12, spin->fontMetrics().horizontalAdvance(QStringLiteral("000")) + 44));
+}
+
+FolderChoice::FolderChoice(const QString& default_text, QString dialog_title, std::optional<std::filesystem::path> folder, QWidget* parent) :
+    QComboBox(parent),
+    default_text_(default_text),
+    dialog_title_(std::move(dialog_title)),
+    folder_(std::move(folder))
+{
+    setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    rebuild();
+    setCurrentIndex(folder_ ? 1 : 0);
+    previous_ = currentIndex();
+    connect(this, &QComboBox::activated, this, [this](int index) {
+        if (index != count() - 1)
+        {
+            previous_ = index;
+            return;
+        }
+        const auto start = folder_ ? QString::fromStdU16String(folder_->u16string()) : QString();
+        const auto chosen = QFileDialog::getExistingDirectory(this, dialog_title_, start);
+        if (chosen.isEmpty())
+        {
+            setCurrentIndex(previous_);
+            return;
+        }
+        set_folder(to_path(chosen));
+    });
+}
+
+std::optional<std::filesystem::path> FolderChoice::folder() const
+{
+    if (folder_ && currentIndex() == 1)
+        return folder_;
+    return std::nullopt;
+}
+
+void FolderChoice::set_folder(std::optional<std::filesystem::path> folder)
+{
+    folder_ = std::move(folder);
+    rebuild();
+    setCurrentIndex(folder_ ? 1 : 0);
+    previous_ = currentIndex();
+}
+
+void FolderChoice::rebuild()
+{
+    const QSignalBlocker block(this);
+    clear();
+    addItem(default_text_);
+    if (folder_)
+    {
+        const auto path = QDir::toNativeSeparators(QString::fromStdU16String(folder_->u16string()));
+        addItem(QFileIconProvider().icon(QFileIconProvider::Folder), QFileInfo(path).fileName().isEmpty() ? path : QFileInfo(path).fileName());
+        setItemData(1, path, Qt::ToolTipRole);
+    }
+    insertSeparator(count());
+    addItem(tr("Choose Folder…"));
+}
+
+LocationChoice::LocationChoice(QWidget* parent) :
+    QComboBox(parent)
+{
+    setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    setMinimumContentsLength(12);
+    setAccessibleName(tr("Location"));
+    connect(this, &QComboBox::activated, this, [this](int index) {
+        auto chosen = itemData(index).toString();
+        if (chosen.isEmpty())
+            chosen = QFileDialog::getExistingDirectory(this, tr("Location"), folder_);
+        if (chosen.isEmpty() || QDir(chosen) == QDir(folder_))
+        {
+            set_folder(folder_);
+            return;
+        }
+        set_folder(chosen);
+        emit folder_chosen(folder_);
+    });
+}
+
+void LocationChoice::set_folder(const QString& folder)
+{
+    folder_ = QDir::cleanPath(folder);
+    const QSignalBlocker block(this);
+    clear();
+    const QFileIconProvider icons;
+    const auto add = [&](const QString& path) {
+        for (int i = 0; i < count(); ++i)
+        {
+            if (!itemData(i).toString().isEmpty() && QDir(itemData(i).toString()) == QDir(path))
+                return;
+        }
+        const auto name = QFileInfo(path).fileName();
+        addItem(icons.icon(QFileInfo(path)), name.isEmpty() ? QDir::toNativeSeparators(path) : name, path);
+        setItemData(count() - 1, QDir::toNativeSeparators(path), Qt::ToolTipRole);
+    };
+    for (QDir d(folder_);;)
+    {
+        add(d.absolutePath());
+        if (!d.cdUp())
+            break;
+    }
+    insertSeparator(count());
+    for (const auto where : { QStandardPaths::DesktopLocation, QStandardPaths::DocumentsLocation, QStandardPaths::DownloadLocation })
+    {
+        if (const auto path = QStandardPaths::writableLocation(where); !path.isEmpty())
+            add(path);
+    }
+    insertSeparator(count());
+    addItem(tr("Choose Folder…"));
+    setCurrentIndex(0);
+    setToolTip(QDir::toNativeSeparators(folder_));
 }
 
 ExcludeEditor::ExcludeEditor(const Settings& settings, QWidget* parent) :
@@ -64,7 +194,7 @@ ExcludeEditor::ExcludeEditor(const Settings& settings, QWidget* parent) :
     daw_->setToolTip(preset_tooltip(ZP_EXCLUDE_PRESET_DAW_CACHES));
     list_ = new QListWidget(this);
     list_->setAccessibleName(tr("Exclude patterns"));
-    list_->setToolTip(tr("Names to leave out: * any text, ? one character, [a-z] one of a set; end with / for folders only"));
+    list_->setToolTip(wrapped(tr("Names to leave out. * matches any text, ? one character, [a-z] one character of a set. End a pattern with / to match folders only.")));
     list_->setMaximumHeight(110);
     for (const auto& p : settings.exclude_patterns)
     {
@@ -160,10 +290,11 @@ bool ResolutionSheet::apply()
     return zp_plan_resolve(plan_, res.data(), res.size()) == ZP_OK && zp_plan_executable(plan_) != 0;
 }
 
-ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settings settings, std::vector<std::size_t> selection, QWidget* parent) :
+ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settings settings, std::vector<std::size_t> selection, QString base_folder, QWidget* parent) :
     QDialog(parent),
     archive_(std::move(archive)),
     selection_(std::move(selection)),
+    base_folder_(std::move(base_folder)),
     settings_(std::move(settings))
 {
     setWindowTitle(selection_.empty() ? tr("Extract all") : tr("Extract selected"));
@@ -193,14 +324,6 @@ ExtractDialog::ExtractDialog(QString archive, const QString& destination, Settin
     form->addRow(tr("Existing files"), overwrite_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     buttons->button(QDialogButtonBox::Ok)->setText(tr("Extract"));
-    auto* copy = buttons->addButton(tr("Copy as CLI command"), QDialogButtonBox::HelpRole);
-    connect(copy, &QPushButton::clicked, this, [this] {
-        Settings s = settings_;
-        s.restore_audio = restore_->isChecked();
-        s.include_readme = readme_->isChecked();
-        s.overwrite = static_cast<satchel_gui::Overwrite>(overwrite_->currentIndex());
-        QApplication::clipboard()->setText(QString::fromStdString(satchel_gui::cli_extract_command(s, to_path(archive_), to_path(destination_->text()))));
-    });
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     form->addRow(buttons);
@@ -228,6 +351,8 @@ std::optional<ExtractChoice> ExtractDialog::run()
         zp_extract_options_init(&options);
         options.restore_wav = choice.settings.restore_audio ? 1 : 0;
         options.include_readme = choice.settings.include_readme ? 1 : 0;
+        const auto base = base_folder_.toStdString();
+        options.base_folder = base.c_str();
         zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan(reader.get(), selection_.empty() ? nullptr : selection_.data(), selection_.size(), sink.get(), &options)));
         QStringList problems;
         QStringList existing;
@@ -242,14 +367,14 @@ std::optional<ExtractChoice> ExtractDialog::run()
         }
         if (!problems.isEmpty())
         {
-            QMessageBox box(QMessageBox::Warning, tr("Before extracting"), tr("%1 entr(ies) need attention; refused entries will not be written.").arg(problems.size()), QMessageBox::Ok | QMessageBox::Cancel, parentWidget());
+            QMessageBox box(QMessageBox::Warning, tr("Before extracting"), tr("%n entr(ies) need attention; refused entries will not be written.", nullptr, static_cast<int>(problems.size())), QMessageBox::Ok | QMessageBox::Cancel, parentWidget());
             box.setDetailedText(problems.join('\n'));
             if (box.exec() != QMessageBox::Ok)
                 return std::nullopt;
         }
         if (!existing.isEmpty() && choice.settings.overwrite == satchel_gui::Overwrite::Ask)
         {
-            QMessageBox box(QMessageBox::Question, tr("Files already exist"), tr("%1 file(s) already exist at the destination.").arg(existing.size()), QMessageBox::NoButton, parentWidget());
+            QMessageBox box(QMessageBox::Question, tr("Files already exist"), tr("%n file(s) already exist at the destination.", nullptr, static_cast<int>(existing.size())), QMessageBox::NoButton, parentWidget());
             box.setDetailedText(existing.join('\n'));
             auto* replace = box.addButton(tr("Replace"), QMessageBox::AcceptRole);
             box.addButton(tr("Skip existing"), QMessageBox::RejectRole);
@@ -275,11 +400,9 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
 {
     setWindowTitle(tr("Settings"));
     auto* form = new QFormLayout(this);
-    const auto path_text = [](const std::optional<std::filesystem::path>& p) { return p ? QString::fromStdU16String(p->u16string()) : QString(); };
     last_mode_ = new QCheckBox(tr("Start in the mode used last"), this);
     last_mode_->setChecked(base_.start_in_last_mode);
-    simple_output_ = new QLineEdit(path_text(base_.simple_output_folder), this);
-    simple_output_->setPlaceholderText(tr("Next to the source"));
+    simple_output_ = new FolderChoice(tr("Next to the source"), tr("Folder for Simple mode output"), base_.simple_output_folder, this);
     flac_ = new QCheckBox(tr("Convert PCM audio to FLAC"), this);
     flac_->setChecked(base_.flac);
     flac_level_ = new QSpinBox(this);
@@ -292,8 +415,12 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
     threads_->setRange(0, 256);
     threads_->setSpecialValueText(tr("All cores"));
     threads_->setValue(base_.threads);
-    temp_ = new QLineEdit(path_text(base_.temp_folder), this);
-    temp_->setPlaceholderText(tr("System temporary folder"));
+    threads_->setMinimumWidth(threads_->fontMetrics().horizontalAdvance(tr("All cores")) + 60);
+    pad_spin_box(flac_level_);
+    pad_spin_box(deflate_);
+    if (auto* edit = threads_->findChild<QLineEdit*>())
+        edit->setTextMargins(6, 0, 6, 0);
+    temp_ = new FolderChoice(tr("System temporary folder"), tr("Folder for temporary files"), base_.temp_folder, this);
     restore_ = new QCheckBox(tr("Restore original audio"), this);
     restore_->setChecked(base_.restore_audio);
     readme_ = new QCheckBox(tr("Include the generated readme"), this);
@@ -323,10 +450,6 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
     form->addRow(tr("Integration"), associate_);
     form->addRow(tr("Updates"), updates_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    auto* copy = buttons->addButton(tr("Copy as CLI command"), QDialogButtonBox::HelpRole);
-    connect(copy, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText(QString::fromStdString(satchel_gui::cli_create_command(settings(), "archive.zip", { "files" })));
-    });
     connect(buttons, &QDialogButtonBox::accepted, this, [this] {
         if (const auto error = exclude_pattern_error(exclude_patterns(settings())); !error.isEmpty())
         {
@@ -342,18 +465,13 @@ SettingsDialog::SettingsDialog(Settings s, QWidget* parent) :
 Settings SettingsDialog::settings() const
 {
     Settings s = base_;
-    const auto opt_path = [](const QLineEdit* e) -> std::optional<std::filesystem::path> {
-        if (e->text().trimmed().isEmpty())
-            return std::nullopt;
-        return to_path(e->text().trimmed());
-    };
     s.start_in_last_mode = last_mode_->isChecked();
-    s.simple_output_folder = opt_path(simple_output_);
+    s.simple_output_folder = simple_output_->folder();
     s.flac = flac_->isChecked();
     s.flac_level = flac_level_->value();
     s.deflate_level = deflate_->value();
     s.threads = threads_->value();
-    s.temp_folder = opt_path(temp_);
+    s.temp_folder = temp_->folder();
     s.restore_audio = restore_->isChecked();
     s.include_readme = readme_->isChecked();
     s.overwrite = static_cast<satchel_gui::Overwrite>(overwrite_->currentIndex());

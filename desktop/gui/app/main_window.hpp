@@ -22,7 +22,6 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
-class QListWidget;
 class QProgressBar;
 class QStackedWidget;
 class QTextBrowser;
@@ -44,9 +43,17 @@ public:
     void add_paths(const QStringList& paths, const QString& folder = {});
     // Create / Apply: returns the job id, or 0 if nothing can be written now.
     int apply_changes();
+    // Drag-out: the top-level names the selected on-disk entries extract to; none if nothing on
+    // disk is selected (a new archive), so the drag offers no files.
+    [[nodiscard]] QStringList drag_names() const;
+    // Moves the selection into the folder of `target` (a source-model index) (a folder row: into it; an entry: beside
+    // it; invalid: the top level). Returns whether that is possible; applies it if `apply`.
+    bool move_to(const QModelIndex& target, bool apply);
 
     [[nodiscard]] QString archive_path() const { return archive_; }
     [[nodiscard]] int visible_rows() const;
+    // Staged changes (or a new archive with files) that have not been written.
+    [[nodiscard]] bool dirty() const;
     [[nodiscard]] SessionController& session() { return *controller_; }
     [[nodiscard]] ArchiveModel& model() { return *model_; }
 
@@ -65,6 +72,7 @@ private:
     };
 
     void build_ui();
+    // File ▸ New asks where to write; dropped items default to next to themselves (Simple-mode rule).
     void new_archive(const QStringList& given = {});
     void choose_and_add(bool folders);
     void drop_paths(const QStringList& paths, const QModelIndex& target);
@@ -74,31 +82,40 @@ private:
     void rename_selected();
     void rename_entry(const QModelIndex& index, const QString& leaf);
     void move_selected();
-    void new_folder();
+    // An empty folder next to the selection (top level without one); with_selection moves the
+    // selected items into it.
+    void new_folder(bool with_selection);
     void save_as();
     // Leaves a new archive without creating it.
     void cancel_new();
-    void open_entry(const QModelIndex& index);
+    // Closes the archive or new archive (asking about unwritten changes) and shows the drop zone.
+    void close_archive();
     void show_empty();
-    void update_recent();
     void update_inspector();
     void update_summary();
     void update_actions();
     void update_title();
+    // Applies a search/filter change, expanding every folder while one is active and restoring the
+    // earlier expansion after.
+    void expand_for_filter(const std::function<void()>& apply);
     void on_session_updated();
     void load_base(const QString& path);
     void show_model(std::vector<BrowserEntry> entries, std::vector<Ref> refs);
     // Asks what to do with staged changes before `then`; false if the caller must not go on now.
     bool confirm_leave(const std::function<void()>& then);
-    [[nodiscard]] bool dirty() const;
     [[nodiscard]] satchel_gui::SessionOptions session_options() const;
     [[nodiscard]] std::vector<std::size_t> selected_positions() const;
+    // The deepest archive folder holding every selected row; selected items extract relative to it.
+    [[nodiscard]] QString selection_base() const;
     [[nodiscard]] std::vector<std::size_t> base_ids(const std::vector<std::size_t>& positions) const;
     [[nodiscard]] std::optional<satchel_gui::EntryKey> key_of(std::size_t position) const;
     [[nodiscard]] const satchel_gui::SessionRow* row_of(std::size_t position) const;
     [[nodiscard]] QString folder_for(const QModelIndex& index) const;
+    // Renames that move the selected entries and folders into `dest`.
+    [[nodiscard]] satchel_gui::Change move_change(const QString& dest) const;
     [[nodiscard]] QStringList folders_in_session() const;
-    QString extract_to_temp(const std::vector<std::size_t>& base);
+    // Drag-out: the extraction of the selected on-disk entries (no event processing while it runs).
+    void extract_to(const std::vector<std::size_t>& entries, const QString& base_folder, const QString& dir);
 
     void on_started(int id, const QString& title);
     void on_progress(int id, quint64 done, quint64 total);
@@ -119,32 +136,33 @@ private:
     QHash<std::size_t, std::size_t> base_to_row_;
     bool model_is_base_ = false;
     int commit_job_ = 0;
+    int verify_job_ = 0;
+    bool extracting_ = false;
     std::function<void()> after_commit_;
     QString edit_after_update_;
+    bool filtering_ = false;
+    QSet<QString> expanded_before_filter_;
 
     ArchiveModel* model_ = nullptr;
     ArchiveFilter* filter_ = nullptr;
     QStackedWidget* center_ = nullptr;
     ArchiveView* view_ = nullptr;
     SessionBar* bar_ = nullptr;
-    QListWidget* recent_ = nullptr;
     QTextBrowser* inspector_ = nullptr;
     QLineEdit* search_ = nullptr;
     QComboBox* method_filter_ = nullptr;
     QCheckBox* restorable_only_ = nullptr;
     QLabel* summary_ = nullptr;
-    QListWidget* jobs_list_ = nullptr;
     QProgressBar* job_bar_ = nullptr;
-    QLabel* jobs_label_ = nullptr;
     QHash<int, QString> verification_; // by archive entry
     QHash<int, QString> verified_at_;
     QList<int> mine_;
-    QAction* tree_action_ = nullptr;
     QAction* show_deleted_ = nullptr;
     QAction* undo_ = nullptr;
     QAction* redo_ = nullptr;
     QAction* go_ = nullptr;
     QAction* save_as_ = nullptr;
+    QAction* close_ = nullptr;
     QAction* discard_ = nullptr;
     QList<QAction*> edit_actions_;
     QList<QAction*> disk_actions_;
