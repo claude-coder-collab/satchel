@@ -561,6 +561,8 @@ void Session::refresh_view()
     std::vector<std::pair<std::string, std::string>> changes;
     std::vector<std::string> before;
     std::vector<std::string> after;
+    before.reserve(baseline_.size());
+    after.reserve(view_.rows.size());
     for (const auto& k : baseline_)
         before.push_back(k.name);
     for (const auto& r : view_.rows)
