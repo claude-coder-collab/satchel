@@ -122,5 +122,8 @@ std::uint64_t deflate_size_hint(std::uint64_t size);
 inline constexpr std::array<std::uint64_t, 3> sample_positions_percent{ 20, 50, 80 };
 // Start offsets of the non-overlapping sample windows of a seekable entry, ascending.
 std::vector<std::uint64_t> sample_offsets(std::uint64_t size, std::size_t window);
+// The store/deflate test for a seekable entry: deflates the sample windows and reports whether
+// that saves at least `min_saving`. Leaves the stream at an undefined position.
+Result<bool> sample_pays_off(IChunkedStream& stream, std::uint64_t size, std::size_t window, int level, double min_saving);
 
 }

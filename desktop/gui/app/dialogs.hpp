@@ -42,44 +42,6 @@ private:
     QListWidget* list_ = nullptr;
 };
 
-// Plans `inputs` and lets the user review names, methods, conflicts and warnings before a build.
-class PlanReviewDialog : public QDialog
-{
-    Q_OBJECT
-
-public:
-    PlanReviewDialog(QStringList inputs, const QString& output, satchel_gui::Settings settings, QWidget* parent = nullptr);
-
-    // After accept(): the plan to build and where.
-    std::shared_ptr<zpp::Plan> take_plan() { return plan_; }
-    [[nodiscard]] QString output() const;
-    [[nodiscard]] const satchel_gui::Settings& settings() const { return settings_; }
-
-    // Builds a plan with the given options (also used by Simple mode).
-    static std::shared_ptr<zpp::Plan> make_plan(const QStringList& inputs, const satchel_gui::Settings& settings);
-
-private:
-    void replan();
-    void refresh();
-    void resolve(zp_resolution_t r, const std::string& name_storage);
-
-    QStringList inputs_;
-    satchel_gui::Settings settings_;
-    std::shared_ptr<zpp::Plan> plan_;
-    QLabel* totals_ = nullptr;
-    QWidget* issues_ = nullptr;
-    QVBoxLayout* issues_layout_ = nullptr;
-    QListWidget* warnings_ = nullptr;
-    QTableView* table_ = nullptr;
-    QStandardItemModel* model_ = nullptr;
-    QLineEdit* output_ = nullptr;
-    QCheckBox* flac_ = nullptr;
-    QSpinBox* deflate_ = nullptr;
-    QSpinBox* flac_level_ = nullptr;
-    ExcludeEditor* excludes_ = nullptr;
-    QPushButton* build_ = nullptr;
-};
-
 // Simple mode: name collisions only, defaulting to "rename with suffix".
 class ResolutionSheet : public QDialog
 {

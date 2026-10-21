@@ -326,6 +326,7 @@ int         zp_plan_get_conflict(const zp_plan_t*, size_t i, zp_conflict_t* out)
 size_t      zp_plan_warning_count(const zp_plan_t*);
 int         zp_plan_get_warning(const zp_plan_t*, size_t i, zp_warning_t* out);
 int         zp_plan_resolve(zp_plan_t*, const zp_resolution_t* res, size_t n);
+int         zp_plan_predict_store(const zp_plan_t*, size_t i, int* store);  /* the build's store/deflate sampling, ahead of the build */
 void        zp_plan_free(zp_plan_t*);
 
 /* building */

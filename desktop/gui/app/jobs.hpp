@@ -52,6 +52,7 @@ public:
     ~JobQueue() override;
 
     int enqueue(QString title, std::function<JobOutcome(JobContext&)> run);
+    // A queued job is dropped and reported as finished with ZP_CANCELLED; a running one is asked to stop.
     void cancel(int id);
     [[nodiscard]] bool busy() const;
 
@@ -82,6 +83,9 @@ zp_context_t* app_context();
 std::vector<std::string> exclude_patterns(const satchel_gui::Settings& settings);
 // Empty if every pattern is valid, else the library's message for the first invalid one.
 QString exclude_pattern_error(const std::vector<std::string>& patterns);
+
+// Plans `inputs` with the settings' compression and Leave out options (Simple mode).
+std::shared_ptr<zpp::Plan> make_plan(const QStringList& inputs, const satchel_gui::Settings& settings);
 
 // Job bodies.
 JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, const satchel_gui::Settings& settings);

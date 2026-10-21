@@ -492,3 +492,52 @@ TEST_CASE("C API editor options, resolutions and build options", "[capi][editor]
     zp_input_free(add);
     zp_stream_free(src);
 }
+
+TEST_CASE("C API predicts store for incompressible files", "[capi][store]")
+{
+    Ctx c;
+    zp_input_t* in = zp_input_memory();
+    const auto noise = zp::test::random_bytes(6u << 20, 7);
+    const auto small_noise = zp::test::random_bytes(50000, 8);
+    const auto text = zp::test::text_like(6u << 20, 9);
+    const auto wav = zp::test::make_wav({});
+    REQUIRE(zp_input_memory_add_file(in, "video.mp4", noise.data(), noise.size(), 0, 0644) == ZP_OK);
+    REQUIRE(zp_input_memory_add_file(in, "thumb.jpg", small_noise.data(), small_noise.size(), 0, 0644) == ZP_OK);
+    REQUIRE(zp_input_memory_add_file(in, "notes.txt", text.data(), text.size(), 0, 0644) == ZP_OK);
+    REQUIRE(zp_input_memory_add_file(in, "take.wav", wav.data(), wav.size(), 0, 0644) == ZP_OK);
+    REQUIRE(zp_input_memory_add_directory(in, "dir", 0, 0755) == ZP_OK);
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, nullptr);
+    REQUIRE(plan);
+    std::map<std::string, int> store;
+    for (std::size_t i = 0; i < zp_plan_entry_count(plan); ++i)
+    {
+        zp_plan_entry_t e{};
+        REQUIRE(zp_plan_get_entry(plan, i, &e) == ZP_OK);
+        int s = -1;
+        REQUIRE(zp_plan_predict_store(plan, i, &s) == ZP_OK);
+        store[e.output_name] = s;
+    }
+    CHECK(store["video.mp4"] == 1);
+    CHECK(store["thumb.jpg"] == 1);
+    CHECK(store["notes.txt"] == 0);
+    CHECK(store["take.flac"] == 0);
+    CHECK(store["dir"] == 0);
+    int s = 0;
+    CHECK(zp_plan_predict_store(plan, 99, &s) == ZP_INVALID_ARGUMENT);
+
+    zp_stream_t* out = zp_stream_memory();
+    zp_build_result_t* result = nullptr;
+    REQUIRE(zp_build(plan, out, nullptr, nullptr, nullptr, &result) == ZP_OK);
+    for (std::size_t i = 0; i < zp_build_result_entry_count(result); ++i)
+    {
+        zp_entry_result_t r{};
+        REQUIRE(zp_build_result_get_entry(result, i, &r) == ZP_OK);
+        const auto it = store.find(r.name);
+        if (it != store.end() && (std::string(r.name) == "video.mp4" || std::string(r.name) == "notes.txt"))
+            CHECK((r.method == ZP_METHOD_STORE) == (it->second == 1));
+    }
+    zp_build_result_free(result);
+    zp_stream_free(out);
+    zp_plan_free(plan);
+    zp_input_free(in);
+}

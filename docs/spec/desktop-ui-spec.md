@@ -137,10 +137,10 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | Change | How |
 | --- | --- |
-| Add files / folders | Archive ▸ Add Files (⌘⇧A), or drag from Finder/Explorer onto the browser. They go into the folder being viewed in flat view, or the folder row they are dropped on in tree view |
+| Add files / folders | Archive ▸ Add Files… (⌘⇧A) or Add Folder…, or drag from Finder/Explorer onto the browser. In tree view they go into the selected folder (or the selected entry's folder), or the folder or entry row they are dropped on; in flat view, and when dropped on empty space, to the top level |
 | New folder | Archive ▸ New Folder (⌘⇧N), named in place |
-| Rename | F2 / Enter on macOS, edited in place; works on folders, which renames everything below them |
-| Move | Drag rows onto a folder row inside the browser (stored as a rename of every moved entry) |
+| Rename | F2 / Enter on macOS, edited in place; works on folders, which renames everything below them. A multi-mono set is renamed through a dialog asking for the channel files' stem. A name containing `/` is refused (use Move To…) |
+| Move | Archive ▸ Move To…: pick an existing folder or type a new path (stored as renames). Dragging rows is reserved for dragging out to Finder/Explorer, which extracts them first |
 | Delete | Delete key; no confirmation, because it is only staged and can be undone |
 | Replace | Drop a single file onto a file row with the same name and confirm "Replace *name*?" |
 
@@ -154,7 +154,7 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | Row state | Display |
 | --- | --- |
-| Added | "New" badge; Size from the source file; Packed blank; Method and **Reason** from the plan ("FLAC: 24-bit, 6 ch", "Stored: 32-bit float", "Deflate") |
+| Added | "New" badge; Size from the source file; Packed blank; Method and **Reason** from the plan. For files that are not converted to FLAC, Store or Deflate is predicted by the build's own sampling (`zp_plan_predict_store`), so already-compressed media shows Store before anything is written |
 | Renamed / moved | New name, with the old name in the tooltip and Inspector |
 | Replaced | "Replaced" badge; columns show the new source |
 | Deleted | Struck through and dimmed; View ▸ Show Deleted (on by default) hides them |
@@ -172,13 +172,14 @@ A bar at the bottom of the browser, visible while the session has pending change
 - **Issues** button with a count, which opens the issues panel (a popover over the bar):
   - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls. The rows involved get a warning badge in the browser.
   - Skipped symlinks and leave-out matches (warning), FLAC fallbacks (info), listed with paths.
-- **Options** button, which opens a popover with FLAC on/off, FLAC level, deflate level, threads, Existing entries and the Leave out controls. These are per-session overrides of Settings and are not saved. "Copy as CLI command" lives here.
-- **Discard** and the Go button (**Create Archive** / **Apply Changes**, ⌘S). Go is disabled while blocking issues remain or additions are still being planned.
+- **Options** button, which opens a popover with FLAC on/off, FLAC level, deflate level, Existing entries and the Leave out controls. These are per-session overrides of Settings and are not saved. OK applies them (an invalid Leave out pattern is shown in the popover and keeps it open); Cancel, Esc or clicking elsewhere discards them. Threads stay a Settings value (one thread pool for the app).
+- **Discard** (all staged changes; for a new archive it reads **Cancel** and leaves it without creating it, asking first if files were added, then shows the start page) and the Go button (**Create Archive** / **Apply Changes**, ⌘S). Go is disabled while blocking issues remain or additions are still being planned.
+- While the archive is written, the bar shows the summary, a progress bar and **Cancel** instead of the other controls.
 
 ### Go
 
 1. Create and Apply need no dialog. For an Edit session, **Save As…** (⌘⇧S) asks for a path and writes a copy, leaving the original untouched.
-2. The job runs in the background queue with per-file and overall progress, throughput, ETA and Cancel. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
+2. The job runs in the background queue, with progress and Cancel in the action bar (and in the Jobs panel). A job cancelled while still queued is reported as cancelled. The session's browser is read-only while its job runs; other archives can be opened in Simple mode or by other jobs.
 3. On success: a result card in the action bar (savings, per-method breakdown, warnings, Reveal), and the session reopens the written archive. With "verify after build" on, Verify runs on the written archive.
 4. On failure or Cancel: the original archive is untouched, and the pending changes stay staged so the user can retry.
 
@@ -234,9 +235,9 @@ Verify checks an archive's integrity without writing any files: CRC32 for every 
 | Integration | Associate with .zip | Off (offered, never forced) |
 | Updates | Check automatically | On |
 
-"Copy as CLI command" (on the plan review and Settings) produces the equivalent CLI invocation for the current options.
+"Copy as CLI command" (in Settings) produces the equivalent CLI invocation for the current options.
 
-The plan review's Options panel has the same "Leave out" controls as Settings, as a per-archive override that is not saved. Items left out are counted in the totals line and listed below the conflicts ("Left out: …"). Settings refuses to close while a custom pattern is invalid.
+Full mode's Options popover has the same "Leave out" controls as Settings, as a per-archive override that is not saved. Items left out are counted in the action bar and listed in its Issues popover ("Left out: …"). Settings refuses to close while a custom pattern is invalid.
 
 ## OS integration
 

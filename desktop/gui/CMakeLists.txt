@@ -35,6 +35,8 @@ if(ZP_BUILD_GUI AND Qt6_FOUND)
         app/dialogs.cpp
         app/simple_window.cpp
         app/main_window.cpp
+        app/session_bar.cpp
+        app/session_controller.cpp
         app/user_data.cpp
     )
     if(APPLE)
@@ -50,7 +52,7 @@ if(ZP_BUILD_GUI AND Qt6_FOUND)
         target_compile_definitions(satchel_gui_app PRIVATE ZP_UPDATE_FEED_URL="${ZP_UPDATE_FEED_URL_WINDOWS}" ZP_UPDATE_PUBLIC_KEY="${ZP_UPDATE_PUBLIC_KEY}")
     endif()
     target_include_directories(satchel_gui_app PUBLIC app ${PROJECT_SOURCE_DIR}/desktop/common)
-    target_link_libraries(satchel_gui_app PUBLIC satchel_gui_logic zp::core Qt6::Widgets)
+    target_link_libraries(satchel_gui_app PUBLIC satchel_gui_logic satchel_gui_session zp::core Qt6::Widgets)
 
     if(TARGET Qt6::lupdate AND TARGET Qt6::lrelease)
         set(ts_files ${CMAKE_CURRENT_SOURCE_DIR}/translations/satchel_en.ts)

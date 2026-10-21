@@ -47,11 +47,20 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Inspector for each entry type: plain file, FLAC, restorable FLAC, multi-mono, folder, multi-selection
 - [ ] Inspector labels readable in dark mode
 - [ ] Timecode display with and without iXML rate
-- [ ] New blank archive, compress a folder, drag files in, Add files, delete, rename
-- [ ] Plan review: totals, per-entry method and reason, collisions block Build until resolved, symlink warnings, FLAC fallback info
-- [ ] Options: FLAC off, deflate level 0/1/9, FLAC level 0/8, threads 1 and max
-- [ ] "Copy as CLI command" output runs and produces an identical archive
-- [ ] Edit an open archive: rewrite-and-swap with a failure midway (disk full, cancel) keeps the original intact
+- [ ] New (⌘N) asks for name and location first; nothing is written until Create Archive; title shows the edited marker
+- [ ] Drop files on the empty window: name dialog defaults to `<item>.zip` next to them; drop one zip: opens it
+- [ ] Drop one zip on an open archive: Add to This Archive / Open
+- [ ] Add Files, Add Folder, drop into a folder row; New Folder (named in place); rename in place (file, folder, Added entry); rename a multi-mono set; Move To… (existing and new folder); Delete (no confirmation)
+- [ ] Row states: New / Replaced badges, renamed in italics (tooltip shows the old name), deleted struck through; View ▸ Show Deleted
+- [ ] Undo / Redo through several changes; Discard; Reason column only while there are additions
+- [ ] Drop a file onto an entry with the same name: Replace?
+- [ ] Collisions: Issues popover with Rename / Skip (Remove for the archive's entry) / Store unconverted; Apply disabled until resolved
+- [ ] Options popover: FLAC off, deflate 1/9, FLAC level 0/8, Existing entries (Ask, Replace, Replace if newer, Keep), Leave out; staged additions re-plan
+- [ ] Apply rewrites in place; Save As writes a copy and switches to it; result card with Reveal
+- [ ] Close the window / open another archive / New with staged changes: Apply / Discard / Cancel
+- [ ] Apply with a failure midway (disk full, cancel) keeps the original intact and the changes staged
+- [ ] Cancel a new archive (with and without added files) returns to the start page; Cancel in the action bar while writing, also while the write waits behind another job
+- [ ] Extract / Verify / double-click with staged changes act on the archive on disk; double-click on an added file opens the source
 - [ ] Archive open in the app is modified or deleted by another program
 - [ ] Recent archives list: missing file, moved file
 - [ ] Verify whole archive and selection, with injected CRC error, hash mismatch, incomplete multi-mono group

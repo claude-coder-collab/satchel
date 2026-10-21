@@ -187,6 +187,7 @@ int zp_plan_get_warning(const zp_plan_t* plan, size_t i, zp_warning_t* out);
 size_t zp_plan_excluded_count(const zp_plan_t* plan);
 int zp_plan_get_excluded(const zp_plan_t* plan, size_t i, zp_excluded_t* out);
 int zp_plan_resolve(zp_plan_t* plan, const zp_resolution_t* resolutions, size_t count);
+int zp_plan_predict_store(const zp_plan_t* plan, size_t i, int* store);
 int zp_plan_executable(const zp_plan_t* plan);
 uint64_t zp_plan_total_bytes(const zp_plan_t* plan);
 void zp_plan_free(zp_plan_t* plan);

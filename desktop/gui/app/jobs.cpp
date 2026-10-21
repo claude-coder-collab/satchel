@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Venn Audio Ltd.
 #include "jobs.hpp"
 
+#include <algorithm>
+
 #include "labels.hpp"
 
 #include <condition_variable>
@@ -86,10 +88,21 @@ int JobQueue::enqueue(QString title, std::function<JobOutcome(JobContext&)> run)
 
 void JobQueue::cancel(int id)
 {
-    std::lock_guard lock(mutex_);
-    if (running_ == id)
-        cancel_running_ = true;
-    std::erase_if(queue_, [id](const Job& j) { return j.id == id; });
+    QString title;
+    {
+        std::lock_guard lock(mutex_);
+        if (running_ == id)
+            cancel_running_ = true;
+        const auto it = std::ranges::find(queue_, id, &Job::id);
+        if (it == queue_.end())
+            return;
+        title = it->title;
+        queue_.erase(it);
+    }
+    JobOutcome outcome;
+    outcome.status = ZP_CANCELLED;
+    outcome.message = tr("Cancelled");
+    emit finished(id, title, outcome);
 }
 
 bool JobQueue::busy() const
@@ -139,6 +152,21 @@ void JobQueue::loop()
         }
         emit finished(job.id, job.title, outcome);
     }
+}
+
+std::shared_ptr<zpp::Plan> make_plan(const QStringList& inputs, const satchel_gui::Settings& settings)
+{
+    std::vector<std::string> paths;
+    for (const auto& i : inputs)
+        paths.push_back(i.toStdString());
+    auto input = zpp::input_from_paths(paths);
+    zpp::set_excludes(input, exclude_patterns(settings));
+    zp_plan_options_t options{};
+    zp_plan_options_init(&options);
+    options.flac_enabled = settings.flac ? 1 : 0;
+    options.deflate_level = settings.deflate_level;
+    options.flac_level = settings.flac_level;
+    return std::make_shared<zpp::Plan>(zpp::not_null(zp_plan_create(app_context(), input.get(), &options)));
 }
 
 JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, const satchel_gui::Settings& settings)

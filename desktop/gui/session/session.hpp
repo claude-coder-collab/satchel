@@ -11,8 +11,10 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <variant>
 #include <vector>
 
@@ -77,7 +79,7 @@ struct RenameFolder
 
 struct Remove
 {
-    EntryKey entry;
+    std::vector<EntryKey> entries;
 };
 
 struct RemoveFolder
@@ -122,6 +124,7 @@ struct SessionRow
     std::optional<zpp::PlanEntry> plan; // empty for Deleted
     std::optional<std::size_t> base_index; // index into base_entries() (kept and deleted entries)
     bool generated = false; // the readme the library writes for converted audio
+    bool stored = false; // added file the build will store, not deflate (sampled like the build)
     bool conflicted = false;
 };
 
@@ -135,6 +138,7 @@ struct SessionConflict
 
 struct SessionSummary
 {
+    // Files only; folders show as rows but are not counted.
     std::size_t added = 0;
     std::uint64_t added_bytes = 0;
     std::size_t removed = 0;
@@ -233,6 +237,8 @@ private:
     zpp::Editor editor_;
     std::vector<zpp::Input> inputs_;
     SessionView view_;
+    // Store predictions by source, size, mtime and deflate level, so replays do not resample.
+    std::map<std::tuple<std::string, std::uint64_t, std::int64_t, int>, bool> stored_;
 };
 
 }
