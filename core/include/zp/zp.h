@@ -219,6 +219,11 @@ ZP_API void zp_input_free(zp_input_t* input);
  * directly (top-level paths, or names without '/') are never excluded. Replaces earlier patterns;
  * an invalid pattern fails with ZP_INVALID_ARGUMENT and leaves them unchanged. */
 ZP_API int zp_input_set_excludes(zp_input_t* input, const char* const* patterns, size_t count);
+/* Places every item under the archive folder `folder` ("Takes/Day 1"; '\\' and a trailing '/' are
+ * accepted), e.g. to add files into a folder of an existing archive. NULL or "" clears it. An
+ * unsafe folder (absolute, "..", drive letter) fails with ZP_INVALID_NAME and leaves it unchanged.
+ * Exclude patterns still treat the input's own top-level items as chosen explicitly. */
+ZP_API int zp_input_set_prefix(zp_input_t* input, const char* folder);
 /* Pattern i of a ZP_EXCLUDE_PRESET_*, or NULL past the end. */
 ZP_API const char* zp_exclude_preset_pattern(int preset, size_t i);
 
@@ -459,13 +464,19 @@ ZP_API char* zp_preview(zp_stream_t* input, const char* file_name, int format);
 /* The editor keeps using `input`; free the editor before the stream. Entry indices refer to
  * the current zp_editor_plan() order. */
 ZP_API zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input);
+/* As zp_editor_open; `options` (NULL = defaults) apply to entries added later. */
+ZP_API zp_editor_t* zp_editor_open_with_options(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options);
 ZP_API int zp_editor_add(zp_editor_t* editor, zp_input_t* input);
 ZP_API int zp_editor_remove(zp_editor_t* editor, size_t i);
 ZP_API int zp_editor_rename(zp_editor_t* editor, size_t i, const char* new_name);
 /* Replaces entry i with the first file of `input`. */
 ZP_API int zp_editor_replace(zp_editor_t* editor, size_t i, zp_input_t* input);
 ZP_API zp_plan_t* zp_editor_plan(zp_editor_t* editor);
+/* Applies conflict resolutions to the edit, as zp_plan_resolve does for a plan; indices refer to
+ * the current zp_editor_plan(). On failure the edit is unchanged. */
+ZP_API int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, size_t count);
 ZP_API int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user);
+ZP_API int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user);
 ZP_API void zp_editor_free(zp_editor_t* editor);
 
 #ifdef __cplusplus

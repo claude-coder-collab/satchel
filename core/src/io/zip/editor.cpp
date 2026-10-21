@@ -5,6 +5,8 @@
 #include "io/zip/path_policy.hpp"
 
 #include <format>
+#include <set>
+#include <string>
 #include <utility>
 
 namespace zp
@@ -79,8 +81,23 @@ VoidResult ArchiveEditor::add(InputSource& input)
     auto added = planner_.make_entries(std::move(*items), warnings_);
     if (!added)
         return std::unexpected(added.error());
+    std::set<std::string, std::less<>> folders;
+    for (const auto& e : entries_)
+    {
+        if (e.is_directory())
+            if (auto k = PathPolicy::collision_key(e.output_name))
+                folders.insert(std::move(*k));
+    }
     for (auto& e : *added)
+    {
+        if (e.is_directory())
+        {
+            auto k = PathPolicy::collision_key(e.output_name);
+            if (k && !folders.insert(std::move(*k)).second)
+                continue;
+        }
         entries_.push_back(std::move(e));
+    }
     excluded_.insert(excluded_.end(), input.excluded().begin(), input.excluded().end());
     return {};
 }
@@ -122,6 +139,16 @@ VoidResult ArchiveEditor::replace(std::size_t index, InputItem item)
     return {};
 }
 
+VoidResult ArchiveEditor::resolve(const std::vector<Resolution>& resolutions)
+{
+    auto next = ArchivePlanner::replan(plan(), resolutions);
+    if (!next)
+        return std::unexpected(next.error());
+    std::erase_if(next->entries, [](const PlanEntry& e) { return e.codec == PlanCodec::Generated; });
+    entries_ = std::move(next->entries);
+    return {};
+}
+
 ArchivePlan ArchiveEditor::plan() const
 {
     ArchivePlan p;
@@ -134,7 +161,7 @@ ArchivePlan ArchiveEditor::plan() const
     return p;
 }
 
-BuildResult ArchiveEditor::commit(IChunkedStream& output, ProgressSink& progress)
+BuildResult ArchiveEditor::commit(IChunkedStream& output, ProgressSink& progress, BuilderOptions options)
 {
     if (!reader_)
     {
@@ -143,7 +170,7 @@ BuildResult ArchiveEditor::commit(IChunkedStream& output, ProgressSink& progress
         r.message = "no archive is open";
         return r;
     }
-    ArchiveBuilder builder(output, context_);
+    ArchiveBuilder builder(output, context_, std::move(options));
     builder.set_kept_source(reader_.get());
     return builder.execute(plan(), progress);
 }

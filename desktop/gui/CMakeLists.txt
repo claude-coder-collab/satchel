@@ -2,10 +2,19 @@ add_library(satchel_gui_logic STATIC logic/logic.cpp)
 target_include_directories(satchel_gui_logic PUBLIC logic)
 target_link_libraries(satchel_gui_logic PUBLIC zp::project_options)
 
+add_library(satchel_gui_session STATIC session/session.cpp)
+target_include_directories(satchel_gui_session PUBLIC session ${PROJECT_SOURCE_DIR}/desktop/common)
+target_link_libraries(satchel_gui_session PUBLIC zp::core zp::project_options)
+
 if(ZP_BUILD_TESTS)
     add_executable(satchel_gui_logic_tests ${PROJECT_SOURCE_DIR}/tests/gui/test_logic.cpp)
     target_link_libraries(satchel_gui_logic_tests PRIVATE satchel_gui_logic Catch2::Catch2WithMain)
     catch_discover_tests(satchel_gui_logic_tests DISCOVERY_MODE PRE_TEST)
+
+    add_executable(satchel_gui_session_tests ${PROJECT_SOURCE_DIR}/tests/gui/test_session.cpp ${PROJECT_SOURCE_DIR}/tests/support/pcm_fixtures.cpp)
+    target_include_directories(satchel_gui_session_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests/support ${PROJECT_SOURCE_DIR}/core/src)
+    target_link_libraries(satchel_gui_session_tests PRIVATE satchel_gui_session Catch2::Catch2WithMain)
+    catch_discover_tests(satchel_gui_session_tests DISCOVERY_MODE PRE_TEST)
 endif()
 
 option(ZP_BUILD_GUI "Build the Qt desktop app (needs Qt 6 Widgets)" ON)

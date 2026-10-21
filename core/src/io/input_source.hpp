@@ -66,6 +66,9 @@ public:
     Result<std::vector<InputItem>> enumerate();
     void set_exclude(ExcludeFilter filter) { exclude_ = std::move(filter); }
     [[nodiscard]] const ExcludeFilter& exclude() const { return exclude_; }
+    // A normalized archive folder ("a/b") placed in front of every archive path; empty for none.
+    void set_prefix(std::string folder) { prefix_ = std::move(folder); }
+    [[nodiscard]] const std::string& prefix() const { return prefix_; }
     // Topmost excluded paths of the last enumerate(), in input order.
     [[nodiscard]] const std::vector<ExcludedItem>& excluded() const { return excluded_; }
 
@@ -74,7 +77,10 @@ protected:
     virtual Result<std::vector<InputItem>> list_items() = 0;
 
 private:
+    Result<std::vector<InputItem>> filter(std::vector<InputItem> items);
+
     ExcludeFilter exclude_;
+    std::string prefix_;
     std::vector<ExcludedItem> excluded_;
 };
 

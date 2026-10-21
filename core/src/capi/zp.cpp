@@ -13,6 +13,7 @@
 #include "io/zip/builder.hpp"
 #include "io/zip/editor.hpp"
 #include "io/zip/extractor.hpp"
+#include "io/zip/path_policy.hpp"
 #include "io/zip/planner.hpp"
 #include "io/zip/reader.hpp"
 #include "io/zip/readme.hpp"
@@ -471,6 +472,47 @@ int kind_code(ItemKind k)
     }
 }
 
+Result<PlannerOptions> planner_options(const zp_plan_options_t* options)
+{
+    PlannerOptions o;
+    if (options)
+    {
+        o.flac_enabled = options->flac_enabled != 0;
+        o.deflate_level = options->deflate_level;
+        o.flac_level = options->flac_level;
+    }
+    if (o.deflate_level < 1 || o.deflate_level > 9 || o.flac_level < 0 || o.flac_level > 8)
+        return fail(Status::InvalidArgument, "deflate level must be 1-9 and FLAC level 0-8");
+    return o;
+}
+
+BuilderOptions builder_options(const zp_build_options_t* options)
+{
+    BuilderOptions o;
+    if (options && options->small_entry_threshold)
+        o.small_entry_threshold = options->small_entry_threshold;
+    if (options && options->readme_template)
+        o.readme_template = options->readme_template;
+    if (options && options->temp_dir)
+        o.temp_dir = path_from_utf8(options->temp_dir);
+    return o;
+}
+
+Result<std::vector<Resolution>> resolution_list(const zp_resolution_t* resolutions, size_t count)
+{
+    std::vector<Resolution> list;
+    for (size_t i = 0; i < count; ++i)
+    {
+        const auto& r = resolutions[i];
+        if (r.action < ZP_RESOLVE_RENAME || r.action > ZP_RESOLVE_DISABLE_FLAC)
+            return fail(Status::InvalidArgument, "unknown resolution action");
+        if (r.action == ZP_RESOLVE_RENAME && !r.new_name)
+            return fail(Status::InvalidArgument, "rename needs a new name");
+        list.push_back({ r.entry, static_cast<ResolutionAction>(r.action), r.new_name ? r.new_name : "" });
+    }
+    return list;
+}
+
 }
 
 extern "C" {
@@ -867,6 +909,28 @@ int zp_input_set_excludes(zp_input_t* input, const char* const* patterns, size_t
     );
 }
 
+int zp_input_set_prefix(zp_input_t* input, const char* folder)
+{
+    ZP_REQUIRE(input, ZP_INVALID_ARGUMENT);
+    return guarded(
+        [&]() -> int {
+            if (!folder || !*folder)
+            {
+                input->source->set_prefix({});
+                return ZP_OK;
+            }
+            auto normalized = PathPolicy::normalize(folder);
+            if (!normalized)
+                return set_error(normalized.error());
+            if (auto valid = PathPolicy::validate_for_archive(*normalized); !valid)
+                return set_error(valid.error());
+            input->source->set_prefix(std::move(*normalized));
+            return ZP_OK;
+        },
+        ZP_INTERNAL
+    );
+}
+
 const char* zp_exclude_preset_pattern(int preset, size_t i)
 {
     if (preset != ZP_EXCLUDE_PRESET_SYSTEM && preset != ZP_EXCLUDE_PRESET_DAW_CACHES)
@@ -933,19 +997,13 @@ zp_plan_t* zp_plan_create(zp_context_t* ctx, zp_input_t* input, const zp_plan_op
     ZP_REQUIRE(ctx && input, nullptr);
     return guarded(
         [&]() -> zp_plan_t* {
-            PlannerOptions o;
-            if (options)
+            const auto o = planner_options(options);
+            if (!o)
             {
-                o.flac_enabled = options->flac_enabled != 0;
-                o.deflate_level = options->deflate_level;
-                o.flac_level = options->flac_level;
-            }
-            if (o.deflate_level < 1 || o.deflate_level > 9 || o.flac_level < 0 || o.flac_level > 8)
-            {
-                set_error(Status::InvalidArgument, "deflate level must be 1-9 and FLAC level 0-8");
+                set_error(o.error());
                 return nullptr;
             }
-            auto plan = ArchivePlanner(o).plan(*input->source);
+            auto plan = ArchivePlanner(*o).plan(*input->source);
             if (!plan)
             {
                 set_error(plan.error());
@@ -1042,17 +1100,10 @@ int zp_plan_resolve(zp_plan_t* plan, const zp_resolution_t* resolutions, size_t 
     ZP_REQUIRE(plan && (resolutions || count == 0), ZP_INVALID_ARGUMENT);
     return guarded(
         [&]() -> int {
-            std::vector<Resolution> list;
-            for (size_t i = 0; i < count; ++i)
-            {
-                const auto& r = resolutions[i];
-                if (r.action < ZP_RESOLVE_RENAME || r.action > ZP_RESOLVE_DISABLE_FLAC)
-                    return set_error(Status::InvalidArgument, "unknown resolution action");
-                if (r.action == ZP_RESOLVE_RENAME && !r.new_name)
-                    return set_error(Status::InvalidArgument, "rename needs a new name");
-                list.push_back({ r.entry, static_cast<ResolutionAction>(r.action), r.new_name ? r.new_name : "" });
-            }
-            auto next = ArchivePlanner::replan(plan->plan, list);
+            const auto list = resolution_list(resolutions, count);
+            if (!list)
+                return set_error(list.error());
+            auto next = ArchivePlanner::replan(plan->plan, *list);
             if (!next)
                 return set_error(next.error());
             plan->plan = std::move(*next);
@@ -1089,14 +1140,7 @@ int zp_build(zp_plan_t* plan, zp_stream_t* output, const zp_build_options_t* opt
         *out_result = nullptr;
     return guarded(
         [&]() -> int {
-            BuilderOptions o;
-            if (options && options->small_entry_threshold)
-                o.small_entry_threshold = options->small_entry_threshold;
-            if (options && options->readme_template)
-                o.readme_template = options->readme_template;
-            if (options && options->temp_dir)
-                o.temp_dir = path_from_utf8(options->temp_dir);
-            ArchiveBuilder builder(*output->stream, *plan->context, o);
+            ArchiveBuilder builder(*output->stream, *plan->context, builder_options(options));
             CallbackProgress p(progress, user);
             auto result = std::make_unique<zp_build_result>();
             result->result = builder.execute(plan->plan, p);
@@ -1482,10 +1526,21 @@ char* zp_preview(zp_stream_t* input, const char* file_name, int format)
 
 zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input)
 {
+    return zp_editor_open_with_options(ctx, input, nullptr);
+}
+
+zp_editor_t* zp_editor_open_with_options(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options)
+{
     ZP_REQUIRE(ctx && input, nullptr);
     return guarded(
         [&]() -> zp_editor_t* {
-            auto ed = std::make_unique<ArchiveEditor>(ctx->context);
+            const auto o = planner_options(options);
+            if (!o)
+            {
+                set_error(o.error());
+                return nullptr;
+            }
+            auto ed = std::make_unique<ArchiveEditor>(ctx->context, *o);
             if (auto r = ed->open(*input->stream); !r)
             {
                 set_error(r.error());
@@ -1570,13 +1625,34 @@ zp_plan_t* zp_editor_plan(zp_editor_t* editor)
     );
 }
 
+int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, size_t count)
+{
+    ZP_REQUIRE(editor && (resolutions || count == 0), ZP_INVALID_ARGUMENT);
+    return guarded(
+        [&]() -> int {
+            const auto list = resolution_list(resolutions, count);
+            if (!list)
+                return set_error(list.error());
+            if (auto r = editor->editor->resolve(*list); !r)
+                return set_error(r.error());
+            return ZP_OK;
+        },
+        ZP_INTERNAL
+    );
+}
+
 int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user)
+{
+    return zp_editor_commit_with_options(editor, output, nullptr, progress, user);
+}
+
+int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user)
 {
     ZP_REQUIRE(editor && output, ZP_INVALID_ARGUMENT);
     return guarded(
         [&]() -> int {
             CallbackProgress p(progress, user);
-            const auto r = editor->editor->commit(*output->stream, p);
+            const auto r = editor->editor->commit(*output->stream, p, builder_options(options));
             if (r.status != Status::Ok)
                 return set_error(r.status, r.message);
             return ZP_OK;

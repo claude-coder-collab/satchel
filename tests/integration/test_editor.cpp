@@ -121,10 +121,43 @@ TEST_CASE("editor operations", "[editor]")
         ProgressSink progress;
         CHECK(ed.commit(out, progress).status == Status::ConflictsUnresolved);
     }
+    SECTION("an added folder that exists merges into it")
+    {
+        MemoryInputSource more;
+        more.add_directory("DOCS");
+        more.add_directory("new");
+        more.add_directory("new");
+        more.add_file("DOCS/z.txt", test::text_bytes("z"));
+        REQUIRE(ed.add(more));
+        const auto plan = ed.plan();
+        CHECK(plan.executable());
+        CHECK(plan.entries.size() == 6);
+        auto x = test::extract_all(commit(ed));
+        CHECK(x.files.contains("DOCS/z.txt"));
+    }
+    SECTION("an added file still collides with a folder")
+    {
+        MemoryInputSource more;
+        more.add_file("docs", test::text_bytes("f"));
+        REQUIRE(ed.add(more));
+        CHECK_FALSE(ed.plan().executable());
+    }
+    SECTION("resolve applies conflict decisions to the edit")
+    {
+        MemoryInputSource more;
+        more.add_file("C.TXT", test::text_bytes("dup"));
+        REQUIRE(ed.add(more));
+        CHECK_FALSE(ed.resolve({ { 4, ResolutionAction::Rename, "c.txt" } }));
+        CHECK_FALSE(ed.plan().executable());
+        REQUIRE(ed.resolve({ { 4, ResolutionAction::Skip, "" } }));
+        CHECK(ed.plan().executable());
+        CHECK(ed.plan().entries.size() == 4);
+    }
     SECTION("out of range")
     {
         CHECK_FALSE(ed.remove(99));
         CHECK_FALSE(ed.rename(99, "x"));
+        CHECK_FALSE(ed.resolve({ { 99, ResolutionAction::Skip, "" } }));
     }
 }
 

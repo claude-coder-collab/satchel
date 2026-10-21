@@ -125,6 +125,7 @@ typedef int64_t (*zp_read_fn)(void* user, size_t item, uint64_t offset, uint8_t*
 zp_input_t* zp_input_from_callbacks(const zp_input_item_t* items, size_t count, zp_read_fn read, void* user);
 void zp_input_free(zp_input_t* input);
 int zp_input_set_excludes(zp_input_t* input, const char* const* patterns, size_t count);
+int zp_input_set_prefix(zp_input_t* input, const char* folder);
 const char* zp_exclude_preset_pattern(int preset, size_t i);
 typedef struct zp_plan_options
 {
@@ -298,10 +299,13 @@ enum {
 };
 char* zp_preview(zp_stream_t* input, const char* file_name, int format);
 zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input);
+zp_editor_t* zp_editor_open_with_options(zp_context_t* ctx, zp_stream_t* input, const zp_plan_options_t* options);
 int zp_editor_add(zp_editor_t* editor, zp_input_t* input);
 int zp_editor_remove(zp_editor_t* editor, size_t i);
 int zp_editor_rename(zp_editor_t* editor, size_t i, const char* new_name);
 int zp_editor_replace(zp_editor_t* editor, size_t i, zp_input_t* input);
 zp_plan_t* zp_editor_plan(zp_editor_t* editor);
+int zp_editor_resolve(zp_editor_t* editor, const zp_resolution_t* resolutions, size_t count);
 int zp_editor_commit(zp_editor_t* editor, zp_stream_t* output, zp_progress_fn progress, void* user);
+int zp_editor_commit_with_options(zp_editor_t* editor, zp_stream_t* output, const zp_build_options_t* options, zp_progress_fn progress, void* user);
 void zp_editor_free(zp_editor_t* editor);

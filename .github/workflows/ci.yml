@@ -77,7 +77,7 @@ jobs:
       - name: Generate sources
         run: cmake --build build/clang --config Debug --target zp_core satchel_cli
       - name: clang-tidy
-        run: run-clang-tidy-23 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp' 'desktop/(cli|gui/(app|logic))/.*\.cpp'
+        run: run-clang-tidy-23 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp' 'desktop/(cli|gui/(app|logic|session))/.*\.cpp'
 
   bindings:
     runs-on: ubuntu-24.04

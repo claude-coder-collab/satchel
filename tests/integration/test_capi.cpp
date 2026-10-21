@@ -351,3 +351,144 @@ TEST_CASE("C API exclude patterns and presets", "[capi][exclude]")
     zp_plan_free(plan);
     zp_input_free(in);
 }
+
+TEST_CASE("C API input prefix places items under an archive folder", "[capi][prefix]")
+{
+    Ctx c;
+    zp_input_t* in = zp_input_memory();
+    const std::string x = "x";
+    for (const auto* name : { "d/keep.txt", "d/.DS_Store" })
+        REQUIRE(zp_input_memory_add_file(in, name, reinterpret_cast<const std::uint8_t*>(x.data()), x.size(), 0, 0644) == ZP_OK);
+
+    for (const auto* bad : { "/abs", "a/../b", "C:/x", "a//b" })
+    {
+        INFO(bad);
+        CHECK(zp_input_set_prefix(in, bad) == ZP_INVALID_NAME);
+    }
+    REQUIRE(zp_input_set_prefix(in, "Takes\\Day 1/") == ZP_OK);
+    const char* patterns[] = { ".DS_Store" };
+    REQUIRE(zp_input_set_excludes(in, patterns, 1) == ZP_OK);
+
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, nullptr);
+    REQUIRE(plan);
+    REQUIRE(zp_plan_entry_count(plan) == 1);
+    zp_plan_entry_t e{};
+    REQUIRE(zp_plan_get_entry(plan, 0, &e) == ZP_OK);
+    CHECK(std::string(e.output_name) == "Takes/Day 1/d/keep.txt");
+    REQUIRE(zp_plan_excluded_count(plan) == 1);
+    zp_excluded_t ex{};
+    REQUIRE(zp_plan_get_excluded(plan, 0, &ex) == ZP_OK);
+    CHECK(std::string(ex.archive_path) == "Takes/Day 1/d/.DS_Store");
+    zp_plan_free(plan);
+
+    REQUIRE(zp_input_set_prefix(in, nullptr) == ZP_OK);
+    plan = zp_plan_create(c.ctx, in, nullptr);
+    REQUIRE(zp_plan_get_entry(plan, 0, &e) == ZP_OK);
+    CHECK(std::string(e.output_name) == "d/keep.txt");
+    zp_plan_free(plan);
+    zp_input_free(in);
+}
+
+TEST_CASE("C API editor adds into a folder with a prefix", "[capi][prefix][editor]")
+{
+    Ctx c;
+    zp_input_t* base = zp_input_memory();
+    const std::string x = "x";
+    REQUIRE(zp_input_memory_add_file(base, "Takes/a.txt", reinterpret_cast<const std::uint8_t*>(x.data()), x.size(), 0, 0644) == ZP_OK);
+    std::vector<std::uint8_t> zip;
+    {
+        zp_plan_t* plan = zp_plan_create(c.ctx, base, nullptr);
+        zp_stream_t* out = zp_stream_memory();
+        REQUIRE(zp_build(plan, out, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
+        zip = memory_bytes(out);
+        zp_stream_free(out);
+        zp_plan_free(plan);
+    }
+    zp_stream_t* src = zp_stream_memory_from(zip.data(), zip.size());
+    zp_editor_t* ed = zp_editor_open(c.ctx, src);
+    REQUIRE(ed);
+    zp_input_t* add = zp_input_memory();
+    REQUIRE(zp_input_memory_add_file(add, "b.txt", reinterpret_cast<const std::uint8_t*>(x.data()), x.size(), 0, 0644) == ZP_OK);
+    REQUIRE(zp_input_set_prefix(add, "Takes") == ZP_OK);
+    REQUIRE(zp_editor_add(ed, add) == ZP_OK);
+    zp_plan_t* view = zp_editor_plan(ed);
+    REQUIRE(zp_plan_entry_count(view) == 2);
+    zp_plan_entry_t e{};
+    REQUIRE(zp_plan_get_entry(view, 1, &e) == ZP_OK);
+    CHECK(std::string(e.output_name) == "Takes/b.txt");
+    zp_plan_free(view);
+    zp_editor_free(ed);
+    zp_input_free(add);
+    zp_stream_free(src);
+    zp_input_free(base);
+}
+
+TEST_CASE("C API editor options, resolutions and build options", "[capi][editor]")
+{
+    Ctx c;
+    zp_input_t* base = zp_input_memory();
+    const std::string x = "x";
+    REQUIRE(zp_input_memory_add_file(base, "a.txt", reinterpret_cast<const std::uint8_t*>(x.data()), x.size(), 0, 0644) == ZP_OK);
+    std::vector<std::uint8_t> zip;
+    {
+        zp_plan_t* plan = zp_plan_create(c.ctx, base, nullptr);
+        zp_stream_t* out = zp_stream_memory();
+        REQUIRE(zp_build(plan, out, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
+        zip = memory_bytes(out);
+        zp_stream_free(out);
+        zp_plan_free(plan);
+    }
+    zp_input_free(base);
+
+    zp_plan_options_t bad;
+    zp_plan_options_init(&bad);
+    bad.flac_level = 99;
+    zp_stream_t* src = zp_stream_memory_from(zip.data(), zip.size());
+    CHECK(zp_editor_open_with_options(c.ctx, src, &bad) == nullptr);
+    CHECK(zp_last_status() == ZP_INVALID_ARGUMENT);
+
+    zp_plan_options_t no_flac;
+    zp_plan_options_init(&no_flac);
+    no_flac.flac_enabled = 0;
+    zp_editor_t* ed = zp_editor_open_with_options(c.ctx, src, &no_flac);
+    REQUIRE(ed);
+
+    const auto wav = zp::test::make_wav({});
+    zp_input_t* add = zp_input_memory();
+    REQUIRE(zp_input_memory_add_file(add, "take.wav", wav.data(), wav.size(), 0, 0644) == ZP_OK);
+    REQUIRE(zp_input_memory_add_file(add, "A.TXT", reinterpret_cast<const std::uint8_t*>(x.data()), x.size(), 0, 0644) == ZP_OK);
+    REQUIRE(zp_editor_add(ed, add) == ZP_OK);
+
+    zp_plan_t* view = zp_editor_plan(ed);
+    REQUIRE(zp_plan_entry_count(view) == 3);
+    zp_plan_entry_t e{};
+    REQUIRE(zp_plan_get_entry(view, 1, &e) == ZP_OK);
+    CHECK(e.codec == ZP_CODEC_GENERAL);
+    REQUIRE(zp_plan_conflict_count(view) == 1);
+    CHECK_FALSE(zp_plan_executable(view));
+    zp_plan_free(view);
+
+    const zp_resolution_t bad_kind{ 2, 7, nullptr };
+    CHECK(zp_editor_resolve(ed, &bad_kind, 1) == ZP_INVALID_ARGUMENT);
+    const zp_resolution_t clash{ 2, ZP_RESOLVE_RENAME, "a.txt" };
+    CHECK(zp_editor_resolve(ed, &clash, 1) == ZP_NAME_COLLISION);
+    const zp_resolution_t rename{ 2, ZP_RESOLVE_RENAME, "b.txt" };
+    REQUIRE(zp_editor_resolve(ed, &rename, 1) == ZP_OK);
+    view = zp_editor_plan(ed);
+    CHECK(zp_plan_executable(view));
+    REQUIRE(zp_plan_get_entry(view, 2, &e) == ZP_OK);
+    CHECK(std::string(e.output_name) == "b.txt");
+    zp_plan_free(view);
+
+    zp_stream_t* out = zp_stream_memory();
+    zp_build_options_t bo{};
+    bo.readme_template = "custom";
+    REQUIRE(zp_editor_commit_with_options(ed, out, &bo, nullptr, nullptr) == ZP_OK);
+    auto x2 = zp::test::extract_all(memory_bytes(out));
+    CHECK(x2.files.contains("take.wav"));
+    CHECK(x2.files.contains("b.txt"));
+    zp_stream_free(out);
+    zp_editor_free(ed);
+    zp_input_free(add);
+    zp_stream_free(src);
+}

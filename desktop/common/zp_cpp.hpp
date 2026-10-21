@@ -95,6 +95,11 @@ inline void set_excludes(const Input& input, const std::vector<std::string>& pat
     check(zp_input_set_excludes(input.get(), raw.data(), raw.size()));
 }
 
+inline void set_prefix(const Input& input, const std::string& folder)
+{
+    check(zp_input_set_prefix(input.get(), folder.c_str()));
+}
+
 inline std::vector<std::string> exclude_preset(int preset)
 {
     std::vector<std::string> out;

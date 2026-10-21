@@ -210,6 +210,13 @@ require the magic; anything else is a foreign comment (`nullopt`).
 - Symlink entries in the source archive are dropped with a `SYMLINK_SKIPPED` warning.
 - Archives containing encrypted entries or entries with methods other than store/deflate cannot be
   edited (`UNSUPPORTED_METHOD`): minizip-ng only writes raw entries for methods it was built with.
+- `add` merges an added directory into an existing one with the same collision key instead of
+  adding a second entry, so dropping a folder that already exists is not a collision. A file
+  with a folder's name still collides.
+- `resolve` runs `ArchivePlanner::replan` on the merged plan and keeps the result without the
+  generated readme, which `plan()` appends last, so editor indices equal plan indices.
+- `InputSource::set_prefix` is applied in `enumerate()` after exclusion, so exclude patterns
+  still treat the input's own top-level items as explicit.
 - In-place native edits: the caller writes to `AtomicFileStream` on the original path (temp file
   in the same directory, fsync, `rename`/`ReplaceFileW`, directory fsync). The input is opened with
   `FILE_SHARE_DELETE` on Windows so the replace can happen while it is open.
@@ -506,6 +513,11 @@ which the GUI will reuse.
 (HH:MM:SS:FF from the iXML rate incl. 29.97/59.94 drop frame, else HH:MM:SS.mmm), Settings
 defaults and "Copy as CLI command".
 
+**Session** (`desktop/gui/session`, library `satchel_gui_session`, no Qt, Catch2-tested in
+`satchel_gui_session_tests`): the staged Full-mode model (desktop UI spec, "Implementation
+model"). It builds on the C API through `desktop/common/zp_cpp.hpp`. Not used by the app yet;
+the staged UI replaces the immediate edit jobs and `PlanReviewDialog` in the next milestone.
+
 **App** (`desktop/gui/app`, library `satchel_gui_app` plus `Satchel` executable):
 - Exclude settings (`exclude_system`, `exclude_daw_caches`, `exclude_patterns`) are stored under
   `excludes/` in QSettings. `exclude_patterns(Settings)` in `jobs.cpp` expands them (presets from
@@ -584,7 +596,9 @@ file + commit, memory, callbacks), input constructors (paths, memory), option in
 `zp_plan_executable`, `zp_plan_total_bytes`, build result accessors, extraction issue/item/outcome
 accessors and `zp_xplan_decide`, `zp_sink_filesystem`/`zp_sink_null`, `zp_status_name`,
 `zp_version`, `zp_preview`, `zp_input_set_excludes`, `zp_exclude_preset_pattern`,
-`zp_plan_excluded_count`/`zp_plan_get_excluded`. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
+`zp_plan_excluded_count`/`zp_plan_get_excluded`, `zp_input_set_prefix`. The editor additions
+(`zp_editor_open_with_options`, `zp_editor_resolve`, `zp_editor_commit_with_options`) are in the
+design doc. The progress callback returns non-zero to cancel. `zp_last_error` is thread-local.
 
 ### 4.15 Packaging and releases (main spec 12.3)
 
