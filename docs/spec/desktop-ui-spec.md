@@ -160,7 +160,7 @@ The window holds one **session** at a time: a base archive (none for a new archi
 | Row state | Display |
 | --- | --- |
 | Added | "New" badge, right-aligned in the Name column; Size from the source file; Packed blank; Method from the plan. For files that are not converted to FLAC, Store or Deflate is predicted by the build's own sampling (`zp_plan_predict_store`), so already-compressed media shows Store before anything is written |
-| Renamed / moved | New name, with the old name in the tooltip and Inspector |
+| Renamed / moved | New name, with the old name in the tooltip; the Inspector says "Renamed from *name*", "Moved from *folder*" or "Moved and renamed from *path*" |
 | Replaced | "Replaced" badge; columns show the new source |
 | Deleted | Struck through and dimmed; View ▸ Show Deleted (on by default) hides them |
 | Unchanged | As today |
@@ -172,7 +172,7 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 A bar at the bottom of the browser, visible while the session has pending changes (always visible for a new archive):
 
-- Summary: "+12 files (4.2 GB) · −3 · 2 renamed". New archive: file count, input size, entries per method.
+- Summary: "+12 files (4.2 GB) · −3 · 1 moved · 2 renamed". Moves and renames are counted where they happened: same folder with a new name is a rename, same name in another folder a move; renaming a folder counts once (recognised by its old path being gone and its new path being new), as does moving a folder. New archive: file count, input size, entries per method.
 - **Issues** button with a count, which opens the issues panel (a popover over the bar):
   - Collisions (blocking): each conflict group with Rename / Skip / Store unconverted controls. The rows involved get a warning badge in the browser.
   - Skipped symlinks and leave-out matches (warning), FLAC fallbacks (info), listed with paths.

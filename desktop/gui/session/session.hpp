@@ -142,7 +142,10 @@ struct SessionSummary
     std::size_t added = 0;
     std::uint64_t added_bytes = 0;
     std::size_t removed = 0;
+    // Name changes, counted where they happened (see count_moves): renaming a folder is one
+    // rename, moving a folder one move. A change of both name and folder counts in both.
     std::size_t renamed = 0;
+    std::size_t moved = 0;
     std::size_t replaced = 0;
     std::size_t entries = 0;
     std::uint64_t input_bytes = 0;
@@ -161,6 +164,19 @@ struct SessionView
 };
 
 using CommitProgress = std::function<bool(std::uint64_t done, std::uint64_t total)>;
+
+struct MoveCount
+{
+    std::size_t renamed = 0;
+    std::size_t moved = 0;
+};
+
+// Classifies path changes ("old" -> "new" archive paths, folders with or without a trailing
+// slash) as renames (same folder, new name) or moves (same name, other folder). Changes are counted
+// once per item that changed: entries whose folder was renamed count as that folder's rename, which
+// is recognised by the old folder being gone (`after` has no entry under it) and the new one being
+// new (`before` had none).
+MoveCount count_moves(const std::vector<std::pair<std::string, std::string>>& changes, const std::vector<std::string>& before, const std::vector<std::string>& after);
 
 class Session
 {

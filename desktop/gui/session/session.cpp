@@ -367,6 +367,79 @@ void Session::set_options(SessionOptions options)
     rebuild();
 }
 
+namespace
+{
+
+std::vector<std::string> split_path(std::string_view path)
+{
+    std::vector<std::string> parts;
+    for (const auto part : std::views::split(path, '/'))
+    {
+        if (!part.empty())
+            parts.emplace_back(part.begin(), part.end());
+    }
+    return parts;
+}
+
+std::string join_parts(const std::vector<std::string>& parts, std::size_t n)
+{
+    std::string out;
+    for (std::size_t i = 0; i < n; ++i)
+        out += (i ? "/" : "") + parts[i];
+    return out;
+}
+
+std::set<std::string, std::less<>> folders_of(const std::vector<std::string>& names)
+{
+    std::set<std::string, std::less<>> out;
+    for (const auto& n : names)
+    {
+        const auto parts = split_path(n);
+        const auto own = n.ends_with('/') ? parts.size() : parts.size() - std::min<std::size_t>(parts.size(), 1);
+        for (std::size_t i = 1; i <= own; ++i)
+            out.insert(join_parts(parts, i));
+    }
+    return out;
+}
+
+}
+
+MoveCount count_moves(const std::vector<std::pair<std::string, std::string>>& changes, const std::vector<std::string>& before, const std::vector<std::string>& after)
+{
+    const auto folders_before = folders_of(before);
+    const auto folders_after = folders_of(after);
+    std::set<std::pair<std::string, std::string>> renames;
+    std::set<std::pair<std::string, std::string>> moves;
+    for (const auto& [from, to] : changes)
+    {
+        const auto p = split_path(from);
+        const auto n = split_path(to);
+        if (p.empty() || n.empty() || p == n)
+            continue;
+        std::size_t k = 0;
+        while (k < p.size() && k < n.size() && p[p.size() - 1 - k] == n[n.size() - 1 - k])
+            ++k;
+        if (k == 0)
+        {
+            const bool same_folder = p.size() == n.size() && join_parts(p, p.size() - 1) == join_parts(n, n.size() - 1);
+            renames.emplace(join_parts(p, p.size()), join_parts(n, n.size()));
+            if (!same_folder)
+                moves.emplace(join_parts(p, p.size()), join_parts(n, n.size()));
+            continue;
+        }
+        const auto a = p.size() - k;
+        const auto b = n.size() - k;
+        const auto old_folder = join_parts(p, a);
+        const auto new_folder = join_parts(n, b);
+        const bool folder_renamed = a == b && a >= 1 && join_parts(p, a - 1) == join_parts(n, b - 1) && !folders_after.contains(old_folder) && !folders_before.contains(new_folder);
+        if (folder_renamed)
+            renames.emplace(old_folder, new_folder);
+        else
+            moves.emplace(join_parts(p, a + 1), join_parts(n, b + 1));
+    }
+    return { renames.size(), moves.size() };
+}
+
 void Session::refresh_view()
 {
     zpp::Plan plan(zpp::not_null(zp_editor_plan(editor_.get())));
@@ -413,8 +486,6 @@ void Session::refresh_view()
             {
                 row.state = RowState::Renamed;
                 row.previous_name = it->second;
-                if (e.kind == ZP_KIND_FILE)
-                    ++view_.summary.renamed;
             }
         }
         else
@@ -487,6 +558,21 @@ void Session::refresh_view()
         }
         view_.conflicts.push_back(std::move(sc));
     }
+    std::vector<std::pair<std::string, std::string>> changes;
+    std::vector<std::string> before;
+    std::vector<std::string> after;
+    for (const auto& k : baseline_)
+        before.push_back(k.name);
+    for (const auto& r : view_.rows)
+    {
+        if (r.state != RowState::Deleted)
+            after.push_back(r.key.name);
+        if (r.state == RowState::Renamed)
+            changes.emplace_back(r.previous_name, r.key.name);
+    }
+    const auto moves = count_moves(changes, before, after);
+    view_.summary.renamed = moves.renamed;
+    view_.summary.moved = moves.moved;
     view_.summary.entries = list.size();
     view_.summary.input_bytes = zp_plan_total_bytes(plan.get());
 }

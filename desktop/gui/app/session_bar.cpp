@@ -241,6 +241,8 @@ void SessionBar::show_snapshot(std::shared_ptr<const SessionSnapshot> snapshot, 
             parts << tr("+%n file(s) (%1)", nullptr, static_cast<int>(sum.added)).arg(qs(satchel_gui::human_size(sum.added_bytes)));
         if (sum.removed)
             parts << tr("−%n removed", nullptr, static_cast<int>(sum.removed));
+        if (sum.moved)
+            parts << tr("%n moved", nullptr, static_cast<int>(sum.moved));
         if (sum.renamed)
             parts << tr("%n renamed", nullptr, static_cast<int>(sum.renamed));
         if (sum.replaced)

@@ -427,16 +427,22 @@ private slots:
 
         // Rename in place, delete, add into a folder: staged until Apply.
         auto& model = w->model();
-        QModelIndex a;
-        QModelIndex docs;
-        for (int r = 0; r < model.rowCount(); ++r)
-        {
-            const auto idx = model.index(r, ArchiveModel::Name);
-            if (idx.data(ArchiveModel::PathRole).toString() == "a.txt")
-                a = idx;
-            if (idx.data(ArchiveModel::PathRole).toString() == "docs")
-                docs = idx;
-        }
+        const auto find = [&model](const QString& path) {
+            std::function<QModelIndex(const QModelIndex&)> walk = [&](const QModelIndex& parent) -> QModelIndex {
+                for (int r = 0; r < model.rowCount(parent); ++r)
+                {
+                    const auto idx = model.index(r, ArchiveModel::Name, parent);
+                    if (idx.data(ArchiveModel::PathRole).toString() == path)
+                        return idx;
+                    if (auto found = walk(idx); found.isValid())
+                        return found;
+                }
+                return {};
+            };
+            return walk({});
+        };
+        auto a = find("a.txt");
+        auto docs = find("docs");
         QVERIFY(a.isValid() && docs.isValid());
 
         // Verification applies to files, not folders.
@@ -447,6 +453,18 @@ private slots:
         QVERIFY(!inspector->toPlainText().contains("Verification"));
         view->selectionModel()->setCurrentIndex(proxy->mapFromSource(a), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
         QVERIFY(inspector->toPlainText().contains("Verification"));
+
+        // Dropping a file on a folder of an existing archive is a move, not a rename.
+        QVERIFY(w->move_to(docs, true));
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->has_changes, 20000);
+        QCOMPARE(session.snapshot()->view.summary.moved, std::size_t{ 1 });
+        QCOMPARE(session.snapshot()->view.summary.renamed, std::size_t{ 0 });
+        view->selectionModel()->setCurrentIndex(proxy->mapFromSource(find("docs/a.txt")), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        QVERIFY(inspector->toPlainText().contains("Moved from the top level"));
+        session.undo();
+        QTRY_VERIFY_WITH_TIMEOUT(settled() && !session.snapshot()->has_changes, 20000);
+        a = find("a.txt");
+        QVERIFY(a.isValid());
         QVERIFY(model.flags(a) & Qt::ItemIsEditable);
         model.setData(a, "alpha.txt", Qt::EditRole);
         QTRY_VERIFY_WITH_TIMEOUT(settled() && session.snapshot()->has_changes, 20000);

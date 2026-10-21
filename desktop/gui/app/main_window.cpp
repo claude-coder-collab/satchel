@@ -1587,7 +1587,19 @@ void MainWindow::update_inspector()
     else if (srow && srow->state == RowState::Deleted)
         html += QString("<p><b>%1</b></p>").arg(esc(tr("Will be removed when the changes are applied")));
     else if (srow && srow->state == RowState::Renamed)
-        html += QString("<p><b>%1</b></p>").arg(esc(tr("Renamed from %1").arg(qs(srow->previous_name))));
+    {
+        auto before = qs(srow->previous_name);
+        auto now = qs(srow->key.name);
+        while (before.endsWith('/'))
+            before.chop(1);
+        while (now.endsWith('/'))
+            now.chop(1);
+        const auto old_folder = parent_of(before);
+        const auto text = parent_of(now) == old_folder        ? tr("Renamed from %1").arg(before.section('/', -1))
+            : before.section('/', -1) == now.section('/', -1) ? tr("Moved from %1").arg(old_folder.isEmpty() ? tr("the top level") : old_folder)
+                                                              : tr("Moved and renamed from %1").arg(before);
+        html += QString("<p><b>%1</b></p>").arg(esc(text));
+    }
     if (ids.empty() || !reader_)
     {
         inspector_->setHtml(html);

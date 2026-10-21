@@ -684,6 +684,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Moved from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>the top level</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Moved and renamed from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>CRC-32</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1034,6 +1046,13 @@
         <translation>
             <numerusform>−%n removed</numerusform>
             <numerusform>−%n removed</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n moved</source>
+        <translation>
+            <numerusform>%n moved</numerusform>
+            <numerusform>%n moved</numerusform>
         </translation>
     </message>
     <message numerus="yes">
