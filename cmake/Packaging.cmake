@@ -34,9 +34,9 @@ function(zp_configure_bundle target)
     if(NOT APPLE)
         return()
     endif()
-    set(icns "${ZP_ICON_DIR}/satchel.icns")
-    target_sources(${target} PRIVATE "${icns}")
-    set_source_files_properties("${icns}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    set(icons "${ZP_ICON_DIR}/satchel.icns" "${ZP_ICON_DIR}/Assets.car")
+    target_sources(${target} PRIVATE ${icons})
+    set_source_files_properties(${icons} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     set_target_properties(${target} PROPERTIES
         MACOSX_BUNDLE ON
         MACOSX_BUNDLE_INFO_PLIST "${PROJECT_SOURCE_DIR}/packaging/macos/Info.plist.in"

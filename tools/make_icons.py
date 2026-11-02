@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 # Copyright (c) 2026 Venn Audio Ltd.
-"""Renders the placeholder app icon to PNG, ICO and ICNS without third-party packages."""
+"""Renders the placeholder app icon to PNG, ICO, ICNS and a macOS 26 Icon Composer bundle without
+third-party packages, then compiles the bundle into an asset catalog when Xcode's actool is present."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import math
+import shutil
 import struct
+import subprocess
+import sys
+import tempfile
 import zlib
 from pathlib import Path
 from typing import Callable
@@ -50,28 +56,35 @@ def flap(top: float, bottom: float, hw_top: float, hw_bottom: float, cx: float) 
     return sdf
 
 
-LAYERS: list[tuple[Shape, Color]] = [
-    (rounded_rect(0.5, 0.5, 0.46, 0.46, 0.2), BACKGROUND),
-    (ring(0.5, 0.36, 0.13, 0.03, 0.36), BAG),
-    (rounded_rect(0.5, 0.6, 0.3, 0.22, 0.06), BAG),
-    (flap(0.38, 0.56, 0.3, 0.2, 0.5), FLAP),
-    (rounded_rect(0.5, 0.56, 0.05, 0.035, 0.015), CLASP),
-]
+Layers = list[tuple[Shape, Color]]
+
+BACKGROUND_HALF_WIDTH = 0.46
+FOREGROUND: dict[str, Layers] = {
+    "bag": [(ring(0.5, 0.36, 0.13, 0.03, 0.36), BAG), (rounded_rect(0.5, 0.6, 0.3, 0.22, 0.06), BAG)],
+    "flap": [(flap(0.38, 0.56, 0.3, 0.2, 0.5), FLAP)],
+    "clasp": [(rounded_rect(0.5, 0.56, 0.05, 0.035, 0.015), CLASP)],
+}
+LAYERS: Layers = [(rounded_rect(0.5, 0.5, BACKGROUND_HALF_WIDTH, BACKGROUND_HALF_WIDTH, 0.2), BACKGROUND)]
+LAYERS += [layer for layers in FOREGROUND.values() for layer in layers]
 
 
-def rgba(size: int, samples: int = 4) -> bytes:
-    """Returns straight-alpha RGBA pixels, row by row, for a `size`-pixel square icon."""
+def rgba(size: int, samples: int = 4, layers: Layers | None = None, extent: float = 1.0) -> bytes:
+    """Returns straight-alpha RGBA pixels, row by row, for a `size`-pixel square icon.
+
+    `extent` is the width of icon space the image covers, centred on the icon."""
+    layers = LAYERS if layers is None else layers
     out = bytearray()
-    step = 1.0 / (size * samples)
+    step = extent / (size * samples)
+    origin = 0.5 - extent / 2
     for py in range(size):
         for px in range(size):
             acc = [0.0, 0.0, 0.0, 0.0]
             for sy in range(samples):
                 for sx in range(samples):
-                    x = (px * samples + sx + 0.5) * step
-                    y = (py * samples + sy + 0.5) * step
+                    x = origin + (px * samples + sx + 0.5) * step
+                    y = origin + (py * samples + sy + 0.5) * step
                     r = g = b = a = 0.0
-                    for shape, (cr, cg, cb, ca) in LAYERS:
+                    for shape, (cr, cg, cb, ca) in layers:
                         if shape(x, y) <= 0.0:
                             r, g, b, a = cr, cg, cb, ca
                     acc[0] += r * a
@@ -88,19 +101,28 @@ def rgba(size: int, samples: int = 4) -> bytes:
     return bytes(out)
 
 
-def render(size: int, samples: int = 4) -> bytes:
-    """Returns PNG scanlines (filter byte 0, then RGBA) for a `size`-pixel square icon."""
-    pixels = rgba(size, samples)
+def scanlines(pixels: bytes, size: int) -> bytes:
+    """Returns PNG scanlines (filter byte 0, then RGBA) for `size`-pixel square RGBA pixels."""
     stride = size * 4
     return b"".join(b"\0" + pixels[y * stride : (y + 1) * stride] for y in range(size))
 
 
-def png(size: int) -> bytes:
+def render(size: int, samples: int = 4) -> bytes:
+    """Returns PNG scanlines for a `size`-pixel square icon."""
+    return scanlines(rgba(size, samples), size)
+
+
+def encode_png(pixels: bytes, size: int) -> bytes:
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
 
     header = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(render(size), 9)) + chunk(b"IEND", b"")
+    idat = zlib.compress(scanlines(pixels, size), 9)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
+
+
+def png(size: int) -> bytes:
+    return encode_png(rgba(size), size)
 
 
 def ico(images: dict[int, bytes]) -> bytes:
@@ -159,8 +181,66 @@ def icns(pngs: dict[int, bytes], pixels: dict[int, bytes]) -> bytes:
     return b"icns" + struct.pack(">I", 8 + len(body)) + body
 
 
+ICON_SIZE = 1024
+
+
+def srgb(color: Color) -> str:
+    return "srgb:" + ",".join(f"{c:.5f}" for c in color)
+
+
+def icon_composer(size: int = ICON_SIZE, samples: int = 4) -> dict[str, bytes]:
+    """Returns the files of an Icon Composer `.icon` bundle by relative path: the background as a
+    solid fill (macOS draws its shape) and one image layer per foreground part, front to back,
+    scaled so the background square spans the whole canvas."""
+    extent = 2 * BACKGROUND_HALF_WIDTH
+    names = list(reversed(FOREGROUND))
+    files = {f"Assets/{name}.png": encode_png(rgba(size, samples, FOREGROUND[name], extent), size) for name in names}
+    manifest = {
+        "fill": {"solid": srgb(BACKGROUND)},
+        "groups": [
+            {
+                "layers": [{"image-name": f"{name}.png", "name": name} for name in names],
+                "shadow": {"kind": "neutral", "opacity": 0.5},
+                "translucency": {"enabled": False, "value": 0.5},
+            }
+        ],
+        "supported-platforms": {"squares": ["macOS"]},
+    }
+    files["icon.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
+    return files
+
+
+MACOS_DEPLOYMENT_TARGET = "13.3"
+
+
+def actool_command(icon: Path, out_dir: Path) -> list[str]:
+    """The actool invocation that compiles `icon` into `out_dir`/Assets.car under the icon's name."""
+    return [
+        "xcrun", "actool", str(icon.resolve()),
+        "--compile", str(out_dir.resolve()),
+        "--app-icon", icon.stem,
+        "--platform", "macosx",
+        "--target-device", "mac",
+        "--minimum-deployment-target", MACOS_DEPLOYMENT_TARGET,
+        "--output-partial-info-plist", str(out_dir.resolve() / "partial.plist"),
+        "--output-format", "human-readable-text",
+        "--errors", "--warnings",
+    ]  # fmt: skip
+
+
+def compile_catalog(icon: Path, car: Path) -> bool:
+    """Compiles `icon` into the asset catalog `car`; returns False when actool is unavailable."""
+    if shutil.which("xcrun") is None or subprocess.run(["xcrun", "--find", "actool"], capture_output=True).returncode != 0:
+        return False
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(actool_command(icon, Path(tmp)), check=True, stdout=subprocess.DEVNULL)
+        shutil.copyfile(Path(tmp) / "Assets.car", car)
+    return True
+
+
 def write_all(out_dir: Path) -> list[Path]:
-    """Writes satchel.png (256), satchel-512.png, satchel.ico and satchel.icns into `out_dir`."""
+    """Writes satchel.png (256), satchel-512.png, satchel.ico, satchel.icns and the Satchel.icon
+    bundle into `out_dir`."""
     out_dir.mkdir(parents=True, exist_ok=True)
     images = {s: png(s) for s in (16, 32, 48, 64, 128, 256, 512, 1024)}
     files = {
@@ -169,9 +249,11 @@ def write_all(out_dir: Path) -> list[Path]:
         "satchel.ico": ico({s: images[s] for s in (16, 32, 48, 64, 128, 256)}),
         "satchel.icns": icns(images, {s: rgba(s) for s in ICNS_ARGB_TYPES}),
     }
+    files |= {f"Satchel.icon/{name}": data for name, data in icon_composer().items()}
     paths = []
     for name, data in files.items():
         path = out_dir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         paths.append(path)
     return paths
@@ -183,6 +265,11 @@ def main() -> None:
     args = parser.parse_args()
     for path in write_all(args.out_dir):
         print(path)
+    car = args.out_dir / "Assets.car"
+    if compile_catalog(args.out_dir / "Satchel.icon", car):
+        print(car)
+    else:
+        print(f"actool not found: {car} was not updated", file=sys.stderr)
 
 
 if __name__ == "__main__":
