@@ -22,7 +22,7 @@ first public release.
 | EOCD comment magic | `STCH` (0x53544348) | Big-endian in the binary record |
 | FLAC APPLICATION ID | `Stch` | Must be registered with Xiph |
 | Copyright holder | Venn Audio Ltd. | SPDX: `AGPL-3.0-only OR LicenseRef-Commercial` |
-| App icon | `packaging/icons/*` | Drawn by `tools/make_icons.py` (PNG, ICO, ICNS; no dependencies). The ICNS uses `iconutil`'s type codes: 16 and 32 px at 1x as run-length-encoded `ic04`/`ic05` ARGB (straight alpha), the rest as PNG `ic07`–`ic14`. Finder drew PNG data in `icp4`/`icp5` as noise (#55) |
+| App icon | `packaging/icons/*` | Drawn by `tools/make_icons.py` (PNG, ICO, ICNS; no dependencies). The ICNS uses `iconutil`'s type codes: 16 and 32 px at 1x as run-length-encoded `ic04`/`ic05` ARGB (straight alpha), the rest as PNG `ic07`–`ic14`. Finder drew PNG data in `icp4`/`icp5` as noise (#55). macOS 26+ frames icons supplied only as ICNS (#61), so the script also writes the Icon Composer bundle `Satchel.icon` (solid background fill; bag, flap and clasp as glass layers with translucency off, scaled so the background square spans the canvas) and compiles it with `xcrun actool` (deployment target 13.3) into `Assets.car`, which is committed so builds need no Xcode. The bundle names it with `CFBundleIconName`; macOS 13–15 also prefer it and show actool's flattened render, `satchel.icns` (`CFBundleIconFile`) remains for anything that ignores the catalog. Re-run the script on a Mac with Xcode 26+ after changing the artwork |
 | macOS bundle ID | `com.vennaudio.satchel` | `ZP_BUNDLE_ID` in `cmake/Packaging.cmake` |
 | WiX upgrade code | `C228FD8D-4C42-4523-90CC-05246E0FF58B` | Must never change once an MSI ships |
 | Debian maintainer | `Venn Audio Ltd. <packages@example.invalid>` | `ZP_PACKAGE_CONTACT` |
@@ -620,7 +620,7 @@ design doc. The progress callback returns non-zero to cancel. `zp_last_error` is
 | Platform | Install layout | Package |
 |---|---|---|
 | Linux | `bin/satchel`, `bin/satchel-gui`, `share/applications/satchel.desktop`, hicolor icons 256/512 | CPack `DEB` (`satchel_<ver>_amd64.deb`, `SHLIBDEPS` against system Qt) and `TGZ`; AppImage by `linuxdeploy` + `linuxdeploy-plugin-qt` from the installed tree |
-| macOS | `Satchel.app` (executable `Satchel`, `Info.plist` from `packaging/macos/Info.plist.in`, `satchel.icns`); CLI at `Satchel.app/Contents/Helpers/satchel` (the bundle's `MacOS/Satchel` would clash with `satchel` on a case-insensitive disk) | CPack `DragNDrop` (UDZO dmg with an Applications link) |
+| macOS | `Satchel.app` (executable `Satchel`, `Info.plist` from `packaging/macos/Info.plist.in`, `satchel.icns`, `Assets.car`); CLI at `Satchel.app/Contents/Helpers/satchel` (the bundle's `MacOS/Satchel` would clash with `satchel` on a case-insensitive disk) | CPack `DragNDrop` (UDZO dmg with an Applications link) |
 | Windows | `bin/satchel.exe`, `bin/satchel-gui.exe` (icon + version resource from `packaging/windows/satchel.rc.in`), Qt DLLs | CPack `WIX` (WiX 5 via `CPACK_WIX_VERSION 4`): Start-menu shortcut "Satchel", `bin` appended to the system `PATH` (`packaging/windows/wix_patch.xml`) |
 
 - Windows: the MSVC runtime is installed app-local in `bin` (`InstallRequiredSystemLibraries`,

@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Venn Audio Ltd.
 from __future__ import annotations
 
+import json
 import struct
 import sys
 import zlib
@@ -82,3 +83,50 @@ def test_icns_uses_iconutil_types_and_argb_for_small_sizes() -> None:
         (a, r, g, b), _ = unrle(chunks[tag][4:], size * size)
         src = pixels[size]
         assert (a, r, g, b) == (src[3::4], src[0::4], src[1::4], src[2::4])
+
+
+def test_icon_composer_bundle_layers_the_foreground_over_a_solid_fill() -> None:
+    files = make_icons.icon_composer(size=32, samples=1)
+    manifest = json.loads(files["icon.json"])
+    assert manifest["fill"] == {"solid": make_icons.srgb(make_icons.BACKGROUND)}
+    assert manifest["supported-platforms"] == {"squares": ["macOS"]}
+    (group,) = manifest["groups"]
+    names = [layer["name"] for layer in group["layers"]]
+    assert names == ["clasp", "flap", "bag"]
+    assert [layer["image-name"] for layer in group["layers"]] == [f"{n}.png" for n in names]
+    assert set(files) == {"icon.json"} | {f"Assets/{n}.png" for n in names}
+    for name in names:
+        assert struct.unpack(">II", files[f"Assets/{name}.png"][16:24]) == (32, 32)
+
+
+def test_icon_composer_layers_fill_the_canvas_with_the_background_square() -> None:
+    extent = 2 * make_icons.BACKGROUND_HALF_WIDTH
+    bag = make_icons.rgba(100, 1, make_icons.FOREGROUND["bag"], extent)
+    alpha = bag[3::4]
+    assert alpha[0] == 0 and alpha[50 * 100 + 50] == 255
+    body_left = round((0.5 - 0.3 - (0.5 - extent / 2)) / extent * 100)
+    row = 70 * 100
+    assert alpha[row + body_left - 2] == 0 and alpha[row + body_left + 2] == 255
+
+
+def test_actool_command_names_the_icon_and_deployment_target(tmp_path: Path) -> None:
+    command = make_icons.actool_command(tmp_path / "Satchel.icon", tmp_path)
+    assert command[:3] == ["xcrun", "actool", str(tmp_path / "Satchel.icon")]
+    assert command[command.index("--app-icon") + 1] == "Satchel"
+    assert command[command.index("--minimum-deployment-target") + 1] == make_icons.MACOS_DEPLOYMENT_TARGET
+    release = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml").read_text()
+    assert f"-DCMAKE_OSX_DEPLOYMENT_TARGET={make_icons.MACOS_DEPLOYMENT_TARGET}" in release
+
+
+def test_compile_catalog_skips_without_xcode(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(make_icons.shutil, "which", lambda _: None)
+    assert not make_icons.compile_catalog(tmp_path / "Satchel.icon", tmp_path / "Assets.car")
+    assert not (tmp_path / "Assets.car").exists()
+
+
+def test_bundle_icon_name_matches_the_catalog() -> None:
+    root = Path(__file__).resolve().parents[2]
+    plist = (root / "packaging" / "macos" / "Info.plist.in").read_text()
+    assert "<key>CFBundleIconName</key>\n    <string>Satchel</string>" in plist
+    assert (root / "packaging" / "icons" / "Satchel.icon" / "icon.json").is_file()
+    assert (root / "packaging" / "icons" / "Assets.car").is_file()
