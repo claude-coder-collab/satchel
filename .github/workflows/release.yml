@@ -10,6 +10,7 @@ on:
       - desktop/macos/**
       - cmake/Packaging.cmake
       - tools/build_wheel.py
+      - tools/check_macos_min.py
       - bindings/js/package.json.in
       - .github/workflows/release.yml
 
@@ -137,6 +138,7 @@ jobs:
           for bin in MacOS/Satchel Helpers/satchel PlugIns/SatchelPreview.appex/Contents/MacOS/SatchelPreview; do
             lipo -archs "/tmp/satchel-dmg/Satchel.app/Contents/$bin" | grep -q "x86_64 arm64"
           done
+          python3 tools/check_macos_min.py /tmp/satchel-dmg/Satchel.app --target 13.3
           outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System|:$' || true)
           if [[ -n "$outside" ]]; then echo "Links outside the bundle: $outside"; exit 1; fi
           hdiutil detach /tmp/satchel-dmg

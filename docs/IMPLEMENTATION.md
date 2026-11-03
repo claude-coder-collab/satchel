@@ -44,7 +44,7 @@ bench/                   zp_bench throughput benchmark
 tests/unit, tests/integration, tests/support, tests/capi
 cmake/Packaging.cmake    install layout, platform resources, CPack
 packaging/               icons, .desktop, Info.plist, Windows resources, WiX patch, signing hook
-tools/                   gen_cdef.py, make_icons.py, serve_web.py
+tools/                   gen_cdef.py, make_icons.py, serve_web.py, qa_build.py, check_macos_min.py
 docs/spec/               specifications (inputs)
 ```
 
@@ -638,8 +638,19 @@ design doc. The progress callback returns non-zero to cancel. `zp_last_error` is
   `ZP_VERSION`. Jobs: Linux (deb, tar.gz, AppImage; installs the deb and starts the AppImage under
   Xvfb), macOS (Qt 6.11.3 from `install-qt-action`; 6.8.3 clipped focus rings and drew square buttons on current macOS; Windows stays on 6.10.3 because aqtinstall cannot fetch 6.11 for Windows, universal arm64 + x86_64, deployment target 13.3 (libc++ floating-point `to_chars`), dmg; notarized and
   stapled when Apple credentials exist; checks the bundle links nothing outside itself and the
-  system), Windows (MSI; installs it silently and runs `satchel --version`), web (zip of the browser
+  system and that no binary in it needs a newer macOS than 13.3 (`tools/check_macos_min.py`, which
+  reads `LC_BUILD_VERSION`/`LC_VERSION_MIN_MACOSX` of every Mach-O slice)), Windows (MSI; installs it silently and runs `satchel --version`), web (zip of the browser
   app, npm tarball), Python wheels (Linux, macOS, Windows). `publish` writes `SHA256SUMS` and, for tags, creates a draft GitHub release.
+- QA builds: `tools/qa_build.py` builds an unsigned package like the release job for the host
+  (#66). It reads the Qt version (`QT_VERSION_MACOS`/`QT_VERSION_WINDOWS`) and the job's
+  `cmake --preset` line from `release.yml`, dropping arguments that use workflow variables (so the
+  version is the CMake project version), installs official Qt with aqtinstall into `~/Qt`
+  (`--qt-root`) when missing, configures `build/qa-<job>` with `--fresh`, builds Release, runs
+  `cpack` and, on macOS, runs `check_macos_min.py` on the staged bundle. `--label` adds a suffix to
+  the package names. Linux uses the system Qt and makes no AppImage; Windows needs a developer
+  prompt. A package-manager Qt (Homebrew) carries the build machine's minimum macOS, so local
+  builds against it do not start on older systems. Qt 6.8 links AGL, which recent macOS SDKs lack;
+  the script then passes `-DWrapOpenGL_AGL=<SDK>/…/OpenGL.framework` instead of patching Qt.
 - Secrets (all optional; unsigned packages are built without them): `MACOS_CERTIFICATE` (base64
   .p12), `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`,
   `APPLE_APP_PASSWORD`, `WINDOWS_CERTIFICATE` (base64 .pfx), `WINDOWS_CERTIFICATE_PASSWORD`.
