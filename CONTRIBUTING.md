@@ -12,4 +12,7 @@ Thanks for your interest in Satchel.
   `SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial` and the copyright line.
 - **Build and test.** See the [README](README.md). `clang-format` (the repository's
   `.clang-format`) and `clang-tidy` must pass; CI runs both.
+- **Test builds.** `python3 tools/qa_build.py [--label pr65]` makes an unsigned package for testers
+  with the same Qt and settings as the release (it installs that Qt with `pip install aqtinstall`
+  if needed). Packages built against Homebrew's Qt may not start on older macOS.
 - **Specification.** Behaviour changes update [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
