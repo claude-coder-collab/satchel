@@ -1,0 +1,99 @@
+name: Full
+
+on:
+  workflow_dispatch:
+
+env:
+  TZ: UTC
+
+jobs:
+  tsan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build unzip zip p7zip-full
+      - name: Configure
+        run: cmake --preset clang-tsan -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23
+      - name: Build
+        run: cmake --build build/clang-tsan --config Debug
+      - name: Test
+        env:
+          TSAN_OPTIONS: halt_on_error=1 second_deadlock_stack=1
+        run: ctest --test-dir build/clang-tsan -C Debug --output-on-failure
+
+  large:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-14 g++-14 unzip p7zip-full
+      - name: Build
+        run: |
+          cmake --preset gcc -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DZP_BUILD_GUI=OFF
+          cmake --build build/gcc --config Release --target zp_tests
+      - name: Multi-GB tests
+        run: build/gcc/tests/Release/zp_tests "[large]"
+
+  interop:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-14 g++-14 unzip zip p7zip-full flac ffmpeg
+      - name: Build
+        run: |
+          cmake --preset gcc -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DZP_BUILD_GUI=OFF
+          cmake --build build/gcc --config Release --target zp_tests
+      - name: Interoperability (unzip, 7-Zip, flac, ffmpeg)
+        run: build/gcc/tests/Release/zp_tests "[interop],[flac]"
+
+  browsers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.10
+          actions-cache-folder: emsdk-cache
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build
+        run: |
+          emcmake cmake --preset wasm
+          cmake --build build/wasm --config Release --target satchel_web
+      - name: Browser tests (Chromium, Firefox, WebKit)
+        run: |
+          pip install pytest playwright
+          python -m playwright install --with-deps chromium firefox webkit
+          SATCHEL_WEB_DIR=build/wasm/web SATCHEL_BROWSERS=chromium,firefox,webkit SATCHEL_DEVICES="iPhone 15:webkit,Pixel 7:chromium" python -m pytest -q tests/web
+
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build zip
+      - name: Build
+        run: |
+          cmake --preset fuzz -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23
+          cmake --build build/fuzz --config Debug
+      - name: Seed corpora
+        run: |
+          mkdir -p corpus/archive corpus/pcm corpus/flac
+          python3 tests/fuzz/make_seeds.py corpus
+          cp tests/fuzz/seeds/flac/* corpus/flac/
+          cp tests/fuzz/seeds/archive/* corpus/archive/
+      - name: Fuzz
+        run: |
+          build/fuzz/tests/fuzz/Debug/fuzz_archive -max_total_time=900 -rss_limit_mb=4096 -timeout=30 corpus/archive
+          build/fuzz/tests/fuzz/Debug/fuzz_pcm -max_total_time=900 -rss_limit_mb=4096 -timeout=30 -max_len=200000 corpus/pcm
+          build/fuzz/tests/fuzz/Debug/fuzz_flac -max_total_time=900 -rss_limit_mb=4096 -timeout=30 -max_len=100000 corpus/flac
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: crash-*

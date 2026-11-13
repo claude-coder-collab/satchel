@@ -1,0 +1,382 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - packaging/**
+      - desktop/macos/**
+      - cmake/Packaging.cmake
+      - tools/build_wheel.py
+      - tools/check_macos_min.py
+      - bindings/js/package.json.in
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION_MACOS: "6.11.3"
+  # aqtinstall cannot fetch Qt 6.11 for Windows yet.
+  QT_VERSION_WINDOWS: "6.10.3"
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(sed -nE 's/^project\(satchel VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-14 g++-14 qt6-base-dev qt6-tools-dev qt6-l10n-tools libgl1-mesa-dev dpkg-dev file xvfb
+      - name: Build
+        run: |
+          cmake --preset gcc -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build/gcc --config Release
+      - name: Debian package and tarball
+        run: cd build/gcc && cpack -C Release
+      - name: AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          QMAKE: /usr/lib/qt6/bin/qmake
+          LDAI_OUTPUT: Satchel-${{ needs.version.outputs.version }}-x86_64.AppImage
+        run: |
+          base=https://github.com/linuxdeploy
+          curl -fsSLo linuxdeploy "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          curl -fsSLo linuxdeploy-plugin-qt "$base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          chmod +x linuxdeploy linuxdeploy-plugin-qt
+          DESTDIR="$PWD/AppDir" cmake --install build/gcc --config Release
+          ./linuxdeploy --appdir AppDir --plugin qt --output appimage \
+            --desktop-file AppDir/usr/share/applications/satchel.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/satchel.png
+          mv "$LDAI_OUTPUT" build/gcc/
+      - name: Smoke test
+        run: |
+          sudo apt-get install -y ./build/gcc/satchel_*.deb
+          satchel --version
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run timeout 5 build/gcc/Satchel-*.AppImage || [[ $? == 124 ]]
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-linux
+          path: |
+            build/gcc/*.deb
+            build/gcc/*.tar.gz
+            build/gcc/*.AppImage
+
+  macos:
+    needs: version
+    runs-on: macos-15
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION_MACOS }}
+          cache: true
+      - name: Install tools
+        run: brew install ninja
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security list-keychain -d user -s "$keychain"
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "SATCHEL_MACOS_SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
+      - name: Build
+        run: |
+          cmake --preset clang -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 -DZP_BUNDLE_UPDATER=ON "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+          cmake --build build/clang --config Release
+      - name: Disk image
+        run: cd build/clang && cpack -C Release
+      - name: Notarize
+        if: env.MACOS_CERTIFICATE != '' && env.APPLE_ID != ''
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for dmg in build/clang/*.dmg; do
+            xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+            xcrun stapler staple "$dmg"
+          done
+      - name: Smoke test
+        run: |
+          hdiutil attach build/clang/*.dmg -mountpoint /tmp/satchel-dmg
+          /tmp/satchel-dmg/Satchel.app/Contents/Helpers/satchel --version
+          codesign --verify --deep --strict /tmp/satchel-dmg/Satchel.app
+          codesign -d --entitlements - /tmp/satchel-dmg/Satchel.app/Contents/PlugIns/SatchelPreview.appex | grep -q app-sandbox
+          test -d /tmp/satchel-dmg/Satchel.app/Contents/Frameworks/Sparkle.framework
+          for bin in MacOS/Satchel Helpers/satchel PlugIns/SatchelPreview.appex/Contents/MacOS/SatchelPreview; do
+            lipo -archs "/tmp/satchel-dmg/Satchel.app/Contents/$bin" | grep -q "x86_64 arm64"
+          done
+          python3 tools/check_macos_min.py /tmp/satchel-dmg/Satchel.app --target 13.3
+          outside=$(otool -L /tmp/satchel-dmg/Satchel.app/Contents/MacOS/Satchel | tail -n +2 | grep -v -E '@(rpath|executable_path)|/usr/lib|/System|:$' || true)
+          if [[ -n "$outside" ]]; then echo "Links outside the bundle: $outside"; exit 1; fi
+          hdiutil detach /tmp/satchel-dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-macos
+          path: build/clang/*.dmg
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION_WINDOWS }}
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Install WiX
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.UI.wixext/5.0.2
+      - name: Import signing certificate
+        if: env.WINDOWS_CERTIFICATE != ''
+        shell: bash
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$WINDOWS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.pfx"
+          echo "SATCHEL_WINDOWS_CERT=$RUNNER_TEMP/cert.pfx" >> "$GITHUB_ENV"
+          echo "SATCHEL_WINDOWS_CERT_PASSWORD=$WINDOWS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build
+        shell: bash
+        run: |
+          cmake --preset msvc -DZP_BUILD_TESTS=OFF -DZP_VERSION="$VERSION" -DZP_BUNDLE_UPDATER=ON
+          cmake --build build/msvc --config Release
+      - name: Installer
+        shell: bash
+        run: |
+          cd build/msvc && cpack -C Release
+          if [[ -n "${SATCHEL_WINDOWS_CERT:-}" ]]; then
+            signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f "$SATCHEL_WINDOWS_CERT" /p "$SATCHEL_WINDOWS_CERT_PASSWORD" *.msi
+          fi
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem build/msvc/*.msi | Select-Object -First 1
+          Start-Process msiexec -ArgumentList "/i `"$($msi.FullName)`" /qn /l*v install.log" -Wait
+          & "$env:ProgramFiles\Satchel\bin\satchel.exe" --version
+          if ($LASTEXITCODE -ne 0) { Get-Content install.log -Tail 50; exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\Qt6Widgets.dll")) { exit 1 }
+          if (-not (Test-Path "HKLM:\Software\Classes\Satchel.zip\shell\open\command")) { exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\WinSparkle.dll")) { exit 1 }
+          if (-not (Test-Path "HKLM:\Software\Classes\Directory\shell\satchel.compress\command")) { exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\satchel_shell.dll")) { exit 1 }
+          if (-not (Test-Path "$env:ProgramFiles\Satchel\bin\msvcp140.dll")) { exit 1 }
+          if (Test-Path "$env:ProgramFiles\Satchel\bin\vc_redist.x64.exe") { exit 1 }
+          if (-not (Test-Path "HKLM:\Software\Classes\CLSID\{8C4F2B1C-E643-456B-A814-5A3F0DB05DFB}\InprocServer32")) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-windows
+          path: build/msvc/*.msi
+
+  wheel-linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build library
+        run: |
+          export PATH=/opt/python/cp312-cp312/bin:$PATH
+          pip install cmake ninja wheel setuptools
+          cmake --preset gcc -DZP_BUILD_TESTS=OFF -DZP_BUILD_CLI=OFF -DZP_BUILD_GUI=OFF -DZP_PORTABLE_RUNTIME=ON -DZP_VERSION="${{ needs.version.outputs.version }}"
+          cmake --build build/gcc --config Release --target zp_shared
+      - name: Wheel
+        run: |
+          export PATH=/opt/python/cp312-cp312/bin:$PATH
+          python tools/build_wheel.py --library build/gcc/core/Release/libsatchel.so --platform-tag linux_x86_64 --version "${{ needs.version.outputs.version }}" --out raw
+          auditwheel show raw/*.whl
+          auditwheel repair --plat manylinux_2_28_x86_64 -w dist raw/*.whl
+      - name: Test
+        run: |
+          cp -r bindings/python/tests /tmp/tests
+          for py in cp310-cp310 cp313-cp313; do
+            /opt/python/$py/bin/python -m venv /tmp/venv-$py
+            /tmp/venv-$py/bin/pip install -q dist/*.whl pytest
+            (cd /tmp && /tmp/venv-$py/bin/python -m pytest -q tests)
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-wheel-linux
+          path: dist/*.whl
+
+  wheel:
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            preset: clang
+            library: build/clang/core/Release/libsatchel.dylib
+            tag: macosx_14_0_universal2
+            extra: -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+          - os: windows-latest
+            preset: msvc
+            library: build/msvc/core/Release/satchel.dll
+            tag: win_amd64
+            extra: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - name: Build library
+        shell: bash
+        run: |
+          cmake --preset ${{ matrix.preset }} -DZP_BUILD_TESTS=OFF -DZP_BUILD_CLI=OFF -DZP_BUILD_GUI=OFF -DZP_PORTABLE_RUNTIME=ON -DZP_VERSION="${{ needs.version.outputs.version }}" ${{ matrix.extra }}
+          cmake --build build/${{ matrix.preset }} --config Release --target zp_shared
+      - name: Wheel
+        shell: bash
+        run: |
+          pip install wheel setuptools
+          python tools/build_wheel.py --library ${{ matrix.library }} --platform-tag ${{ matrix.tag }} --version "${{ needs.version.outputs.version }}" --out dist
+      - name: Test
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          if [[ "$RUNNER_OS" == Windows ]]; then bin="$RUNNER_TEMP/venv/Scripts"; else bin="$RUNNER_TEMP/venv/bin"; fi
+          "$bin/python" -m pip install -q dist/*.whl pytest
+          cp -r bindings/python/tests "$RUNNER_TEMP/tests"
+          cd "$RUNNER_TEMP" && "$bin/python" -m pytest -q tests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-wheel-${{ runner.os }}
+          path: dist/*.whl
+
+  web:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.10
+          actions-cache-folder: emsdk-cache
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Build
+        run: |
+          emcmake cmake --preset wasm -DZP_BUILD_TESTS=OFF -DZP_VERSION="${{ needs.version.outputs.version }}"
+          cmake --build build/wasm --config Release --target satchel_web satchel_npm
+          cd build/wasm/web && zip -qr "$GITHUB_WORKSPACE/Satchel-${{ needs.version.outputs.version }}-web.zip" .
+      - name: npm package
+        run: |
+          (cd build/wasm/npm && npm pack --pack-destination "$GITHUB_WORKSPACE")
+          mkdir "$RUNNER_TEMP/npm-test" && cd "$RUNNER_TEMP/npm-test"
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE"/satchel-satchel-*.tgz
+          cp "$GITHUB_WORKSPACE/bindings/js/test/package.mjs" .
+          node package.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-web
+          path: |
+            Satchel-*-web.zip
+            satchel-satchel-*.tgz
+
+  appcast:
+    needs: [version, macos, windows]
+    runs-on: macos-15
+    env:
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.SPARKLE_PRIVATE_KEY != ''
+      - uses: actions/download-artifact@v4
+        if: env.SPARKLE_PRIVATE_KEY != ''
+        with:
+          pattern: package-{macos,windows}
+          merge-multiple: true
+          path: dist
+      - name: Sign and write appcasts
+        if: env.SPARKLE_PRIVATE_KEY != ''
+        run: |
+          curl -fsSLo sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz
+          echo "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c  sparkle.tar.xz" | shasum -a 256 -c
+          mkdir sparkle && tar -xf sparkle.tar.xz -C sparkle
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION"
+          mkdir appcast
+          for pkg in dist/*.dmg dist/*.msi; do
+            name=$(basename "$pkg")
+            platform=macos; minimum="--minimum-system-version 13.3"
+            if [[ "$name" == *.msi ]]; then platform=windows; minimum=""; fi
+            sig=$(sparkle/bin/sign_update --ed-key-file "$RUNNER_TEMP/sparkle.key" "$pkg")
+            python3 tools/make_appcast.py --version "$VERSION" --url "$base/$name" --sign-output "$sig" --platform $platform $minimum --out appcast/appcast-$platform.xml
+          done
+          rm "$RUNNER_TEMP/sparkle.key"
+      - uses: actions/upload-artifact@v4
+        if: env.SPARKLE_PRIVATE_KEY != ''
+        with:
+          name: package-appcast
+          path: appcast/*.xml
+
+  publish:
+    needs: [version, linux, macos, windows, wheel-linux, wheel, web, appcast]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: dist
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: dist
+      - name: Draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --draft --generate-notes --title "Satchel ${{ needs.version.outputs.version }}"

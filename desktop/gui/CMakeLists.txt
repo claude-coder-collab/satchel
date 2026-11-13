@@ -1,0 +1,105 @@
+add_library(satchel_gui_logic STATIC logic/logic.cpp)
+target_include_directories(satchel_gui_logic PUBLIC logic)
+target_link_libraries(satchel_gui_logic PUBLIC zp::project_options)
+
+add_library(satchel_gui_session STATIC session/session.cpp)
+target_include_directories(satchel_gui_session PUBLIC session ${PROJECT_SOURCE_DIR}/desktop/common)
+target_link_libraries(satchel_gui_session PUBLIC zp::core zp::project_options)
+
+if(ZP_BUILD_TESTS)
+    add_executable(satchel_gui_logic_tests ${PROJECT_SOURCE_DIR}/tests/gui/test_logic.cpp)
+    target_link_libraries(satchel_gui_logic_tests PRIVATE satchel_gui_logic Catch2::Catch2WithMain)
+    catch_discover_tests(satchel_gui_logic_tests DISCOVERY_MODE PRE_TEST)
+
+    add_executable(satchel_gui_session_tests ${PROJECT_SOURCE_DIR}/tests/gui/test_session.cpp ${PROJECT_SOURCE_DIR}/tests/support/pcm_fixtures.cpp)
+    target_include_directories(satchel_gui_session_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests/support ${PROJECT_SOURCE_DIR}/core/src)
+    target_link_libraries(satchel_gui_session_tests PRIVATE satchel_gui_session Catch2::Catch2WithMain)
+    catch_discover_tests(satchel_gui_session_tests DISCOVERY_MODE PRE_TEST)
+endif()
+
+option(ZP_BUILD_GUI "Build the Qt desktop app (needs Qt 6 Widgets)" ON)
+if(ZP_BUILD_GUI)
+    find_package(Qt6 6.4 QUIET COMPONENTS Widgets Test OPTIONAL_COMPONENTS LinguistTools)
+    if(NOT Qt6_FOUND)
+        message(STATUS "Qt 6 not found: the desktop app is not built")
+    endif()
+endif()
+if(ZP_BUILD_GUI AND Qt6_FOUND)
+    set(CMAKE_AUTOMOC ON)
+    add_library(satchel_gui_app STATIC
+        app/app.cpp
+        app/jobs.cpp
+        app/labels.cpp
+        app/rate_label.cpp
+        app/settings_store.cpp
+        app/archive_model.cpp
+        app/dialogs.cpp
+        app/simple_window.cpp
+        app/main_window.cpp
+        app/session_bar.cpp
+        app/session_controller.cpp
+        app/user_data.cpp
+        app/workspace.cpp
+    )
+    if(APPLE)
+        enable_language(OBJCXX)
+        target_sources(satchel_gui_app PRIVATE app/mac_services.mm app/mac_uninstall.cpp app/updater_mac.mm)
+        target_link_libraries(satchel_gui_app PRIVATE satchel_macos_uninstall)
+        set_source_files_properties(app/mac_services.mm app/updater_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+        set_target_properties(satchel_gui_app PROPERTIES OBJCXX_STANDARD 23 OBJCXX_STANDARD_REQUIRED ON)
+        target_link_libraries(satchel_gui_app PUBLIC "-framework AppKit")
+    else()
+        target_sources(satchel_gui_app PRIVATE app/mac_services_stub.cpp $<IF:$<PLATFORM_ID:Windows>,app/updater_win.cpp,app/updater_null.cpp>)
+        target_compile_definitions(satchel_gui_app PRIVATE ZP_VENDOR_NAME="${ZP_VENDOR}")
+        target_compile_definitions(satchel_gui_app PRIVATE ZP_UPDATE_FEED_URL="${ZP_UPDATE_FEED_URL_WINDOWS}" ZP_UPDATE_PUBLIC_KEY="${ZP_UPDATE_PUBLIC_KEY}")
+    endif()
+    target_include_directories(satchel_gui_app PUBLIC app ${PROJECT_SOURCE_DIR}/desktop/common)
+    target_link_libraries(satchel_gui_app PUBLIC satchel_gui_logic satchel_gui_session zp::core Qt6::Widgets)
+
+    if(TARGET Qt6::lupdate AND TARGET Qt6::lrelease)
+        set(ts_files ${CMAKE_CURRENT_SOURCE_DIR}/translations/satchel_en.ts)
+        if(Qt6_VERSION VERSION_GREATER_EQUAL 6.7)
+            qt_add_lupdate(TS_FILES ${ts_files} SOURCE_TARGETS satchel_gui_app NO_GLOBAL_TARGET LUPDATE_TARGET satchel_lupdate OPTIONS -no-obsolete -locations none)
+        else()
+            qt_add_lupdate(satchel_gui_app TS_FILES ${ts_files} OPTIONS -no-obsolete -locations none)
+            add_custom_target(satchel_lupdate DEPENDS satchel_gui_app_lupdate)
+        endif()
+        qt_add_lrelease(satchel_gui_app TS_FILES ${ts_files} QM_FILES_OUTPUT_VARIABLE qm_files)
+        qt_add_resources(satchel_gui_app "satchel_i18n" PREFIX /i18n BASE ${CMAKE_CURRENT_BINARY_DIR} FILES ${qm_files})
+        target_compile_definitions(satchel_gui_app PUBLIC ZP_HAS_TRANSLATIONS)
+    else()
+        message(STATUS "Qt Linguist tools not found: the desktop app is built without translations")
+    endif()
+
+    qt_add_executable(satchel_gui app/main.cpp)
+    set_target_properties(satchel_gui PROPERTIES OUTPUT_NAME "$<IF:$<PLATFORM_ID:Darwin>,Satchel,satchel-gui>" WIN32_EXECUTABLE ON)
+    target_link_libraries(satchel_gui PRIVATE satchel_gui_app)
+    zp_configure_bundle(satchel_gui)
+    zp_add_windows_resources(satchel_gui "Satchel")
+
+    if(ZP_BUILD_TESTS AND TARGET Qt6::Test)
+        qt_add_executable(satchel_gui_tests ${PROJECT_SOURCE_DIR}/tests/gui/test_app.cpp)
+        target_link_libraries(satchel_gui_tests PRIVATE satchel_gui_app Qt6::Test)
+        add_test(NAME satchel_gui_tests COMMAND satchel_gui_tests)
+        set_tests_properties(satchel_gui_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    endif()
+    install(TARGETS satchel_gui BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    zp_install_linux_desktop_files()
+    zp_install_macos_uninstaller()
+    zp_install_updater()
+
+    if(APPLE OR WIN32)
+        set(deploy_default ON)
+    else()
+        set(deploy_default OFF)
+    endif()
+    option(ZP_DEPLOY_QT "Copy the Qt libraries next to the installed app (macdeployqt/windeployqt)" ${deploy_default})
+    if(ZP_DEPLOY_QT)
+        set(deploy_options "")
+        if(WIN32)
+            set(deploy_options DEPLOY_TOOL_OPTIONS --no-compiler-runtime)
+        endif()
+        qt_generate_deploy_app_script(TARGET satchel_gui OUTPUT_SCRIPT deploy_script NO_UNSUPPORTED_PLATFORM_ERROR NO_TRANSLATIONS ${deploy_options})
+        install(SCRIPT ${deploy_script})
+    endif()
+endif()

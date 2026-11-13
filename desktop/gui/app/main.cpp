@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Satchel contributors
+#include "app.hpp"
+#include "mac_services.hpp"
+#include "mac_uninstall.hpp"
+#include "main_window.hpp"
+#include "settings_store.hpp"
+#include "user_data.hpp"
+
+#include <QApplication>
+#include <QCommandLineParser>
+#include <QElapsedTimer>
+#include <QFileOpenEvent>
+#include <QLibraryInfo>
+#include <QLocale>
+#include <QTimer>
+#include <QTranslator>
+
+#include <filesystem>
+#include <print>
+#include <utility>
+
+namespace
+{
+
+// macOS delivers files dropped on the Dock icon as QFileOpenEvent.
+class FileOpenFilter : public QObject
+{
+public:
+    explicit FileOpenFilter(App& app) :
+        app_(app)
+    {
+    }
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::FileOpen)
+        {
+            if (const auto* open = dynamic_cast<QFileOpenEvent*>(event))
+                pending_ << open->file();
+            QTimer::singleShot(100, this, [this] {
+                if (!pending_.isEmpty())
+                    app_.open_paths(std::exchange(pending_, {}));
+            });
+            return true;
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    App& app_;
+    QStringList pending_;
+};
+
+}
+
+int main(int argc, char** argv)
+{
+    if (const auto request = parse_uninstall_helper(argc, argv))
+        return run_uninstall_helper(*request);
+    QApplication qapp(argc, argv);
+    QApplication::setApplicationName("Satchel");
+    QApplication::setOrganizationName("Satchel");
+    QApplication::setOrganizationDomain("satchel.invalid");
+    QApplication::setApplicationVersion(QString::fromUtf8(zp_version()));
+
+    QTranslator qt_translator;
+    if (qt_translator.load(QLocale(), "qtbase", "_", QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+        QApplication::installTranslator(&qt_translator);
+    QTranslator translator;
+    if (translator.load(QLocale(), "satchel", "_", ":/i18n") || translator.load(QLocale(QLocale::English), "satchel", "_", ":/i18n"))
+        QApplication::installTranslator(&translator);
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription("Satchel — lossless media packaging as standard zip archives");
+    parser.addHelpOption();
+    parser.addVersionOption();
+    QCommandLineOption simple("simple", "Start in Simple mode");
+    QCommandLineOption full("full", "Start in Full mode");
+    QCommandLineOption compress("compress", "Compress the given files into one archive (file-manager action)");
+    QCommandLineOption extract("extract", "Extract each given zip archive (file-manager action)");
+    QCommandLineOption smoke("smoke-test", "Open the archive in Full mode, report the time to list it, and quit", "archive");
+    parser.addOptions({ simple, full, compress, extract, smoke });
+    parser.addPositionalArgument("files", "Zip archives to extract, or files to compress (Simple mode rule)");
+    parser.process(qapp);
+
+    PendingCleanup pending_cleanup;
+    App app;
+    FileOpenFilter filter(app);
+    qapp.installEventFilter(&filter);
+    install_mac_services(app);
+    app.start_updates();
+
+    if (parser.isSet(smoke))
+    {
+        QElapsedTimer timer;
+        timer.start();
+        const auto rows = app.show_archive(parser.value(smoke)).visible_rows();
+        const auto ms = timer.elapsed();
+        std::println("listed {} rows in {} ms", rows, ms);
+        return rows > 0 ? 0 : 1;
+    }
+
+    const auto files = parser.positionalArguments();
+    if (files.size() == 1 && parser.isSet(full) && satchel_gui::is_zip(std::filesystem::path(files.front().toStdU16String())))
+        app.show_archive(files.front());
+    else if (!files.isEmpty())
+        app.open_paths(files, parser.isSet(compress) ? satchel_gui::Intent::Compress : parser.isSet(extract) ? satchel_gui::Intent::Extract
+                                                                                                             : satchel_gui::Intent::Auto);
+    else if (parser.isSet(full) || (!parser.isSet(simple) && app.settings().start_in_last_mode && last_mode() == "full"))
+        app.new_window(true);
+    else
+        app.new_window(false);
+    return QApplication::exec();
+}

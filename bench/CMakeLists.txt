@@ -1,0 +1,5 @@
+add_executable(zp_bench bench.cpp)
+target_link_libraries(zp_bench PRIVATE zp::core zp::project_options)
+if(EMSCRIPTEN)
+    target_link_options(zp_bench PRIVATE -sPROXY_TO_PTHREAD -sINITIAL_MEMORY=2GB -sMAXIMUM_MEMORY=2GB -sEXIT_RUNTIME=1 -sPTHREAD_POOL_SIZE=20 -sENVIRONMENT=node)
+endif()

@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Satchel contributors
+#include "io/zip/editor.hpp"
+
+#include "io/zip/path_policy.hpp"
+
+#include <format>
+#include <set>
+#include <string>
+#include <utility>
+
+namespace zp
+{
+
+ArchiveEditor::ArchiveEditor(Context& context, PlannerOptions options) :
+    context_(context),
+    planner_(options),
+    options_(options)
+{
+}
+
+VoidResult ArchiveEditor::open(IChunkedStream& input)
+{
+    auto reader = ArchiveReader::open(input);
+    if (!reader)
+        return std::unexpected(reader.error());
+    entries_.clear();
+    warnings_.clear();
+    (*reader)->probe_flac();
+    const auto& meta = (*reader)->metadata();
+    const std::string readme = meta ? meta->readme_name : std::string{};
+    const auto& list = (*reader)->entries();
+    for (std::size_t i = 0; i < list.size(); ++i)
+    {
+        const auto& e = list[i];
+        if (e.encrypted)
+            return fail(Status::UnsupportedMethod, std::format("'{}' is encrypted; archives with encrypted entries cannot be edited", e.name));
+        if (e.kind == ItemKind::File && e.method == EntryMethod::Unsupported)
+            return fail(Status::UnsupportedMethod, std::format("'{}' uses compression method {}; such archives cannot be edited", e.name, e.raw_method));
+        if (e.kind == ItemKind::Symlink)
+        {
+            warnings_.push_back({ WarningKind::SymlinkSkipped, e.name, "symbolic link entries are dropped when the archive is rewritten" });
+            continue;
+        }
+        if (!readme.empty() && e.name == readme)
+            continue;
+        PlanEntry p;
+        if (auto h = (*reader)->flac_header(i); h && h->project)
+        {
+            p.kept_restorable = true;
+            p.kept_restored_name = h->project->original_name;
+            p.channel_count = h->project->channel_count;
+            if (h->project->layout == flac::Layout::MultiMonoMember)
+            {
+                p.group_id = h->project->group_id;
+                p.channel_index = h->project->channel_index;
+            }
+        }
+        p.item.source_path = "archive:" + e.name;
+        p.item.archive_path = e.name;
+        p.item.kind = e.kind;
+        p.item.size = e.uncompressed_size;
+        p.item.mtime_ns = e.mtime * 1'000'000'000;
+        p.item.unix_mode = e.unix_mode.value_or(e.kind == ItemKind::Directory ? 0755u : 0644u);
+        auto n = PathPolicy::normalize(e.name);
+        p.output_name = n ? *n : e.name;
+        p.codec = PlanCodec::Kept;
+        p.kept_index = i;
+        p.snapshot = p.item.snapshot();
+        entries_.push_back(std::move(p));
+    }
+    reader_ = std::move(*reader);
+    return {};
+}
+
+VoidResult ArchiveEditor::add(InputSource& input)
+{
+    auto items = input.enumerate();
+    if (!items)
+        return std::unexpected(items.error());
+    auto added = planner_.make_entries(std::move(*items), warnings_);
+    if (!added)
+        return std::unexpected(added.error());
+    std::set<std::string, std::less<>> folders;
+    for (const auto& e : entries_)
+    {
+        if (e.is_directory())
+            if (auto k = PathPolicy::collision_key(e.output_name))
+                folders.insert(std::move(*k));
+    }
+    for (auto& e : *added)
+    {
+        if (e.is_directory())
+        {
+            auto k = PathPolicy::collision_key(e.output_name);
+            if (k && !folders.insert(std::move(*k)).second)
+                continue;
+        }
+        entries_.push_back(std::move(e));
+    }
+    excluded_.insert(excluded_.end(), input.excluded().begin(), input.excluded().end());
+    return {};
+}
+
+VoidResult ArchiveEditor::remove(std::size_t index)
+{
+    if (index >= entries_.size())
+        return fail(Status::InvalidArgument, "entry index out of range");
+    if (entries_[index].codec == PlanCodec::Generated)
+        return fail(Status::InvalidArgument, "the generated readme cannot be edited");
+    entries_.erase(entries_.begin() + static_cast<std::ptrdiff_t>(index));
+    return {};
+}
+
+VoidResult ArchiveEditor::rename(std::size_t index, const std::string& new_name)
+{
+    if (index >= entries_.size())
+        return fail(Status::InvalidArgument, "entry index out of range");
+    auto n = PathPolicy::normalize(new_name);
+    if (!n)
+        return std::unexpected(n.error());
+    if (auto v = PathPolicy::validate_for_archive(*n); !v)
+        return v;
+    entries_[index].output_name = std::move(*n);
+    return {};
+}
+
+VoidResult ArchiveEditor::replace(std::size_t index, InputItem item)
+{
+    if (index >= entries_.size())
+        return fail(Status::InvalidArgument, "entry index out of range");
+    if (item.kind != ItemKind::File)
+        return fail(Status::InvalidArgument, "an entry can only be replaced by a file");
+    auto& e = entries_[index];
+    e.item = std::move(item);
+    e.codec = PlanCodec::General;
+    e.kept_index.reset();
+    e.snapshot = e.item.snapshot();
+    return {};
+}
+
+VoidResult ArchiveEditor::resolve(const std::vector<Resolution>& resolutions)
+{
+    auto next = ArchivePlanner::replan(plan(), resolutions);
+    if (!next)
+        return std::unexpected(next.error());
+    std::erase_if(next->entries, [](const PlanEntry& e) { return e.codec == PlanCodec::Generated; });
+    entries_ = std::move(next->entries);
+    return {};
+}
+
+ArchivePlan ArchiveEditor::plan() const
+{
+    ArchivePlan p;
+    p.options = options_;
+    p.entries = entries_;
+    p.warnings = warnings_;
+    p.excluded = excluded_;
+    ArchivePlanner::ensure_readme(p);
+    ArchivePlanner::check(p);
+    return p;
+}
+
+BuildResult ArchiveEditor::commit(IChunkedStream& output, ProgressSink& progress, BuilderOptions options)
+{
+    if (!reader_)
+    {
+        BuildResult r;
+        r.status = Status::InvalidArgument;
+        r.message = "no archive is open";
+        return r;
+    }
+    ArchiveBuilder builder(output, context_, std::move(options));
+    builder.set_kept_source(reader_.get());
+    return builder.execute(plan(), progress);
+}
+
+}

@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TZ: UTC
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+      - name: clang-format
+        run: find core tests \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) -print0 | xargs -0 clang-format-23 --dry-run --Werror
+      - name: Binding declarations are up to date
+        run: python3 tools/gen_cdef.py --check
+      - name: SPDX headers
+        run: |
+          missing=$(find core tests bindings tools \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' -o -name '*.in' -o -name '*.py' -o -name '*.php' -o -name '*.mjs' \) ! -name 'package.json.in' -print0 | xargs -0 grep -L 'SPDX-License-Identifier: AGPL-3.0-only' || true)
+          if [ -n "$missing" ]; then echo "Missing SPDX header:"; echo "$missing"; exit 1; fi
+
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc
+            preset: gcc
+            config: Release
+            cc: gcc-14
+            cxx: g++-14
+          - name: clang-asan
+            preset: clang-asan
+            config: Debug
+            cc: clang-23
+            cxx: clang++-23
+    name: linux (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+        if: startsWith(matrix.name, 'clang')
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build unzip zip p7zip-full qt6-base-dev qt6-tools-dev qt6-l10n-tools libgl1-mesa-dev
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DZP_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build/${{ matrix.preset }} --config ${{ matrix.config }}
+      - name: Test
+        run: ctest --test-dir build/${{ matrix.preset }} -C ${{ matrix.config }} --output-on-failure -j 4
+      - name: CLI tests
+        if: matrix.name == 'gcc'
+        run: |
+          pip install pytest
+          SATCHEL_CLI=build/${{ matrix.preset }}/desktop/cli/${{ matrix.config }}/satchel python3 -m pytest -q tests/cli
+      - name: Benchmark (smoke)
+        if: matrix.name == 'gcc'
+        run: build/${{ matrix.preset }}/bench/${{ matrix.config }}/zp_bench --size 32
+
+  tidy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-llvm
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure
+        run: cmake --preset clang -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23
+      - name: Generate sources
+        run: cmake --build build/clang --config Debug --target zp_core satchel_cli
+      - name: clang-tidy
+        run: run-clang-tidy-23 -p build/clang -quiet -warnings-as-errors='*' 'core/src/.*\.cpp' 'desktop/(cli|gui/(app|logic|session))/.*\.cpp'
+
+  bindings:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: ffi
+          ini-values: ffi.enable=1
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build shared library
+        run: |
+          cmake --preset gcc -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DZP_BUILD_TESTS=OFF
+          cmake --build build/gcc --config Release --target zp_shared
+      - name: Python
+        working-directory: bindings/python
+        run: |
+          pip install cffi pytest
+          pytest -q
+      - name: PHP
+        run: php -d ffi.enable=1 bindings/php/tests/run.php
+      - name: Tools
+        run: python -m pytest -q tests/tools
+
+  wasm:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.10
+          actions-cache-folder: emsdk-cache
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure
+        run: emcmake cmake --preset wasm -DZP_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build/wasm --config Release
+      - name: Test
+        run: ctest --test-dir build/wasm -C Release --output-on-failure
+      - name: Browser tests (Chromium)
+        run: |
+          pip install pytest playwright
+          python -m playwright install --with-deps chromium
+          SATCHEL_WEB_DIR=build/wasm/web SATCHEL_BROWSERS=chromium python -m pytest -q tests/web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: satchel-web
+          path: build/wasm/web
+          retention-days: 14
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: brew install ninja
+      - name: Configure
+        run: cmake --preset clang -DZP_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build/clang --config Release
+      - name: Test
+        run: ctest --test-dir build/clang -C Release --output-on-failure -j 4
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.10.3"
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Configure
+        run: cmake --preset msvc -DZP_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build/msvc --config Release
+      - name: Test
+        run: ctest --test-dir build/msvc -C Release --output-on-failure -j 4
+      - name: Diagnose GUI tests
+        if: failure()
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          f=$(find build/msvc -name satchel_gui_tests.exe | head -1)
+          "$f" -o gui.txt,txt || echo "exit $?"; grep -E -A3 "^FAIL|^Totals" gui.txt || tail -c 4000 gui.txt
+      - name: CLI tests
+        shell: bash
+        run: |
+          pip install pytest
+          SATCHEL_CLI=build/msvc/desktop/cli/Release/satchel.exe python -m pytest -q tests/cli
+      - name: Benchmark (smoke)
+        run: build/msvc/bench/Release/zp_bench.exe --size 32
