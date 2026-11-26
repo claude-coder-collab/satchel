@@ -56,6 +56,8 @@ public:
     ~FileStream() override;
 
     Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override;
+    Result<std::size_t> read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len) override;
+    [[nodiscard]] bool concurrent_reads() const override { return true; }
     Result<std::size_t> write(const std::uint8_t* buf, std::size_t len) override;
     [[nodiscard]] bool seekable() const override { return true; }
     VoidResult seek(std::uint64_t pos) override;
@@ -93,6 +95,8 @@ public:
     ~AtomicFileStream() override;
 
     Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override { return file_->read(buf, len); }
+    Result<std::size_t> read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len) override { return file_->read_at(offset, buf, len); }
+    [[nodiscard]] bool concurrent_reads() const override { return true; }
     Result<std::size_t> write(const std::uint8_t* buf, std::size_t len) override { return file_->write(buf, len); }
     [[nodiscard]] bool seekable() const override { return true; }
     VoidResult seek(std::uint64_t pos) override { return file_->seek(pos); }

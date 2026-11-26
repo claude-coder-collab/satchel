@@ -66,7 +66,8 @@ struct CopiedEntry
 };
 
 // Lists an archive from its central directory only. Entry data is read on demand; several
-// entries may be read concurrently (reads of the shared input are serialized).
+// entries may be read concurrently (reads of the shared input are serialized unless it has
+// concurrent_reads()).
 class ArchiveReader
 {
 public:
@@ -102,6 +103,7 @@ private:
     IChunkedStream& input_;
     std::mutex io_mutex_;
     std::vector<ZipEntryInfo> entries_;
+    std::mutex offsets_mutex_;
     std::vector<std::optional<std::uint64_t>> data_offsets_;
     std::mutex probe_mutex_;
     std::vector<std::uint8_t> probed_;

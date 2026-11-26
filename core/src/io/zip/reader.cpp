@@ -421,16 +421,16 @@ Result<std::unique_ptr<ArchiveReader>> ArchiveReader::open(IChunkedStream& input
 
 Result<std::size_t> ArchiveReader::read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len)
 {
+    if (input_.concurrent_reads())
+        return input_.read_at(offset, buf, len);
     std::lock_guard lock(io_mutex_);
-    if (auto r = input_.seek(offset); !r)
-        return std::unexpected(r.error());
-    return input_.read_full({ buf, len });
+    return input_.read_at(offset, buf, len);
 }
 
 Result<std::uint64_t> ArchiveReader::data_offset(std::size_t index)
 {
     {
-        std::lock_guard lock(io_mutex_);
+        std::lock_guard lock(offsets_mutex_);
         if (const auto known = data_offsets_[index])
             return *known;
     }
@@ -448,7 +448,7 @@ Result<std::uint64_t> ArchiveReader::data_offset(std::size_t index)
     const auto offset = e.local_header_offset + header.size() + name_len + extra_len;
     if (const auto size = input_.size(); size && offset + e.compressed_size > *size)
         return fail(Status::CorruptArchive, std::format("data of '{}' extends past the end of the archive", e.name));
-    std::lock_guard lock(io_mutex_);
+    std::lock_guard lock(offsets_mutex_);
     data_offsets_[index] = offset;
     return offset;
 }

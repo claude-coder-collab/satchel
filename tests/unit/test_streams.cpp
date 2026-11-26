@@ -8,6 +8,9 @@
 
 #include <array>
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
 
 using namespace zp;
 
@@ -67,6 +70,28 @@ TEST_CASE("file stream round trip and atomic replace", "[stream]")
     REQUIRE((*f)->seek(4));
     std::array<std::uint8_t, 8> buf{};
     CHECK((*f)->read(buf.data(), buf.size()).value() == 4);
+}
+
+TEST_CASE("positional reads leave the stream position alone", "[stream]")
+{
+    test::TempDir dir;
+    dir.write("data.bin", test::text_bytes("0123456789"));
+    auto f = FileStream::open(dir.path() / "data.bin", FileMode::Read);
+    REQUIRE(f);
+    MemoryStream m(test::text_bytes("0123456789"));
+    SharedBufferStream shared(std::make_shared<const std::vector<std::uint8_t>>(test::text_bytes("0123456789")));
+    for (IChunkedStream* s : { static_cast<IChunkedStream*>(f->get()), static_cast<IChunkedStream*>(&m), static_cast<IChunkedStream*>(&shared) })
+    {
+        CHECK(s->concurrent_reads());
+        REQUIRE(s->seek(2));
+        std::array<std::uint8_t, 4> buf{};
+        CHECK(s->read_at(7, buf.data(), buf.size()).value() == 3);
+        CHECK(std::string(buf.begin(), buf.begin() + 3) == "789");
+        CHECK(s->read_at(10, buf.data(), buf.size()).value() == 0);
+        CHECK(s->tell() == 2);
+        CHECK(s->read(buf.data(), 1).value() == 1);
+        CHECK(buf[0] == '2');
+    }
 }
 
 TEST_CASE("stat_no_follow reports kinds and never follows links", "[stream]")

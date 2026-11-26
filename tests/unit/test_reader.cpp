@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Satchel contributors
 #include "common/bytes.hpp"
+#include "io/file_system.hpp"
 #include "io/zip/reader.hpp"
 #include "test_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstddef>
+#include <format>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
+#include <vector>
 
 using namespace zp;
 
@@ -119,4 +124,46 @@ TEST_CASE("foreign comments do not produce metadata", "[reader]")
     auto r = open_bytes(s);
     CHECK(r->comment() == "made by someone else");
     CHECK_FALSE(r->metadata());
+}
+
+TEST_CASE("entries of a file archive can be read from many threads at once", "[reader]")
+{
+    std::vector<test::RawEntry> raw;
+    std::vector<std::vector<std::uint8_t>> expected;
+    for (int i = 0; i < 16; ++i)
+    {
+        std::vector<std::uint8_t> data(std::size_t{ 70000 } + static_cast<std::size_t>(i));
+        for (std::size_t k = 0; k < data.size(); ++k)
+            data[k] = static_cast<std::uint8_t>((k * 31u + static_cast<std::size_t>(i)) & 0xFFu);
+        raw.push_back({ .name = std::format("f{}.bin", i), .data = data });
+        expected.push_back(std::move(data));
+    }
+    test::TempDir dir;
+    const auto path = dir.write("a.zip", test::craft_zip(raw));
+    auto file = FileStream::open(path, FileMode::Read);
+    REQUIRE(file);
+    auto reader = ArchiveReader::open(**file);
+    REQUIRE(reader);
+    std::vector<std::vector<std::uint8_t>> got(expected.size());
+    {
+        std::vector<std::jthread> threads;
+        for (std::size_t i = 0; i < expected.size(); ++i)
+        {
+            threads.emplace_back([&, i] {
+                auto in = (*reader)->open_entry(i);
+                if (!in)
+                    return;
+                std::vector<std::uint8_t> buf(997);
+                while (true)
+                {
+                    auto n = (*in)->read(buf.data(), buf.size());
+                    if (!n || *n == 0)
+                        break;
+                    got[i].insert(got[i].end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*n));
+                }
+            });
+        }
+    }
+    for (std::size_t i = 0; i < expected.size(); ++i)
+        CHECK(got[i] == expected[i]);
 }

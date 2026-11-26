@@ -108,9 +108,10 @@ require the magic; anything else is a foreign comment (`nullopt`).
 ### 4.3 Reading
 
 - The central directory is listed through minizip-ng (with a 64 KiB read-ahead buffer).
-- Entry data is read by the core: the local header is parsed only to find where data starts, and
-  reads of the shared input are serialized by a mutex so several entries can be decoded in
-  parallel.
+- Entry data is read by the core: the local header is parsed only to find where data starts.
+  Several entries are decoded in parallel. Inputs with positional reads (files: `pread`, or
+  `ReadFile` with an offset; memory buffers) are read concurrently without a lock; other inputs
+  (callback streams, WASM files) are serialized by a mutex.
 - Names: UTF-8 when bit 11 is set and the bytes are valid UTF-8; else the Info-ZIP Unicode Path
   extra field (0x7075) if its CRC matches; else CP437.
 - Modification time: extended timestamp if present, else what minizip-ng derives (NTFS or DOS).
