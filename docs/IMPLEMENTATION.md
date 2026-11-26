@@ -544,7 +544,7 @@ only.
     and swallows the quit while a workspace is still visible or busy, so "keep running" survives
     Quit. Before, closing the last window with "keep running" quit the app and cancelled the job.
   - Temp files need no per-window handling: spill files and atomic-write temp files have random
-    names, and drag-out folders are `satchel-<ms>`.
+    names, and drag-out folders are `satchel-<ms>` (or `.satchel-<uuid>` beside a macOS drop target).
   - Two windows on one archive are prevented only for Full mode (`App::window_showing`). A
     Simple-mode extract of an archive another window is rewriting is not guarded: on POSIX the
     reader keeps the old file, on Windows the rewrite fails with a sharing error and the session
@@ -582,7 +582,10 @@ only.
     `rename_requested`; the model never changes itself.
   - Extraction: `ExtractDialog` options, then a pre-flight showing issues and existing files.
   - Verify writes nothing and fills the Verified column.
-  - Dragging out extracts to a temporary folder first. The Name column is resizable; column
+  - Dragging out: on macOS `mac_drag.mm` starts the drag itself with `NSFilePromiseProvider`s
+    (Qt has no file promises) and `export_job` extracts each dropped item; the view treats
+    drag events during that session as its own (moves). Elsewhere `EntriesMime` extracts into a
+    temporary folder when the target asks for the URLs. The Name column is resizable; column
     layout is saved under `browser/layout`.
   - `Session::commit` returns the files the build left out because they changed after planning
     (`zp_editor_commit` returns `ZP_SOURCE_CHANGED` with a complete output and a build
@@ -821,7 +824,7 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   `~/.config/Satchel/Satchel.conf` on Linux; header layout, last mode, options);
   WinSparkle's own key `HKCU\Software\<ZP_VENDOR>\Satchel\WinSparkle` (the path comes from WinSparkle's
   documentation and the exe's version resource, not yet seen on a real Windows machine); and temp
-  leftovers `satchel-<ms>` (entries extracted for opening or dragging, never deleted by the app) and
+  leftovers `satchel-<ms>` (entries extracted for opening, or for dragging where file promises are unavailable) and
   `satchel-spill-*.flac` (spill files after a crash). It writes nothing to AppData or elsewhere. The
   dialog offers "Delete Settings and Temporary Files", "Delete Settings Only" or Cancel, then quits; the
   deletion runs in `PendingCleanup`'s destructor (declared before `App` in `main`) so nothing rewrites

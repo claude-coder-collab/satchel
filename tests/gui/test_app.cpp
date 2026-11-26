@@ -48,6 +48,7 @@
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <optional>
 #include <thread>
 #include <utility>
 
@@ -765,6 +766,65 @@ private slots:
         QCOMPARE(verified.entry_status.size(), 8);
     }
 
+    void dragged_items_extract_only_where_dropped()
+    {
+        QDir root(dir_.filePath("drag-out"));
+        QVERIFY(root.mkpath("src/docs"));
+        QVERIFY(write(root.filePath("src/a.txt"), "a"));
+        QVERIFY(write(root.filePath("src/docs/b.txt"), "b"));
+        const auto archive = root.filePath("x.zip");
+        {
+            JobContext jc;
+            jc.context = context.get();
+            const auto plan = make_plan(context.get(), { root.filePath("src") }, satchel_gui::Settings{});
+            QCOMPARE(compress_job(jc, plan->get(), archive, satchel_gui::Settings{}).status, ZP_OK);
+        }
+        App app;
+        app.show_archive(archive);
+        auto* w = app.active()->full();
+        QTRY_VERIFY_WITH_TIMEOUT(!w->session().busy() && w->session().snapshot(), 20000);
+        auto* view = w->findChild<QTreeView*>();
+        view->expandAll();
+        const auto select = [&](const QString& path) {
+            std::function<QModelIndex(const QModelIndex&)> walk = [&](const QModelIndex& parent) -> QModelIndex {
+                for (int r = 0; r < view->model()->rowCount(parent); ++r)
+                {
+                    const auto idx = view->model()->index(r, 0, parent);
+                    if (idx.data(ArchiveModel::PathRole).toString() == path)
+                        return idx;
+                    if (auto found = walk(idx); found.isValid())
+                        return found;
+                }
+                return {};
+            };
+            view->selectionModel()->setCurrentIndex(walk({}), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        };
+        QVERIFY(root.mkpath("out"));
+        const auto export_one = [&](const QString& row, const QString& expected_name) {
+            select(row);
+            const auto items = w->drag_items();
+            QCOMPARE(items.size(), std::size_t{ 1 });
+            QCOMPARE(items.front().name, expected_name);
+            std::optional<QString> error;
+            w->export_dragged(items.front(), root.filePath("out/" + expected_name), [&](const QString& e) { error = e; });
+            QTRY_VERIFY_WITH_TIMEOUT(error.has_value(), 20000);
+            QCOMPARE(*error, QString());
+        };
+        export_one("src/docs", "docs");
+        export_one("src/docs/b.txt", "b.txt");
+        QCOMPARE(QDir(root.filePath("out")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), (QStringList{ "b.txt", "docs" }));
+        QCOMPARE(QDir(root.filePath("out/docs")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), QStringList{ "b.txt" });
+
+        JobContext jc;
+        jc.context = context.get();
+        const auto taken = export_job(jc, archive, root.filePath("out/b.txt"), satchel_gui::Settings{}, w->drag_items().front().entries, "src/docs");
+        QCOMPARE(taken.status, ZP_IO_ERROR);
+        jc.progress = [](std::uint64_t, std::uint64_t) { return false; };
+        const auto cancelled = export_job(jc, archive, root.filePath("out/again"), satchel_gui::Settings{}, w->drag_items().front().entries, "src/docs");
+        QCOMPARE(cancelled.status, ZP_CANCELLED);
+        QCOMPARE(QDir(root.filePath("out")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), (QStringList{ "b.txt", "docs" }));
+    }
+
     void verified_column_is_hidden_by_default()
     {
         QSettings().remove("browser/layout");
@@ -834,7 +894,7 @@ private slots:
         QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs/b.txt"));
 
         // Nothing of a new archive is on disk, so nothing can be dragged out of the window.
-        QVERIFY(w->drag_names().isEmpty());
+        QVERIFY(w->drag_items().empty());
 
         // A folder cannot move into itself; a file moves into the folder it is dropped on.
         select("src/docs");

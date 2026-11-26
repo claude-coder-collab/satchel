@@ -245,6 +245,14 @@
             <numerusform> · %n problems</numerusform>
         </translation>
     </message>
+    <message>
+        <source>%1 already exists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The selection did not extract to a single item</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message numerus="yes">
         <source>All %n file(s) intact</source>
         <translation>
@@ -516,7 +524,15 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>The window was closed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Speed and time left</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stop</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -837,6 +853,18 @@
     </message>
     <message>
         <source>Verifying %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No archive is open</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Extracting…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

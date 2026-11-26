@@ -3,6 +3,7 @@
 #include "main_window.hpp"
 
 #include "labels.hpp"
+#include "mac_drag.hpp"
 #include "mac_uninstall.hpp"
 #include "rate_label.hpp"
 #include "user_data.hpp"
@@ -24,6 +25,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QDrag>
+#include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -39,6 +41,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPainter>
+#include <QPointer>
 #include <QProgressBar>
 #include <QProgressDialog>
 #include <QPushButton>
@@ -50,6 +53,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QTextBrowser>
+#include <QToolButton>
 #include <QTreeView>
 #include <QUrl>
 
@@ -166,9 +170,9 @@ QStringList local_paths(const QMimeData* mime)
 
 constexpr auto entries_mime = "application/x-satchel-entries";
 
-// A drag of archive entries. Inside the browser it moves them. For other targets it offers the
-// files they will become in a temporary folder; prepare() extracts them there, which happens when
-// the drag leaves the browser or a target asks for the data, whichever comes first.
+// A drag of archive entries where file promises are unavailable. Inside the browser it moves
+// them. For other targets it offers the files they will become in a temporary folder; prepare()
+// extracts them there once a target asks for the data.
 class EntriesMime : public QMimeData
 {
 public:
@@ -232,6 +236,12 @@ public:
     std::function<QStringList()> drag_names;
     // Extracts the selection (as at drag start) into a folder.
     std::function<std::function<void(const QString&)>()> drag_extractor;
+    // Starts a native file-promise drag of the selection; false if unavailable. The callback runs
+    // when that drag ends.
+    std::function<bool(const QPixmap&, std::function<void()>)> promise_drag;
+
+    // A file-promise drag started here is in progress.
+    [[nodiscard]] bool dragging_out() const { return promising_; }
     std::function<void(const QStringList&, const QModelIndex&)> dropped;
     std::function<bool(const QModelIndex&, bool apply)> moved;
     std::function<void()> extract_selected;
@@ -243,6 +253,17 @@ protected:
     {
         if (!selectionModel()->hasSelection())
             return;
+        if (promise_drag)
+        {
+            promising_ = true;
+            const QPointer<ArchiveView> self(this);
+            if (promise_drag(drag_pixmap(), [self] {
+                    if (self)
+                        self->promising_ = false;
+                }))
+                return;
+            promising_ = false;
+        }
         const auto names = drag_names ? drag_names() : QStringList();
         QList<QUrl> urls;
         std::function<void()> extract;
@@ -253,13 +274,10 @@ protected:
                 urls << QUrl::fromLocalFile(dir + '/' + n);
             extract = [dir, run = drag_extractor()] { run(dir); };
         }
-        auto* mime = new EntriesMime(urls, extract);
-        dragging_ = mime;
         auto* drag = new QDrag(this);
-        drag->setMimeData(mime);
+        drag->setMimeData(new EntriesMime(urls, extract));
         drag->setPixmap(drag_pixmap());
         drag->exec(Qt::CopyAction | Qt::MoveAction, Qt::CopyAction);
-        dragging_ = nullptr;
     }
 
     void dragEnterEvent(QDragEnterEvent* e) override
@@ -288,13 +306,6 @@ protected:
             e->acceptProposedAction();
         else
             e->ignore();
-    }
-
-    void dragLeaveEvent(QDragLeaveEvent* e) override
-    {
-        QTreeView::dragLeaveEvent(e);
-        if (dragging_)
-            dragging_->prepare();
     }
 
     void dropEvent(QDropEvent* e) override
@@ -396,9 +407,9 @@ private:
         return pm;
     }
 
-    [[nodiscard]] bool internal(const QDropEvent* e) const { return e->source() == this && e->mimeData()->hasFormat(entries_mime); }
+    [[nodiscard]] bool internal(const QDropEvent* e) const { return promising_ || (e->source() == this && e->mimeData()->hasFormat(entries_mime)); }
 
-    EntriesMime* dragging_ = nullptr;
+    bool promising_ = false;
 };
 
 MainWindow::MainWindow(Workspace& workspace) :
@@ -588,10 +599,35 @@ void MainWindow::build_ui()
     view_->header()->setStretchLastSection(false);
     view_->header()->setSectionResizeMode(QHeaderView::Interactive);
     view_->header()->setContextMenuPolicy(Qt::CustomContextMenu);
-    view_->drag_names = [this] { return drag_names(); };
+    view_->drag_names = [this] {
+        QStringList names;
+        for (const auto& item : drag_items())
+            names << item.name;
+        return names;
+    };
     view_->drag_extractor = [this]() -> std::function<void(const QString&)> {
-        auto entries = base_ids(selected_positions());
-        return [this, entries = std::move(entries), base = selection_base()](const QString& dir) { extract_to(entries, base, dir); };
+        return [self = QPointer<MainWindow>(this), items = drag_items()](const QString& dir) {
+            if (self)
+                self->extract_dragged(items, dir);
+        };
+    };
+    view_->promise_drag = [this](const QPixmap& image, std::function<void()> ended) {
+        const auto items = drag_items();
+        if (items.empty())
+            return false;
+        QList<PromisedItem> promised;
+        for (const auto& item : items)
+        {
+            promised.push_back({ .name = item.name,
+                .folder = item.folder,
+                .write = [self = QPointer<MainWindow>(this), item](const QString& target, std::function<void(const QString&)> done) {
+                    if (!self)
+                        done(tr("The window was closed"));
+                    else
+                        self->export_dragged(item, target, std::move(done));
+                } });
+        }
+        return start_promise_drag(view_, std::move(promised), image, std::move(ended));
     };
     view_->extract_selected = [this] { extract(true); };
     view_->moved = [this](const QModelIndex& index, bool apply) { return move_to(filter_->mapToSource(index), apply); };
@@ -677,8 +713,19 @@ void MainWindow::build_ui()
     job_rate_ = new RateLabel(this);
     job_rate_->setAccessibleName(tr("Speed and time left"));
     job_rate_->hide();
+    job_cancel_ = new QToolButton(this);
+    job_cancel_->setText(QStringLiteral("✕"));
+    job_cancel_->setToolTip(tr("Stop"));
+    job_cancel_->setAccessibleName(tr("Stop"));
+    job_cancel_->setAutoRaise(true);
+    job_cancel_->hide();
+    connect(job_cancel_, &QToolButton::clicked, this, [this] {
+        if (running_job_ != 0)
+            ws_.jobs().cancel(running_job_);
+    });
     statusBar()->addPermanentWidget(job_rate_);
     statusBar()->addPermanentWidget(job_bar_);
+    statusBar()->addPermanentWidget(job_cancel_);
 }
 
 satchel_gui::SessionOptions MainWindow::session_options() const
@@ -1747,11 +1794,12 @@ void MainWindow::verify()
     mine_ << verify_job_;
 }
 
-QStringList MainWindow::drag_names() const
+std::vector<MainWindow::DragItem> MainWindow::drag_items() const
 {
-    if (archive_.isEmpty() || base_ids(selected_positions()).empty())
+    if (archive_.isEmpty())
         return {};
     const bool restore = ws_.app().settings().restore_audio;
+    std::vector<DragItem> items;
     QStringList names;
     for (const auto& proxy : view_->selectionModel()->selectedRows())
     {
@@ -1763,39 +1811,95 @@ QStringList MainWindow::drag_names() const
         const auto idx = filter_->mapToSource(proxy);
         if (idx.data(ArchiveModel::StateRole).toInt() == static_cast<int>(RowState::Added))
             continue;
-        auto name = idx.data(ArchiveModel::PathRole).toString().section('/', -1);
+        std::vector<std::size_t> positions;
+        for (const auto& v : proxy.data(ArchiveModel::EntriesRole).toList())
+            positions.push_back(static_cast<std::size_t>(v.toULongLong()));
+        auto entries = base_ids(positions);
+        if (entries.empty())
+            continue;
+        const auto path = idx.data(ArchiveModel::PathRole).toString();
+        const bool folder = idx.data(ArchiveModel::FolderRole).toBool();
+        auto name = path.section('/', -1);
         const auto restores = idx.siblingAtColumn(ArchiveModel::RestoresTo).data(Qt::DisplayRole).toString();
-        if (!idx.data(ArchiveModel::FolderRole).toBool() && restore && !restores.isEmpty())
+        if (!folder && restore && !restores.isEmpty())
             name = restores.section('/', -1);
-        if (!names.contains(name))
-            names << name;
+        if (names.contains(name))
+            continue;
+        names << name;
+        items.push_back({ .name = name, .folder = folder, .entries = std::move(entries), .base = parent_of(path) });
     }
-    return names;
+    return items;
 }
 
-void MainWindow::extract_to(const std::vector<std::size_t>& entries, const QString& base_folder, const QString& dir)
+void MainWindow::export_dragged(const DragItem& item, const QString& target, std::function<void(const QString&)> done)
 {
-    if (archive_.isEmpty() || entries.empty() || extracting_)
+    if (archive_.isEmpty())
+    {
+        done(tr("No archive is open"));
+        return;
+    }
+    auto& jobs = ws_.jobs();
+    const int id = jobs.enqueue(tr("Extracting %1").arg(item.name), [archive = archive_, target, settings = ws_.app().settings(), item](JobContext& jc) {
+        return export_job(jc, archive, target, settings, item.entries, item.base);
+    });
+    mine_ << id;
+    auto connection = std::make_shared<QMetaObject::Connection>();
+    *connection = connect(&jobs, &JobQueue::finished, &jobs, [id, connection, done = std::move(done), self = QPointer<MainWindow>(this)](int finished, const QString& title, const JobOutcome& outcome) {
+        if (finished != id)
+            return;
+        disconnect(*connection);
+        const auto error = outcome.status == ZP_OK ? QString() : outcome.message.isEmpty() ? QString::fromUtf8(zp_status_name(outcome.status))
+                                                                                           : outcome.message;
+        done(error);
+        if (self && outcome.status != ZP_OK && outcome.status != ZP_CANCELLED)
+            QMessageBox::warning(self, title, error);
+    });
+}
+
+void MainWindow::extract_dragged(const std::vector<DragItem>& items, const QString& dir)
+{
+    if (archive_.isEmpty() || items.empty() || extracting_)
         return;
     extracting_ = true;
-    QApplication::setOverrideCursor(Qt::WaitCursor);
     QDir().mkpath(dir);
-    QString error;
-    try
-    {
-        JobContext jc;
-        jc.context = ws_.jobs().context();
-        const auto outcome = extract_job(jc, archive_, dir, ws_.app().settings(), entries, true, base_folder);
-        if (outcome.status != ZP_OK)
-            error = outcome.message;
-    } catch (const zpp::Error& e)
-    {
-        error = QString::fromUtf8(e.what());
-    }
-    QApplication::restoreOverrideCursor();
+    connect(qApp, &QCoreApplication::aboutToQuit, qApp, [dir] { QDir(dir).removeRecursively(); });
+    auto& jobs = ws_.jobs();
+    const int id = jobs.enqueue(tr("Extracting %1").arg(QFileInfo(archive_).fileName()), [archive = archive_, dir, settings = ws_.app().settings(), items](JobContext& jc) {
+        JobOutcome out;
+        for (const auto& item : items)
+        {
+            out = export_job(jc, archive, dir + '/' + item.name, settings, item.entries, item.base);
+            if (out.status != ZP_OK)
+                return out;
+        }
+        out.output = dir;
+        return out;
+    });
+    QProgressDialog progress(tr("Extracting…"), tr("Cancel"), 0, 1000, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(300);
+    QEventLoop loop;
+    JobOutcome result;
+    const auto on_progress = connect(&jobs, &JobQueue::progress, &progress, [id, &progress](int job, quint64 done, quint64 total) {
+        if (job == id && total > 0)
+            progress.setValue(static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)));
+    });
+    const auto on_finished = connect(&jobs, &JobQueue::finished, &loop, [id, &result, &loop](int job, const QString&, const JobOutcome& outcome) {
+        if (job != id)
+            return;
+        result = outcome;
+        loop.quit();
+    });
+    connect(&progress, &QProgressDialog::canceled, &loop, [&jobs, id] { jobs.cancel(id); });
+    loop.exec();
+    disconnect(on_progress);
+    disconnect(on_finished);
     extracting_ = false;
-    if (!error.isEmpty())
+    if (result.status != ZP_OK && result.status != ZP_CANCELLED)
+    {
+        const auto error = result.message;
         QMetaObject::invokeMethod(this, [this, error] { QMessageBox::warning(this, tr("Cannot extract"), error); }, Qt::QueuedConnection);
+    }
 }
 
 bool MainWindow::move_to(const QModelIndex& target, bool apply)
@@ -1820,7 +1924,7 @@ bool MainWindow::move_to(const QModelIndex& target, bool apply)
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* e)
 {
-    if (e->mimeData()->hasUrls() && e->source() != view_)
+    if (e->mimeData()->hasUrls() && e->source() != view_ && !view_->dragging_out())
         e->acceptProposedAction();
 }
 
@@ -1867,8 +1971,10 @@ void MainWindow::on_started(int id, const QString& title)
     if (!mine_.contains(id) || id == commit_job_)
         return;
     statusBar()->showMessage(title);
+    running_job_ = id;
     job_bar_->setValue(0);
     job_bar_->show();
+    job_cancel_->show();
     job_rate_->reset();
     job_rate_->show();
 }
@@ -1892,6 +1998,9 @@ void MainWindow::on_finished(int id, const QString& title, const JobOutcome& out
     {
         job_bar_->hide();
         job_rate_->hide();
+        job_cancel_->hide();
+        if (running_job_ == id)
+            running_job_ = 0;
         statusBar()->showMessage(ok ? QString("%1 — %2").arg(title, outcome.summary) : QString(), 10000);
     }
     if (!outcome.entry_status.isEmpty() && outcome.output == archive_)

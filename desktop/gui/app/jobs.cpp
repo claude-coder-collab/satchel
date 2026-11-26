@@ -7,10 +7,12 @@
 #include "labels.hpp"
 
 #include <QCoreApplication>
+#include <QUuid>
 
 #include <condition_variable>
 #include <filesystem>
 #include <set>
+#include <utility>
 
 namespace
 {
@@ -291,6 +293,48 @@ JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& de
     out.summary = counted(QT_TRANSLATE_N_NOOP("Jobs", "%n file(s) extracted"), written);
     if (!out.details.isEmpty())
         out.summary += counted(QT_TRANSLATE_N_NOOP("Jobs", " · %n problem(s)"), static_cast<std::size_t>(out.details.size()));
+    return out;
+}
+
+JobOutcome export_job(JobContext& jc, const QString& archive, const QString& target, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, const QString& base_folder)
+{
+    const auto to = fs_path(target);
+    std::error_code ec;
+    if (std::filesystem::exists(std::filesystem::symlink_status(to, ec)))
+        return { .status = ZP_IO_ERROR, .message = QCoreApplication::translate("Jobs", "%1 already exists").arg(target) };
+    const auto staging = to.parent_path() / fs_path(QStringLiteral(".satchel-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)));
+    struct Cleanup
+    {
+        std::filesystem::path dir;
+        explicit Cleanup(std::filesystem::path d) :
+            dir(std::move(d))
+        {
+        }
+        Cleanup(const Cleanup&) = delete;
+        Cleanup& operator=(const Cleanup&) = delete;
+        Cleanup(Cleanup&&) = delete;
+        Cleanup& operator=(Cleanup&&) = delete;
+        ~Cleanup()
+        {
+            std::error_code ignored;
+            std::filesystem::remove_all(dir, ignored);
+        }
+    } const cleanup{ staging };
+    std::filesystem::create_directories(staging, ec);
+    if (ec)
+        return { .status = ZP_IO_ERROR, .message = QString::fromStdString(ec.message()) };
+    auto out = extract_job(jc, archive, QString::fromStdU16String(staging.u16string()), settings, selection, true, base_folder);
+    out.output = target;
+    if (out.status != ZP_OK)
+        return out;
+    std::vector<std::filesystem::path> made;
+    for (const auto& e : std::filesystem::directory_iterator(staging, ec))
+        made.push_back(e.path());
+    if (made.size() != 1)
+        return { .status = ZP_INTERNAL, .message = QCoreApplication::translate("Jobs", "The selection did not extract to a single item"), .output = target };
+    std::filesystem::rename(made.front(), to, ec);
+    if (ec)
+        return { .status = ZP_IO_ERROR, .message = QString::fromStdString(ec.message()), .output = target };
     return out;
 }
 

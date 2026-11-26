@@ -24,6 +24,7 @@ class QLineEdit;
 class QProgressBar;
 class QStackedWidget;
 class QTextBrowser;
+class QToolButton;
 class RateLabel;
 class SessionBar;
 class Workspace;
@@ -44,9 +45,21 @@ public:
     void add_paths(const QStringList& paths, const QString& folder = {});
     // Create / Apply: returns the job id, or 0 if nothing can be written now.
     int apply_changes();
-    // Drag-out: the top-level names the selected on-disk entries extract to; none if nothing on
-    // disk is selected (a new archive), so the drag offers no files.
-    [[nodiscard]] QStringList drag_names() const;
+    // One top-level item dragged out of the window: the selected row, extracted relative to its
+    // own folder.
+    struct DragItem
+    {
+        QString name; // what it extracts to
+        bool folder = false;
+        std::vector<std::size_t> entries;
+        QString base;
+    };
+    // Drag-out: the selected on-disk rows; none if nothing on disk is selected (a new archive),
+    // so the drag offers no files.
+    [[nodiscard]] std::vector<DragItem> drag_items() const;
+    // Extracts a dragged item to `target` as a background job, then calls `done` with an error
+    // message (empty on success). The archive and settings are those of now.
+    void export_dragged(const DragItem& item, const QString& target, std::function<void(const QString&)> done);
     // Moves the selection into the folder of `target` (a source-model index) (a folder row: into it; an entry: beside
     // it; invalid: the top level). Returns whether that is possible; applies it if `apply`.
     bool move_to(const QModelIndex& target, bool apply);
@@ -117,8 +130,9 @@ private:
     // Renames that move the selected entries and folders into `dest`.
     [[nodiscard]] satchel_gui::Change move_change(const QString& dest) const;
     [[nodiscard]] QStringList folders_in_session() const;
-    // Drag-out: the extraction of the selected on-disk entries (no event processing while it runs).
-    void extract_to(const std::vector<std::size_t>& entries, const QString& base_folder, const QString& dir);
+    // Drag-out where the platform has no file promises: extracts into `dir` when the target asks
+    // for the files, with a progress dialog that can cancel.
+    void extract_dragged(const std::vector<DragItem>& items, const QString& dir);
 
     void on_started(int id, const QString& title);
     void on_progress(int id, quint64 done, quint64 total);
@@ -141,6 +155,7 @@ private:
     int commit_job_ = 0;
     int verify_job_ = 0;
     bool extracting_ = false;
+    int running_job_ = 0;
     std::function<void()> after_commit_;
     QString edit_after_update_;
     bool filtering_ = false;
@@ -157,6 +172,7 @@ private:
     QCheckBox* restorable_only_ = nullptr;
     QLabel* summary_ = nullptr;
     QProgressBar* job_bar_ = nullptr;
+    QToolButton* job_cancel_ = nullptr;
     RateLabel* job_rate_ = nullptr;
     QHash<int, QString> verification_; // by archive entry
     QHash<int, QString> verified_at_;
