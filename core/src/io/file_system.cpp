@@ -212,7 +212,7 @@ void FileStream::close()
 #endif
 }
 
-Result<std::size_t> FileStream::read(std::uint8_t* buf, std::size_t len)
+Result<std::size_t> FileStream::read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len)
 {
     std::size_t total = 0;
     while (total < len)
@@ -221,7 +221,7 @@ Result<std::size_t> FileStream::read(std::uint8_t* buf, std::size_t len)
         const DWORD want = static_cast<DWORD>(std::min<std::size_t>(len - total, 1u << 30));
         DWORD got = 0;
         OVERLAPPED ov{};
-        const auto at = pos_ + total;
+        const auto at = offset + total;
         ov.Offset = static_cast<DWORD>(at & 0xFFFFFFFFu);
         ov.OffsetHigh = static_cast<DWORD>(at >> 32);
         if (!ReadFile(handle_, buf + total, want, &got, &ov))
@@ -232,7 +232,7 @@ Result<std::size_t> FileStream::read(std::uint8_t* buf, std::size_t len)
         }
 #else
         const auto want = std::min<std::size_t>(len - total, 1u << 30);
-        const auto got = ::pread(fd_, buf + total, want, static_cast<off_t>(pos_ + total));
+        const auto got = ::pread(fd_, buf + total, want, static_cast<off_t>(offset + total));
         if (got < 0)
         {
             if (errno == EINTR)
@@ -244,8 +244,15 @@ Result<std::size_t> FileStream::read(std::uint8_t* buf, std::size_t len)
             break;
         total += static_cast<std::size_t>(got);
     }
-    pos_ += total;
     return total;
+}
+
+Result<std::size_t> FileStream::read(std::uint8_t* buf, std::size_t len)
+{
+    auto n = read_at(pos_, buf, len);
+    if (n)
+        pos_ += *n;
+    return n;
 }
 
 Result<std::size_t> FileStream::write(const std::uint8_t* buf, std::size_t len)

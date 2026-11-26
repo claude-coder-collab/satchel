@@ -27,6 +27,11 @@ public:
 
     // Returns fewer bytes than requested only at end of stream.
     virtual Result<std::size_t> read(std::uint8_t* buf, std::size_t len);
+    // Reads up to len bytes at offset; fewer only at end of stream. The default seeks and reads,
+    // moving the position; streams with concurrent_reads() leave it alone.
+    virtual Result<std::size_t> read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len);
+    // True when read_at() may be called from several threads at once (while nothing writes).
+    [[nodiscard]] virtual bool concurrent_reads() const { return false; }
     // Writes everything or fails.
     virtual Result<std::size_t> write(const std::uint8_t* buf, std::size_t len);
     [[nodiscard]] virtual bool seekable() const { return false; }
@@ -52,6 +57,8 @@ public:
 
     Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override;
     Result<std::size_t> write(const std::uint8_t* buf, std::size_t len) override;
+    Result<std::size_t> read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len) override;
+    [[nodiscard]] bool concurrent_reads() const override { return true; }
     [[nodiscard]] bool seekable() const override { return true; }
     VoidResult seek(std::uint64_t pos) override;
     [[nodiscard]] std::uint64_t tell() const override { return pos_; }
@@ -80,6 +87,8 @@ public:
     }
 
     Result<std::size_t> read(std::uint8_t* buf, std::size_t len) override;
+    Result<std::size_t> read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len) override;
+    [[nodiscard]] bool concurrent_reads() const override { return true; }
     [[nodiscard]] bool seekable() const override { return true; }
     VoidResult seek(std::uint64_t pos) override;
     [[nodiscard]] std::uint64_t tell() const override { return pos_; }
