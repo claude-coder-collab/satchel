@@ -33,7 +33,9 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Drops during a running job queue up; Cancel mid-job leaves no partial output
 - [ ] Result card: savings, warning count, Reveal, Open in Full mode; error card with Retry
 - [ ] Notification when a job finishes while the window is not focused
-- [ ] Collision sheet during compress, defaulting to rename with suffix
+- [ ] Name sheet during compress: case-only collision, a file `a` next to a folder `A/`, and an unstorable name each listed with its reason; Rename and Skip both work; a new name that still collides is refused and the sheet reopens
+- [ ] Compressing a large folder (100,000+ files or a slow disk) shows "Scanning files…" with a moving bar, then the share of files read; Cancel during the scan stops it and creates nothing
+- [ ] Several folders with the same parent: the zip goes next to them (named after the parent), not inside the first folder
 - [ ] Drop on the Dock/taskbar icon, on the exe/shortcut, and via `.desktop` `%F`
 - [ ] Mode persists across restart; first launch opens Simple mode
 
@@ -60,6 +62,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Close the window / open another archive / New with staged changes: Apply / Discard / Cancel
 - [ ] Apply with a failure midway (disk full, cancel) keeps the original intact and the changes staged
 - [ ] Cancel a new archive (with and without added files) returns to the start page; Cancel in the action bar while writing, also while the write waits behind another job
+- [ ] Apply Changes to a large archive with a rename only: the progress bar moves steadily while unchanged entries are copied, and Cancel stops within a second, leaving the archive unchanged and no temp file
 - [ ] Extract / Verify with staged changes act on the archive on disk; double-click does nothing
 - [ ] Archive open in the app is modified or deleted by another program
 - [ ] Search and filters expand folders with matches; clearing restores the tree
@@ -94,7 +97,8 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Pre-flight warnings: unsafe paths, symlink entries, incomplete groups, case-only duplicates on a case-insensitive disk
 - [ ] Hash mismatch deletes partial output and names the file
 - [ ] Destination without write permission, on a full disk, with a path too long for Windows
-- [ ] Cancel mid-extract leaves no partial files
+- [ ] Cancel mid-extract leaves no partial files, including straight after starting an archive with thousands of FLAC files (busy bar while the headers are read)
+- [ ] FLAC entries, their folders and multi-mono groups show the saving against the original WAV/AIFF size, not 0%
 - [ ] Extract with plain `unzip`, 7-Zip, Archive Utility and Explorer: FLAC entries present, readme explains how to restore
 - [ ] `flac -d --keep-foreign-metadata` restores single-file layouts
 
@@ -123,6 +127,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] File association for `.zip` is off by default; enabling and disabling it works and reverts cleanly
 - [ ] Uninstall removes services, associations and shell extensions
 - [ ] macOS: Satchel > Uninstall Satchel… appears once with both modes opened; it quits, then the app is in the Trash and (Delete Settings) the preferences are gone and stay gone; running from the dmg it explains instead
+- [ ] macOS, as a standard (non-admin) user with Satchel in /Applications: both the menu command and `satchel uninstall` show the system password prompt for the app; entering an admin's password moves it to the user's Trash (and it can be emptied); Cancel in the prompt reports the app as not removed
 
 ## 8. Previewers
 

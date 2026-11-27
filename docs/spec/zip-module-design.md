@@ -318,7 +318,7 @@ zp_context_t* zp_context_create(int threads, uint64_t memory_budget);   /* 0 = d
 void          zp_context_free(zp_context_t*);
 
 /* planning */
-zp_plan_t*  zp_plan_create(zp_context_t*, zp_input_t* input, const zp_plan_options_t* opts);
+zp_plan_t*  zp_plan_create(zp_context_t*, zp_input_t* input, const zp_plan_options_t* opts);  /* opts->progress: (0, 0) while listing, then (files read, files); non-zero cancels */
 size_t      zp_plan_entry_count(const zp_plan_t*);
 int         zp_plan_get_entry(const zp_plan_t*, size_t i, zp_plan_entry_t* out);
 size_t      zp_plan_conflict_count(const zp_plan_t*);
@@ -339,7 +339,7 @@ zp_reader_t* zp_reader_open(zp_context_t*, zp_stream_t* input);
 size_t       zp_reader_entry_count(const zp_reader_t*);
 int          zp_reader_get_entry(const zp_reader_t*, size_t i, zp_entry_info_t* out);
 int          zp_reader_get_app_version(const zp_reader_t*, char* buf, size_t len);
-zp_xplan_t*  zp_extract_plan(zp_reader_t*, const size_t* sel, size_t n, zp_sink_t*, const zp_extract_options_t*);
+zp_xplan_t*  zp_extract_plan(zp_reader_t*, const size_t* sel, size_t n, zp_sink_t*, const zp_extract_options_t*);  /* options->progress: polled (0, 0) while FLAC headers are read in parallel; non-zero cancels */
 int          zp_extract(zp_xplan_t*, zp_progress_fn, void* user);
 void         zp_xplan_free(zp_xplan_t*);
 void         zp_reader_free(zp_reader_t*);

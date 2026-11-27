@@ -208,7 +208,14 @@ require the magic; anything else is a foreign comment (`nullopt`).
 - `ArchiveEditor` indices refer to the current `plan()` order (initially archive order, then
   additions appended).
 - Kept entries are copied raw with their CRC, sizes, method, mtime and mode; names are
-  re-normalized (third-party names are decoded and re-stored as UTF-8 with bit 11).
+  re-normalized (third-party names are decoded and re-stored as UTF-8 with bit 11). The copy
+  reports progress after every 1 MiB chunk (the entry's uncompressed size scaled by the share of
+  raw bytes copied) and stops there when cancelled.
+- Extraction planning reads the FLAC headers of the selected `.flac` entries on the worker pool
+  in batches of 16 (and of every `.flac` entry once a multi-mono member is selected, grouped by
+  group ID in one pass), polling the progress callback with (0, 0) every 100 ms for cancellation.
+- Planning polls its progress callback with (0, 0) before listing the inputs, then with
+  (files read, files) at most every 50 ms while it reads file headers.
 - Symlink entries in the source archive are dropped with a `SYMLINK_SKIPPED` warning.
 - Archives containing encrypted entries or entries with methods other than store/deflate cannot be
   edited (`UNSUPPORTED_METHOD`): minizip-ng only writes raw entries for methods it was built with.
