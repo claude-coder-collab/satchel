@@ -46,6 +46,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <functional>
@@ -64,6 +65,28 @@ constexpr qint64 limit_ms = 3000;
 #else
 constexpr qint64 limit_ms = 3000;
 #endif
+
+QByteArray test_wav(int frames, std::uint16_t channels = 2)
+{
+    QByteArray pcm;
+    for (int i = 0; i < frames; ++i)
+    {
+        const auto v = static_cast<std::int16_t>(8000.0 * std::sin(i / 20.0));
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            pcm.append(static_cast<char>(v & 0xFF));
+            pcm.append(static_cast<char>((v >> 8) & 0xFF));
+        }
+    }
+    const auto le = [](std::uint32_t x, int bytes) {
+        QByteArray b;
+        for (int k = 0; k < bytes; ++k)
+            b.append(static_cast<char>((x >> (8 * k)) & 0xFF));
+        return b;
+    };
+    const auto size = static_cast<std::uint32_t>(pcm.size());
+    return "RIFF" + le(36 + size, 4) + "WAVEfmt " + le(16, 4) + le(1, 2) + le(channels, 2) + le(48000, 4) + le(48000u * 2u * channels, 4) + le(2u * channels, 2) + le(16, 2) + "data" + le(size, 4) + pcm;
+}
 
 // Job results as they reach the test's thread. A QSignalSpy on JobQueue::finished records on the
 // job thread, so a job that ends before wait() starts is missed.
@@ -228,6 +251,43 @@ private slots:
         boxes.front()->setChecked(true);
         QVERIFY(sheet.apply());
         QCOMPARE(zpp::plan_entries(skipped.get()).size(), std::size_t{ 1 });
+    }
+
+    void opened_flac_archive_shows_audio_savings()
+    {
+        QDir root(dir_.filePath("savings"));
+        QVERIFY(root.mkpath("proj"));
+        for (const auto& [name, channels] : { std::pair{ "proj/tone.wav", 2 }, std::pair{ "proj/wide.wav", 10 } })
+        {
+            QFile f(root.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(test_wav(48000, static_cast<std::uint16_t>(channels)));
+        }
+        const auto path = dir_.filePath("savings.zip");
+        {
+            const auto plan = make_plan(context.get(), { root.filePath("proj") }, satchel_gui::Settings{});
+            zpp::Stream out(zpp::not_null(zp_stream_create_file(path.toStdString().c_str())));
+            zpp::check(zp_build(plan->get(), out.get(), nullptr, nullptr, nullptr, nullptr));
+            zpp::check(zp_stream_commit(out.get()));
+        }
+        App app;
+        app.show_archive(path);
+        auto* view = app.active()->full();
+        auto& model = view->model();
+        QTRY_VERIFY_WITH_TIMEOUT(model.rowCount() > 0, 5000);
+        const auto folder = model.index(0, ArchiveModel::Name);
+        QCOMPARE(folder.data().toString(), QString("proj"));
+        QTRY_VERIFY_WITH_TIMEOUT(model.index(0, ArchiveModel::Ratio).data().toString().endsWith('%'), 5000);
+        QVERIFY(model.index(0, ArchiveModel::Ratio).data().toString() != "0%");
+        QVERIFY(model.rowCount(folder) >= 2);
+        for (int r = 0; r < model.rowCount(folder); ++r)
+        {
+            const auto name = model.index(r, ArchiveModel::Name, folder).data().toString();
+            if (!name.contains("tone") && !name.contains("wide"))
+                continue;
+            const auto ratio = model.index(r, ArchiveModel::Ratio, folder).data().toString();
+            QVERIFY2(ratio.endsWith('%') && ratio != "0%", qPrintable(name + ": " + ratio));
+        }
     }
 
     void flac_ratio_needs_the_original_size()
