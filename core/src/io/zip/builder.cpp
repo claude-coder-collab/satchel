@@ -209,7 +209,12 @@ BuildResult ArchiveBuilder::execute(const ArchivePlan& plan, ProgressSink& progr
                     fail_with(Error{ Status::Internal, "kept entry without a source index" });
                     break;
                 }
-                auto r = kept_source_->copy_raw(*entry.kept_index, entry.output_name, entry.item.mtime_seconds(), entry.item.unix_mode, **writer);
+                const auto& source = kept_source_->entries()[*entry.kept_index];
+                const auto on_chunk = [&](std::uint64_t copied) {
+                    const auto share = source.compressed_size ? static_cast<double>(std::min(copied, source.compressed_size)) / static_cast<double>(source.compressed_size) : 1.0;
+                    return !job.cancelled.load() && progress.on_progress(done_bytes + static_cast<std::uint64_t>(share * static_cast<double>(source.uncompressed_size)), total_bytes);
+                };
+                auto r = kept_source_->copy_raw(*entry.kept_index, entry.output_name, entry.item.mtime_seconds(), entry.item.unix_mode, **writer, on_chunk);
                 if (!r)
                 {
                     fail_with(r.error());

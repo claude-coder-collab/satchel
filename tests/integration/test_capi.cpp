@@ -684,3 +684,61 @@ TEST_CASE("C API extraction planning reads FLAC headers and can be cancelled", "
     zp_plan_free(plan);
     zp_input_free(in);
 }
+
+TEST_CASE("C API editor commit reports progress inside kept entries and cancels there", "[capi]")
+{
+    Ctx c;
+    zp::test::TempDir dir;
+    const auto path = (dir.path() / "e.zip").string();
+    std::vector<std::uint8_t> big(24u << 20);
+    std::uint32_t seed = 7;
+    for (auto& b : big)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        b = static_cast<std::uint8_t>(seed >> 24);
+    }
+    zp_input_t* in = zp_input_memory();
+    REQUIRE(zp_input_memory_add_file(in, "big.bin", big.data(), big.size(), 0, 0644) == ZP_OK);
+    const std::string a = "small";
+    REQUIRE(zp_input_memory_add_file(in, "a.txt", reinterpret_cast<const std::uint8_t*>(a.data()), a.size(), 0, 0644) == ZP_OK);
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, nullptr);
+    zp_stream_t* file = zp_stream_create_file(path.c_str());
+    REQUIRE(zp_build(plan, file, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
+    REQUIRE(zp_stream_commit(file) == ZP_OK);
+    zp_stream_free(file);
+    zp_plan_free(plan);
+    zp_input_free(in);
+    const auto before = zp::test::read_file(path);
+
+    struct Seen
+    {
+        std::uint64_t mid = 0;
+        std::uint64_t size = 0;
+    } seen{ 0, big.size() };
+    const auto cancel_inside = [](void* user, uint64_t done, uint64_t) -> int {
+        auto& s = *static_cast<Seen*>(user);
+        if (done >= (1u << 20) && done < s.size)
+        {
+            s.mid = done;
+            return 1;
+        }
+        return 0;
+    };
+
+    zp_stream_t* src = zp_stream_open_file(path.c_str());
+    zp_editor_t* ed = zp_editor_open(c.ctx, src, nullptr);
+    REQUIRE(ed);
+    REQUIRE(zp_editor_rename(ed, 1, "b.txt") == ZP_OK);
+    zp_stream_t* dst = zp_stream_create_file(path.c_str());
+    CHECK(zp_editor_commit(ed, dst, nullptr, cancel_inside, &seen, nullptr) == ZP_CANCELLED);
+    CHECK(seen.mid > 0);
+    zp_stream_free(dst);
+    zp_editor_free(ed);
+    zp_stream_free(src);
+
+    CHECK(zp::test::read_file(path) == before);
+    std::size_t files = 0;
+    for ([[maybe_unused]] const auto& e : std::filesystem::directory_iterator(dir.path()))
+        ++files;
+    CHECK(files == 1);
+}
