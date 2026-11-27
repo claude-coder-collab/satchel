@@ -235,7 +235,16 @@ JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& de
                                                                 : ZP_OVERWRITE_SKIP;
     const auto base = base_folder.toStdString();
     options.base_folder = base.c_str();
-    zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan(reader.get(), selection.empty() ? nullptr : selection.data(), selection.size(), sink.get(), &options)));
+    zpp::ProgressAdapter adapter{ jc.progress };
+    options.progress = zpp::ProgressAdapter::call;
+    options.progress_user = &adapter;
+    auto* planned = zp_extract_plan(reader.get(), selection.empty() ? nullptr : selection.data(), selection.size(), sink.get(), &options);
+    if (!planned && zp_last_status() == ZP_CANCELLED)
+    {
+        out.status = ZP_CANCELLED;
+        return out;
+    }
+    zpp::ExtractionPlan plan(zpp::not_null(planned));
     zp_extract_issue_t issue{};
     for (std::size_t i = 0; i < zp_xplan_issue_count(plan.get()); ++i)
     {
@@ -260,7 +269,11 @@ JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& de
                 new_dirs.push_back(d);
         }
     }
-    zpp::ProgressAdapter adapter{ jc.progress };
+    if (jc.cancelled && jc.cancelled->load())
+    {
+        out.status = ZP_CANCELLED;
+        return out;
+    }
     out.status = zp_extract(plan.get(), zpp::ProgressAdapter::call, &adapter);
     out.message = QString::fromUtf8(zp_last_error());
     std::size_t written = 0;
@@ -348,8 +361,16 @@ JobOutcome verify_job(JobContext& jc, const QString& archive)
     zp_extract_options_init(&options);
     options.include_readme = 1;
     options.overwrite = ZP_OVERWRITE_REPLACE;
-    zpp::ExtractionPlan plan(zpp::not_null(zp_extract_plan(reader.get(), nullptr, 0, sink.get(), &options)));
     zpp::ProgressAdapter adapter{ jc.progress };
+    options.progress = zpp::ProgressAdapter::call;
+    options.progress_user = &adapter;
+    auto* planned = zp_extract_plan(reader.get(), nullptr, 0, sink.get(), &options);
+    if (!planned && zp_last_status() == ZP_CANCELLED)
+    {
+        out.status = ZP_CANCELLED;
+        return out;
+    }
+    zpp::ExtractionPlan plan(zpp::not_null(planned));
     out.status = zp_extract(plan.get(), zpp::ProgressAdapter::call, &adapter);
     out.message = QString::fromUtf8(zp_last_error());
     std::size_t ok = 0;

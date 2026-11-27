@@ -1358,6 +1358,8 @@ void zp_extract_options_init(zp_extract_options_t* options)
     options->include_readme = d.include_readme ? 1 : 0;
     options->overwrite = static_cast<int>(d.overwrite);
     options->base_folder = nullptr;
+    options->progress = nullptr;
+    options->progress_user = nullptr;
 }
 
 zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options)
@@ -1380,7 +1382,10 @@ zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp
                     o.base_folder = options->base_folder;
             }
             ArchiveExtractor extractor(*reader->reader, *sink->sink, *reader->context, o);
-            auto plan = extractor.plan_extraction(std::vector<std::size_t>(sel, sel + n));
+            std::optional<CallbackProgress> progress;
+            if (options && options->progress)
+                progress.emplace(options->progress, options->progress_user);
+            auto plan = extractor.plan_extraction(std::vector<std::size_t>(sel, sel + n), progress ? &*progress : nullptr);
             if (!plan)
             {
                 set_error(plan.error());

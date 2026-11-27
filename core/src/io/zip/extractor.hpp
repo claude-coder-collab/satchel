@@ -105,7 +105,9 @@ public:
 
     // Works out targets, warnings and blocking errors before anything is written. An empty
     // selection means every entry.
-    Result<ExtractionPlan> plan_extraction(const std::vector<std::size_t>& selection) const;
+    // `progress`, if given, is polled while FLAC headers are read; returning false cancels
+    // (Status::Cancelled).
+    Result<ExtractionPlan> plan_extraction(const std::vector<std::size_t>& selection, ProgressSink* progress = nullptr) const;
     // Writes every item that is not refused or skipped. Refuses a plan with undecided items.
     ExtractResult execute(const ExtractionPlan& plan, ProgressSink& progress);
 

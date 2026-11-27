@@ -1988,6 +1988,7 @@ void MainWindow::on_progress(int id, quint64 done, quint64 total)
         bar_->set_progress(done, total);
     else if (mine_.contains(id))
     {
+        job_bar_->setMaximum(total ? 1000 : 0);
         job_bar_->setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
         job_rate_->report(done, total);
     }

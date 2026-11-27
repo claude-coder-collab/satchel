@@ -284,6 +284,7 @@ void SimpleWindow::on_progress(int id, quint64 done, quint64 total)
 {
     if (id != current_)
         return;
+    bar_->setMaximum(total ? 1000 : 0);
     bar_->setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
     rate_->report(done, total);
 }

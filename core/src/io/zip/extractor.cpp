@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <format>
 #include <map>
@@ -24,6 +25,41 @@ namespace zp
 
 namespace
 {
+
+bool may_be_flac(const ZipEntryInfo& e)
+{
+    const auto& n = e.name;
+    return e.kind == ItemKind::File && e.method != EntryMethod::Unsupported && n.size() > 5
+        && std::equal(n.end() - 5, n.end(), ".flac", [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; });
+}
+
+// Reads the FLAC headers of `indices` on the worker pool so later flac_header calls hit the
+// cache. Polls `progress` with (0, 0) meanwhile; false if it asked to stop.
+bool probe_headers(ArchiveReader& reader, ThreadPool& pool, const std::vector<std::size_t>& indices, ProgressSink* progress)
+{
+    if (indices.empty())
+        return !progress || progress->on_progress(0, 0);
+    constexpr std::size_t batch = 16;
+    std::atomic<bool> cancelled{ false };
+    TaskCounter tasks;
+    for (std::size_t first = 0; first < indices.size(); first += batch)
+    {
+        tasks.add();
+        pool.submit([&, first] {
+            for (std::size_t k = first; k < std::min(first + batch, indices.size()) && !cancelled.load(); ++k)
+            {
+                std::ignore = reader.flac_header(indices[k]);
+            }
+            tasks.done();
+        });
+    }
+    do
+    {
+        if (progress && !cancelled.load() && !progress->on_progress(0, 0))
+            cancelled.store(true);
+    } while (!tasks.wait_for(std::chrono::milliseconds(100)));
+    return !cancelled.load();
+}
 
 // Passes an entry's decompressed bytes through and checks size and CRC-32 at the end.
 class CrcCheckingStream final : public IChunkedStream
@@ -96,7 +132,7 @@ ArchiveExtractor::ArchiveExtractor(ArchiveReader& reader, OutputSink& sink, Cont
 {
 }
 
-Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::size_t>& selection) const
+Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::size_t>& selection, ProgressSink* progress) const
 {
     const auto& entries = reader_.entries();
     std::vector<std::size_t> chosen = selection;
@@ -122,7 +158,36 @@ Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::
     };
     std::vector<Candidate> candidates;
     std::set<flac::ProjectBlock::GroupId> groups_done;
-    bool probed_all = false;
+    std::map<flac::ProjectBlock::GroupId, std::vector<std::size_t>> group_members;
+
+    if (options_.restore_wav)
+    {
+        std::vector<std::size_t> flac_chosen;
+        for (const auto idx : chosen)
+        {
+            if (idx < entries.size() && may_be_flac(entries[idx]))
+                flac_chosen.push_back(idx);
+        }
+        if (!probe_headers(reader_, context_.workers(), flac_chosen, progress))
+            return fail(Status::Cancelled, "cancelled");
+        const bool any_group = std::ranges::any_of(flac_chosen, [&](std::size_t i) { return entries[i].flac_group.has_value(); });
+        if (any_group)
+        {
+            std::vector<std::size_t> rest;
+            for (std::size_t j = 0; j < entries.size(); ++j)
+            {
+                if (may_be_flac(entries[j]))
+                    rest.push_back(j);
+            }
+            if (!probe_headers(reader_, context_.workers(), rest, progress))
+                return fail(Status::Cancelled, "cancelled");
+            for (const auto j : rest)
+            {
+                if (const auto& g = entries[j].flac_group)
+                    group_members[g->group_id].push_back(j);
+            }
+        }
+    }
 
     for (const auto idx : chosen)
     {
@@ -166,14 +231,9 @@ Result<ExtractionPlan> ArchiveExtractor::plan_extraction(const std::vector<std::
                     if (groups_done.contains(project.group_id))
                         continue;
                     groups_done.insert(project.group_id);
-                    if (!probed_all)
-                    {
-                        reader_.probe_flac();
-                        probed_all = true;
-                    }
                     std::vector<std::size_t> group;
                     std::vector<flac::Header> headers;
-                    for (std::size_t j = 0; j < entries.size(); ++j)
+                    for (const auto j : group_members[project.group_id])
                     {
                         auto h = reader_.flac_header(j);
                         if (h && h->project && h->project->layout == flac::Layout::MultiMonoMember && h->project->group_id == project.group_id)

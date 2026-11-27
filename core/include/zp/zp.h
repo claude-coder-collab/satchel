@@ -406,6 +406,10 @@ typedef struct zp_extract_options
      * root): "docs/a.txt" with base "docs" is written as "a.txt", and the folder entry itself is
      * not written. Entries outside it keep their full path. Default NULL. */
     const char* base_folder;
+    /* Polled with (0, 0) while zp_extract_plan reads FLAC headers; non-zero cancels and
+     * zp_extract_plan returns NULL with ZP_CANCELLED. Default NULL. */
+    zp_progress_fn progress;
+    void* progress_user;
 } zp_extract_options_t;
 
 ZP_API void zp_extract_options_init(zp_extract_options_t* options);
