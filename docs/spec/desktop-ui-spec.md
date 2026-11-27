@@ -49,7 +49,7 @@ Drop files on the window (or the app icon) and the job starts immediately: zips 
 
 **When Simple mode stops to ask** (only what the core makes mandatory):
 
-- Name collisions inside the archive (main spec 6.2): a compact resolution sheet, defaulting to "rename with suffix".
+- Name problems inside the archive (main spec 6.2): a compact resolution sheet listing every conflict with its reason (names that collide, a file name also used as a folder, names that can't be stored). Each affected file gets a suggested new name (a numbered suffix, or for unstorable names the name with the invalid parts replaced) and a Skip option. The title says which kind of problem it is ("Some names collide", "Some names can't be stored", "Some names need changing"). Names that are still invalid or collide are refused and the sheet opens again.
 - Extraction: unsafe paths, incomplete multi-mono groups, hash mismatches are reported as errors on the result card.
 - Skipped symlinks and FLAC fallbacks don't stop the job; they're listed on the result card.
 - The "Leave out" settings apply to new archives and to files added to an archive (Simple mode uses them as saved).
@@ -57,7 +57,7 @@ Drop files on the window (or the app icon) and the job starts immediately: zips 
 **Window states**
 
 1. Idle: drop target with a one-line hint.
-2. Running: progress ring, file name, throughput, ETA, Cancel. Further drops queue.
+2. Running: progress ring, file name, throughput, ETA, Cancel. Further drops queue. Compressing first scans the dropped files as its own job ("Scanning files for <name>.zip", a busy bar until the files are listed, then the share of files read, no throughput), which Cancel stops too; the resolution sheet, if needed, comes after the scan.
 3. Done: result card with savings (e.g. "4.2 GB → 2.3 GB, 45% smaller"), warning count, **Copy All** when there are warnings or problems (copies the result line and every warning and problem, one per line, including those the card has no room for; the button then reads "Copied"), Reveal in Finder/Explorer, and after compressing View Contents (opens the archive in Full mode). Counts use proper singular and plural ("1 file extracted", "44 files extracted"). Cancel leaves no trace: a cancelled extraction removes everything it wrote (including its folders) and the card reads "Cancelled. Nothing was extracted from <archive>." (compression: "Cancelled. <archive> was not created.").
 4. Error: what failed, which file, Retry.
 
@@ -126,7 +126,7 @@ The window holds one **session** at a time: a base archive (none for a new archi
 
 | | New archive | Edit archive |
 | --- | --- | --- |
-| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Files or folders dropped on an empty window start a session without asking, written next to them by the Simple-mode rule (`<item>.zip`). The action bar's **Location** pop-up (like a save panel's "Where" menu: the folder and its parents, Desktop, Documents, Downloads, Choose Folder…) changes the folder; File ▸ Save As… changes name and folder. While the dropped items are scanned, the bar shows "Scanning files…" with an indeterminate progress bar. Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
+| Start | File ▸ New (⌘N) asks for the archive's name and location (a save dialog; default `Archive.zip` in the last-used folder), then opens an empty session. Files or folders dropped on an empty window start a session without asking, written next to them by the Simple-mode rule (`<item>.zip`). The action bar's **Location** pop-up (like a save panel's "Where" menu: the folder and its parents, Desktop, Documents, Downloads, Choose Folder…) changes the folder; File ▸ Save As… changes name and folder. While dropped or added items are scanned, the bar shows "Scanning files…" with an indeterminate progress bar and Cancel, which drops that addition (earlier changes stay; replaying them for undo or option changes cannot be cancelled). Nothing is written yet | File ▸ Open (⌘O), double-click a zip, or drop one zip on an empty window |
 | Browser shows | Only the staged additions | The archive's entries with pending changes overlaid |
 | Go action | **Create Archive** | **Apply Changes** (also **Save As…**) |
 | Writes | A new zip at the destination | Rewrites the archive in place (temp file, then atomic swap), or writes a copy for Save As |
@@ -204,10 +204,10 @@ A bar at the bottom of the browser, visible while the session has pending change
 
 ## Extracting
 
-Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan. Selected items are extracted relative to the deepest folder holding all of them (`zp_extract_options_t.base_folder`): selecting `docs/b.txt` writes `b.txt`, selecting the folder `docs` writes `docs/…`. Cancelling an extraction removes the files and folders it created; files that already existed are left alone.
+Extract All, Extract Selected, or drag entries out to Finder/Explorer; all three use the same extraction plan. Selected items are extracted relative to the deepest folder holding all of them (`zp_extract_options_t.base_folder`): selecting `docs/b.txt` writes `b.txt`, selecting the folder `docs` writes `docs/…`. Cancelling an extraction removes the files and folders it created; files that already existed are left alone. Before any file is written, the extraction reads the FLAC headers it needs; the progress bar is busy meanwhile and Cancel works there too.
 
 - **Options dialog** (Extract All/Selected): destination, "Restore original audio" (default on) vs keep FLAC, include generated readme (default off), overwrite policy (Ask / Skip / Replace).
-- **Drag-out** uses the saved defaults without a dialog. The drag carries the paths the entries will have in a new temporary folder; they are extracted there when the drag leaves the browser (or a target asks for the data first), so a drag that stays inside the browser (a move) extracts nothing. No events are processed during that extraction (a busy cursor shows instead). The drag image is the first row's icon and name with "+N more" (never the temporary path). Only entries already in the archive on disk can be dragged out: while planning a new archive, a drag can only move.
+- **Drag-out** uses the saved defaults without a dialog. Nothing is extracted until the drag is dropped on a target that accepts files; a drag that stays inside the browser (a move) or is cancelled extracts nothing. Each selected row is one dragged item, extracted relative to its own folder. On macOS the drag carries file promises (`NSFilePromiseProvider`): the target names the destination, and each item is extracted as an ordinary background job (status-bar progress; ✕ stops every extraction and verify of the window, queued ones included) into a hidden `.satchel-<uuid>` folder beside the destination, then moved into place; on failure or cancel nothing is left there and the target is told the promise failed. Elsewhere the drag carries the paths the items will have in a new temporary folder `satchel-<ms>`; they are extracted there when the target asks for the data, behind a progress dialog that can cancel, and the folder is removed when Satchel quits. The drag image is the first row's icon and name with "+N more" (never a temporary path). Only entries already in the archive on disk can be dragged out: while planning a new archive, a drag can only move.
 - **Pre-flight**: the extraction plan's warnings and errors (unsafe paths, symlinks, incomplete multi-mono groups, case-only duplicates) are shown before writing; existing files prompt per the overwrite policy.
 - **Result**: files written, restored and hash-verified count, any failures with reasons; hash mismatch is shown as an error with the file name and the partial output already deleted.
 
@@ -259,7 +259,7 @@ Each platform gets a native previewer and context-menu entries; these are separa
 
 **Previewer content** (Quick Look and Windows preview handler):
 
-- For a `.zip`: entry list (name, size, method), total savings, "created by" version, restorable audio count. Reads only the central directory, so it is instant for any size.
+- For a `.zip`: entry list (name, size, method), total savings, "created by" version, restorable audio count. Sizes and savings of restorable FLAC are measured against the original WAV/AIFF (a multi-mono group counts its original once; channel rows show their own size). Reads the central directory and the FLAC headers (up to 2,000), so it stays fast for any size.
 - For a `.flac` made by this app: audio format, original filename and container, mirrored production tags, track names, multi-mono group info.
 
 **Platform notes**

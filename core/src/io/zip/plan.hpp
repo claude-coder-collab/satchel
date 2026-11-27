@@ -78,8 +78,9 @@ struct PlanEntry
 };
 
 enum class ConflictKind : std::uint8_t {
-    Collision, // names equal after NFC + case folding, or a file used as a folder
+    Collision, // names equal after NFC + case folding
     InvalidName, // name cannot be stored (not UTF-8, absolute, '..', ...)
+    FileAsFolder, // entries[0] is a file whose name is also a folder of the other entries
 };
 
 struct Conflict

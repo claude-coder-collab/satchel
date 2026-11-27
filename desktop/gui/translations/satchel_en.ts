@@ -245,6 +245,14 @@
             <numerusform> · %n problems</numerusform>
         </translation>
     </message>
+    <message>
+        <source>%1 already exists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The selection did not extract to a single item</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message numerus="yes">
         <source>All %n file(s) intact</source>
         <translation>
@@ -386,6 +394,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Stop All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>No archive open</source>
         <translation type="unfinished"></translation>
     </message>
@@ -513,6 +525,10 @@
     </message>
     <message>
         <source>Show Deleted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The window was closed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -840,6 +856,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>No archive is open</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Extracting…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Cannot extract</source>
         <translation type="unfinished"></translation>
     </message>
@@ -984,15 +1012,27 @@
 <context>
     <name>ResolutionSheet</name>
     <message>
+        <source>Some names need changing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Some names can&apos;t be stored</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Some names collide</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>These files would get the same name in the archive. Suggested new names:</source>
+        <source>Rename or skip these files to continue:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Rename and continue</source>
+        <source>Skip</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1125,6 +1165,10 @@
     </message>
     <message>
         <source>Undo all staged changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stop scanning the added files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1418,6 +1462,18 @@ or drop a .zip to extract it.</source>
         <source>Copied</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Scanning files for %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot use those names</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Some of the new names are invalid or still collide. Please choose others.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message numerus="yes">
         <source>
 … and %n more</source>
@@ -1442,10 +1498,6 @@ or drop a .zip to extract it.</source>
     </message>
     <message>
         <source>Close Window</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cannot compress</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -73,14 +73,18 @@ VoidResult ArchiveEditor::open(IChunkedStream& input)
     return {};
 }
 
-VoidResult ArchiveEditor::add(InputSource& input)
+VoidResult ArchiveEditor::add(InputSource& input, ProgressSink* progress)
 {
+    if (progress && !progress->on_progress(0, 0))
+        return fail(Status::Cancelled, "cancelled");
     auto items = input.enumerate();
     if (!items)
         return std::unexpected(items.error());
-    auto added = planner_.make_entries(std::move(*items), warnings_);
+    std::vector<Warning> warnings;
+    auto added = planner_.make_entries(std::move(*items), warnings, progress);
     if (!added)
         return std::unexpected(added.error());
+    warnings_.insert(warnings_.end(), std::make_move_iterator(warnings.begin()), std::make_move_iterator(warnings.end()));
     std::set<std::string, std::less<>> folders;
     for (const auto& e : entries_)
     {

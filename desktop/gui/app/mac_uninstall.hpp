@@ -19,6 +19,10 @@ class QMenu;
 
 void run_uninstall_dialog(QWidget* parent);
 
+// Whether `path` is on a volume mounted read-only (a disk image, App Translocation). Asks the
+// file system directly: QStorageInfo maps /Applications to the sealed system volume.
+[[nodiscard]] bool on_read_only_volume(const std::string& path);
+
 // Adds "Uninstall Satchel…" to the application menu (through `menu`) once per app, when
 // available; the dialog opens over the active window.
 void add_uninstall_action(QMenu* menu, QWidget* parent);

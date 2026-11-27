@@ -123,7 +123,12 @@ nlohmann::json plan_json(const std::vector<zpp::PlanEntry>& entries, const std::
         nlohmann::json names = nlohmann::json::array();
         for (const auto i : c.entries)
             names.push_back(entries[i].output_name);
-        j["conflicts"].push_back({ { "kind", c.kind == ZP_CONFLICT_COLLISION ? "collision" : "invalid-name" }, { "key", c.key }, { "detail", c.detail }, { "entries", c.entries }, { "names", names } });
+        j["conflicts"].push_back({ { "kind", c.kind == ZP_CONFLICT_COLLISION ? "collision" : c.kind == ZP_CONFLICT_INVALID_NAME ? "invalid-name"
+                                                                                                                                : "file-as-folder" },
+            { "key", c.key },
+            { "detail", c.detail },
+            { "entries", c.entries },
+            { "names", names } });
     }
     j["excluded"] = nlohmann::json::array();
     for (const auto& x : excluded)

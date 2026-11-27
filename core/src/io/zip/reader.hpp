@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -83,7 +84,9 @@ public:
     // Decompressed bytes (store/deflate). The CRC is not checked here.
     Result<std::unique_ptr<IChunkedStream>> open_entry(std::size_t index);
     // Copies an entry's compressed bytes unchanged into a new archive, under a possibly new name.
-    Result<CopiedEntry> copy_raw(std::size_t index, const std::string& name, std::int64_t mtime, std::uint32_t unix_mode, ZipWriter& writer);
+    // `on_chunk`, if set, gets the raw bytes copied so far after each chunk; returning false stops
+    // the copy with Status::Cancelled, leaving the entry unfinished.
+    Result<CopiedEntry> copy_raw(std::size_t index, const std::string& name, std::int64_t mtime, std::uint32_t unix_mode, ZipWriter& writer, const std::function<bool(std::uint64_t)>& on_chunk = {});
 
     Result<std::size_t> read_at(std::uint64_t offset, std::uint8_t* buf, std::size_t len);
 

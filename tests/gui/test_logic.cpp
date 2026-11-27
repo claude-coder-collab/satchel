@@ -42,6 +42,8 @@ TEST_CASE("output naming never overwrites", "[gui]")
     CHECK(compress_output({ "/r/take.wav" }, std::nullopt, exists) == fs::path("/r/take.wav.zip"));
     CHECK(compress_output({ "/r/take" }, std::nullopt, exists) == fs::path("/r/take 2.zip"));
     CHECK(compress_output({ "/r/a.wav", "/r/b.wav" }, std::nullopt, exists) == fs::path("/r/r.zip"));
+    CHECK(compress_output({ "/r/x/a/", "/r/x/b/" }, std::nullopt, exists) == fs::path("/r/x/x.zip"));
+    CHECK(compress_output({ "/r/x/a", "/r/x/b" }, std::nullopt, exists) == fs::path("/r/x/x.zip"));
     CHECK(compress_output({ "/r/a.wav" }, fs::path("/out"), exists) == fs::path("/out/a.wav.zip"));
     CHECK(extract_output("/r/session.zip", std::nullopt, exists) == fs::path("/r/session 2"));
     CHECK(extract_output("/r/other.zip", std::nullopt, exists) == fs::path("/r/other"));
@@ -188,4 +190,15 @@ TEST_CASE("secondary text keeps readable contrast", "[gui]")
     }
     constexpr Rgb grey{ 128, 128, 128 };
     CHECK(secondary_text(grey, black, 7.0) == grey);
+}
+
+TEST_CASE("storable names fix what the archive rejects", "[gui]")
+{
+    CHECK(storable_name("a/b.wav") == "a/b.wav");
+    CHECK(storable_name("/abs//x/./y/../z") == "abs/x/y/z");
+    CHECK(storable_name("C:\\dir\\f") == "_dir_f");
+    CHECK(storable_name(std::string{ "bad\xFF\xC0\x80name" }) == "bad___name");
+    CHECK(storable_name(std::string{ "n\0l", 3 }) == "n_l");
+    CHECK(storable_name("caf\xC3\xA9") == "caf\xC3\xA9");
+    CHECK(storable_name("..") == "unnamed");
 }

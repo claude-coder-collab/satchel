@@ -4,12 +4,15 @@
 #include "test_support.hpp"
 #include "zp/zp.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -617,4 +620,206 @@ TEST_CASE("C API predicts store for incompressible files", "[capi][store]")
     zp_stream_free(out);
     zp_plan_free(plan);
     zp_input_free(in);
+}
+
+TEST_CASE("C API extraction planning reads FLAC headers and can be cancelled", "[capi]")
+{
+    Ctx c;
+    zp::test::WavSpec wide;
+    wide.channels = 10;
+    wide.frames = 2000;
+    const auto ten = zp::test::make_wav(wide);
+    const auto two = zp::test::make_wav({});
+    zp_input_t* in = zp_input_memory();
+    REQUIRE(zp_input_memory_add_file(in, "wide.wav", ten.data(), ten.size(), 0, 0644) == ZP_OK);
+    for (int i = 0; i < 40; ++i)
+    {
+        const auto name = std::format("t{}.wav", i);
+        REQUIRE(zp_input_memory_add_file(in, name.c_str(), two.data(), two.size(), 0, 0644) == ZP_OK);
+    }
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, nullptr);
+    REQUIRE(plan);
+    zp_stream_t* out = zp_stream_memory();
+    REQUIRE(zp_build(plan, out, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
+    const auto zip = memory_bytes(out);
+    zp_stream_t* rin = zp_stream_memory_from(zip.data(), zip.size());
+    zp_reader_t* reader = zp_reader_open(c.ctx, rin);
+    REQUIRE(reader);
+    zp_sink_t* sink = zp_sink_null();
+
+    int polls = 0;
+    zp_extract_options_t options{};
+    zp_extract_options_init(&options);
+    options.progress = [](void* user, uint64_t, uint64_t) -> int {
+        ++*static_cast<int*>(user);
+        return 1;
+    };
+    options.progress_user = &polls;
+    CHECK(zp_extract_plan(reader, nullptr, 0, sink, &options) == nullptr);
+    CHECK(zp_last_status() == ZP_CANCELLED);
+    CHECK(polls >= 1);
+
+    options.progress = [](void* user, uint64_t, uint64_t) -> int {
+        ++*static_cast<int*>(user);
+        return 0;
+    };
+    zp_xplan_t* x = zp_extract_plan(reader, nullptr, 0, sink, &options);
+    REQUIRE(x);
+    std::set<std::string> targets;
+    for (std::size_t i = 0; i < zp_xplan_item_count(x); ++i)
+    {
+        zp_extract_item_t item{};
+        REQUIRE(zp_xplan_get_item(x, i, &item) == ZP_OK);
+        targets.insert(item.target);
+    }
+    CHECK(targets.size() == 41);
+    CHECK(targets.contains("wide.wav"));
+    CHECK(targets.contains("t39.wav"));
+    CHECK(zp_extract(x, nullptr, nullptr) == ZP_OK);
+    zp_xplan_free(x);
+
+    zp_sink_free(sink);
+    zp_reader_free(reader);
+    zp_stream_free(rin);
+    zp_stream_free(out);
+    zp_plan_free(plan);
+    zp_input_free(in);
+}
+
+TEST_CASE("C API editor commit reports progress inside kept entries and cancels there", "[capi]")
+{
+    Ctx c;
+    zp::test::TempDir dir;
+    const auto path = (dir.path() / "e.zip").string();
+    std::vector<std::uint8_t> big(24u << 20);
+    std::uint32_t seed = 7;
+    for (auto& b : big)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        b = static_cast<std::uint8_t>(seed >> 24);
+    }
+    zp_input_t* in = zp_input_memory();
+    REQUIRE(zp_input_memory_add_file(in, "big.bin", big.data(), big.size(), 0, 0644) == ZP_OK);
+    const std::string a = "small";
+    REQUIRE(zp_input_memory_add_file(in, "a.txt", reinterpret_cast<const std::uint8_t*>(a.data()), a.size(), 0, 0644) == ZP_OK);
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, nullptr);
+    zp_stream_t* file = zp_stream_create_file(path.c_str());
+    REQUIRE(zp_build(plan, file, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
+    REQUIRE(zp_stream_commit(file) == ZP_OK);
+    zp_stream_free(file);
+    zp_plan_free(plan);
+    zp_input_free(in);
+    const auto before = zp::test::read_file(path);
+
+    struct Seen
+    {
+        std::uint64_t mid = 0;
+        std::uint64_t size = 0;
+    } seen{ 0, big.size() };
+    const auto cancel_inside = [](void* user, uint64_t done, uint64_t) -> int {
+        auto& s = *static_cast<Seen*>(user);
+        if (done >= (1u << 20) && done < s.size)
+        {
+            s.mid = done;
+            return 1;
+        }
+        return 0;
+    };
+
+    zp_stream_t* src = zp_stream_open_file(path.c_str());
+    zp_editor_t* ed = zp_editor_open(c.ctx, src, nullptr);
+    REQUIRE(ed);
+    REQUIRE(zp_editor_rename(ed, 1, "b.txt") == ZP_OK);
+    zp_stream_t* dst = zp_stream_create_file(path.c_str());
+    CHECK(zp_editor_commit(ed, dst, nullptr, cancel_inside, &seen, nullptr) == ZP_CANCELLED);
+    CHECK(seen.mid > 0);
+    zp_stream_free(dst);
+    zp_editor_free(ed);
+    zp_stream_free(src);
+
+    CHECK(zp::test::read_file(path) == before);
+    std::size_t files = 0;
+    for ([[maybe_unused]] const auto& e : std::filesystem::directory_iterator(dir.path()))
+        ++files;
+    CHECK(files == 1);
+}
+
+TEST_CASE("C API planning reports scanned files and can be cancelled", "[capi]")
+{
+    Ctx c;
+    zp::test::TempDir dir;
+    for (int i = 0; i < 5; ++i)
+        std::ofstream(dir.path() / std::format("f{}.txt", i)) << "text";
+    const auto root = dir.path().string();
+    const char* paths[] = { root.c_str() };
+    struct Seen
+    {
+        std::uint64_t total = 0;
+        int calls = 0;
+        bool cancel = false;
+    } seen;
+    zp_plan_options_t options;
+    zp_plan_options_init(&options);
+    options.progress = [](void* user, uint64_t, uint64_t total) -> int {
+        auto& s = *static_cast<Seen*>(user);
+        s.total = std::max<std::uint64_t>(s.total, total);
+        ++s.calls;
+        return s.cancel ? 1 : 0;
+    };
+    options.progress_user = &seen;
+
+    zp_input_t* in = zp_input_from_paths(paths, 1);
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, &options);
+    REQUIRE(plan);
+    CHECK(seen.calls >= 2);
+    CHECK(seen.total == zp_plan_entry_count(plan));
+    zp_plan_free(plan);
+    zp_input_free(in);
+
+    seen.cancel = true;
+    in = zp_input_from_paths(paths, 1);
+    CHECK(zp_plan_create(c.ctx, in, &options) == nullptr);
+    CHECK(zp_last_status() == ZP_CANCELLED);
+    zp_input_free(in);
+}
+
+TEST_CASE("C API editor additions can be cancelled without changing the edit", "[capi]")
+{
+    Ctx c;
+    zp::test::TempDir dir;
+    std::ofstream(dir.path() / "new.txt") << "new";
+    zp_input_t* base_in = zp_input_memory();
+    const std::string a = "keep";
+    REQUIRE(zp_input_memory_add_file(base_in, "a.txt", reinterpret_cast<const std::uint8_t*>(a.data()), a.size(), 0, 0644) == ZP_OK);
+    zp_plan_t* plan = zp_plan_create(c.ctx, base_in, nullptr);
+    zp_stream_t* base = zp_stream_memory();
+    REQUIRE(zp_build(plan, base, nullptr, nullptr, nullptr, nullptr) == ZP_OK);
+    zp_plan_free(plan);
+    zp_input_free(base_in);
+    const auto bytes = memory_bytes(base);
+    zp_stream_t* src = zp_stream_memory_from(bytes.data(), bytes.size());
+
+    bool cancel = true;
+    zp_plan_options_t options;
+    zp_plan_options_init(&options);
+    options.progress = [](void* user, uint64_t, uint64_t) -> int { return *static_cast<bool*>(user) ? 1 : 0; };
+    options.progress_user = &cancel;
+    zp_editor_t* ed = zp_editor_open(c.ctx, src, &options);
+    REQUIRE(ed);
+    const auto path = (dir.path() / "new.txt").string();
+    const char* paths[] = { path.c_str() };
+    zp_input_t* add = zp_input_from_paths(paths, 1);
+    CHECK(zp_editor_add(ed, add) == ZP_CANCELLED);
+    zp_plan_t* view = zp_editor_plan(ed);
+    CHECK(zp_plan_entry_count(view) == 1);
+    zp_plan_free(view);
+    cancel = false;
+    CHECK(zp_editor_add(ed, add) == ZP_OK);
+    view = zp_editor_plan(ed);
+    CHECK(zp_plan_entry_count(view) == 2);
+    zp_plan_free(view);
+    zp_input_free(add);
+    zp_editor_free(ed);
+    zp_stream_free(src);
+    zp_stream_free(base);
 }

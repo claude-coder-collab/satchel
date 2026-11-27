@@ -93,10 +93,14 @@ std::vector<std::string> exclude_patterns(const satchel_gui::Settings& settings)
 QString exclude_pattern_error(const std::vector<std::string>& patterns);
 
 // Plans `inputs` with the settings' compression and Leave out options (Simple mode).
-std::shared_ptr<zpp::Plan> make_plan(zp_context_t* context, const QStringList& inputs, const satchel_gui::Settings& settings);
+// `progress` (optional) is polled while the inputs are listed and read; false cancels.
+std::shared_ptr<zpp::Plan> make_plan(zp_context_t* context, const QStringList& inputs, const satchel_gui::Settings& settings, const std::function<bool(std::uint64_t, std::uint64_t)>& progress = {});
 
 // Job bodies; they run on `jc.context`.
 JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, const satchel_gui::Settings& settings);
 // base_folder: the selection is extracted relative to this archive folder ("" = the root).
 JobOutcome extract_job(JobContext& jc, const QString& archive, const QString& destination, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, bool replace_existing, const QString& base_folder = {});
+// Extracts the selection into a hidden folder beside `target`, then moves the one item it
+// produced to `target` (a drag-and-drop destination). Nothing is left behind if it fails.
+JobOutcome export_job(JobContext& jc, const QString& archive, const QString& target, const satchel_gui::Settings& settings, const std::vector<std::size_t>& selection, const QString& base_folder);
 JobOutcome verify_job(JobContext& jc, const QString& archive);

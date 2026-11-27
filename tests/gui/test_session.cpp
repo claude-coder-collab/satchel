@@ -431,3 +431,35 @@ TEST_CASE("added files that will not shrink are predicted as stored", "[session]
     s.set_options({ .deflate_level = 9 });
     CHECK(row(s, "clip.mp4").stored);
 }
+
+TEST_CASE("a cancelled scan drops the addition and leaves earlier changes alone", "[session]")
+{
+    Fixture f;
+    SessionOptions options;
+    options.cancel = std::make_shared<ScanCancel>();
+    auto s = Session::open(f.ctx, f.base_archive(), options);
+    s.apply({ op::Add{ { f.write("in/kept.txt", "k") }, "" } });
+    REQUIRE(s.can_undo());
+    const auto rows = s.view().rows.size();
+
+    options.cancel->requested = true;
+    try
+    {
+        s.apply({ op::Add{ { f.write("in/dropped.txt", "d") }, "" } });
+        FAIL("the scan was not cancelled");
+    } catch (const zpp::Error& e)
+    {
+        CHECK(e.status() == ZP_CANCELLED);
+    }
+    CHECK(s.view().rows.size() == rows);
+    CHECK(s.view().problems.empty());
+    CHECK_FALSE(options.cancel->armed);
+
+    s.undo();
+    CHECK_FALSE(s.can_undo());
+    s.redo();
+    CHECK(row(s, "kept.txt").state == RowState::Added);
+    options.cancel->requested = false;
+    s.apply({ op::Add{ { f.path("in/dropped.txt") }, "" } });
+    CHECK(row(s, "dropped.txt").state == RowState::Added);
+}

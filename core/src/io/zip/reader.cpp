@@ -476,7 +476,7 @@ Result<std::unique_ptr<IChunkedStream>> ArchiveReader::open_entry(std::size_t in
     return CodecRegistry::make_decoder(e.raw_method, std::move(*raw));
 }
 
-Result<CopiedEntry> ArchiveReader::copy_raw(std::size_t index, const std::string& name, std::int64_t mtime, std::uint32_t unix_mode, ZipWriter& writer)
+Result<CopiedEntry> ArchiveReader::copy_raw(std::size_t index, const std::string& name, std::int64_t mtime, std::uint32_t unix_mode, ZipWriter& writer, const std::function<bool(std::uint64_t)>& on_chunk)
 {
     if (index >= entries_.size())
         return fail(Status::InvalidArgument, "entry index out of range");
@@ -497,6 +497,7 @@ Result<CopiedEntry> ArchiveReader::copy_raw(std::size_t index, const std::string
     if (!w)
         return std::unexpected(w.error());
     std::vector<std::uint8_t> buf(1u << 20);
+    std::uint64_t copied = 0;
     while (true)
     {
         auto n = (*raw)->read(buf.data(), buf.size());
@@ -506,6 +507,9 @@ Result<CopiedEntry> ArchiveReader::copy_raw(std::size_t index, const std::string
             break;
         if (auto r = writer.write({ buf.data(), *n }); !r)
             return std::unexpected(r.error());
+        copied += *n;
+        if (on_chunk && !on_chunk(copied))
+            return fail(Status::Cancelled, "cancelled");
     }
     if (auto r = writer.end_entry(e.crc32, e.compressed_size, e.uncompressed_size); !r)
         return std::unexpected(r.error());

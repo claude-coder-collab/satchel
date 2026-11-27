@@ -98,6 +98,8 @@ struct zp_editor
 {
     Context* context = nullptr;
     std::unique_ptr<ArchiveEditor> editor;
+    zp_progress_fn progress = nullptr;
+    void* progress_user = nullptr;
 };
 
 namespace
@@ -541,7 +543,10 @@ char* zp_plan_describe(const zp_plan_t* plan)
             j.end_array().key("conflicts").begin_array();
             for (const auto& c : plan->plan.conflicts)
             {
-                j.begin_object().field("kind", c.kind == ConflictKind::Collision ? "collision" : "invalid_name").field("key", c.collision_key).field("detail", c.detail);
+                j.begin_object().field("kind", c.kind == ConflictKind::Collision ? "collision" : c.kind == ConflictKind::InvalidName ? "invalid_name"
+                                                                                                                                     : "file_as_folder")
+                    .field("key", c.collision_key)
+                    .field("detail", c.detail);
                 j.key("entries").begin_array();
                 for (const auto i : c.entries)
                     j.value(static_cast<std::uint64_t>(i));
@@ -991,6 +996,8 @@ void zp_plan_options_init(zp_plan_options_t* options)
     options->flac_enabled = d.flac_enabled ? 1 : 0;
     options->deflate_level = d.deflate_level;
     options->flac_level = d.flac_level;
+    options->progress = nullptr;
+    options->progress_user = nullptr;
 }
 
 zp_plan_t* zp_plan_create(zp_context_t* ctx, zp_input_t* input, const zp_plan_options_t* options)
@@ -1004,7 +1011,10 @@ zp_plan_t* zp_plan_create(zp_context_t* ctx, zp_input_t* input, const zp_plan_op
                 set_error(o.error());
                 return nullptr;
             }
-            auto plan = ArchivePlanner(*o).plan(*input->source);
+            std::optional<CallbackProgress> progress;
+            if (options && options->progress)
+                progress.emplace(options->progress, options->progress_user);
+            auto plan = ArchivePlanner(*o).plan(*input->source, progress ? &*progress : nullptr);
             if (!plan)
             {
                 set_error(plan.error());
@@ -1355,6 +1365,8 @@ void zp_extract_options_init(zp_extract_options_t* options)
     options->include_readme = d.include_readme ? 1 : 0;
     options->overwrite = static_cast<int>(d.overwrite);
     options->base_folder = nullptr;
+    options->progress = nullptr;
+    options->progress_user = nullptr;
 }
 
 zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp_sink_t* sink, const zp_extract_options_t* options)
@@ -1377,7 +1389,10 @@ zp_xplan_t* zp_extract_plan(zp_reader_t* reader, const size_t* sel, size_t n, zp
                     o.base_folder = options->base_folder;
             }
             ArchiveExtractor extractor(*reader->reader, *sink->sink, *reader->context, o);
-            auto plan = extractor.plan_extraction(std::vector<std::size_t>(sel, sel + n));
+            std::optional<CallbackProgress> progress;
+            if (options && options->progress)
+                progress.emplace(options->progress, options->progress_user);
+            auto plan = extractor.plan_extraction(std::vector<std::size_t>(sel, sel + n), progress ? &*progress : nullptr);
             if (!plan)
             {
                 set_error(plan.error());
@@ -1573,6 +1588,11 @@ zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input, const zp_plan
             auto* e = new zp_editor();
             e->context = &ctx->context;
             e->editor = std::move(ed);
+            if (options)
+            {
+                e->progress = options->progress;
+                e->progress_user = options->progress_user;
+            }
             return e;
         },
         nullptr
@@ -1584,7 +1604,10 @@ int zp_editor_add(zp_editor_t* editor, zp_input_t* input)
     ZP_REQUIRE(editor && input, ZP_INVALID_ARGUMENT);
     return guarded(
         [&]() -> int {
-            if (auto r = editor->editor->add(*input->source); !r)
+            std::optional<CallbackProgress> progress;
+            if (editor->progress)
+                progress.emplace(editor->progress, editor->progress_user);
+            if (auto r = editor->editor->add(*input->source, progress ? &*progress : nullptr); !r)
                 return set_error(r.error());
             return ZP_OK;
         },

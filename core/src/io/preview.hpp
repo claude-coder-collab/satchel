@@ -29,7 +29,7 @@ struct Preview
     {
         std::string name;
         bool directory = false;
-        std::uint64_t size = 0;
+        std::uint64_t size = 0; // a restorable single-file FLAC: the original file's size
         std::uint64_t packed = 0;
         std::string method; // "Stored", "Deflate", "FLAC", "Method <n>"
         std::string restores_to; // original file name of a restorable FLAC entry
@@ -64,7 +64,7 @@ struct Preview
     bool zip64 = false;
     std::uint64_t entry_count = 0;
     std::uint64_t file_count = 0;
-    std::uint64_t total_size = 0;
+    std::uint64_t total_size = 0; // original sizes for restorable FLAC (a multi-mono group counts once)
     std::uint64_t packed_size = 0;
     std::uint64_t restorable_audio = 0; // files that extraction restores (a multi-mono group counts once)
     bool restorable_audio_partial = false; // more FLAC entries than max_probed: the count is a lower bound

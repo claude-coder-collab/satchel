@@ -32,6 +32,7 @@
 #include <QTemporaryDir>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QToolButton>
 #include <QTreeView>
 
 #include <QElapsedTimer>
@@ -45,9 +46,11 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <optional>
 #include <thread>
 #include <utility>
 
@@ -63,14 +66,39 @@ constexpr qint64 limit_ms = 3000;
 constexpr qint64 limit_ms = 3000;
 #endif
 
-// Job results as they reach the test's thread. A QSignalSpy on JobQueue::finished records on the
+QByteArray test_wav(int frames, std::uint16_t channels = 2)
+{
+    QByteArray pcm;
+    for (int i = 0; i < frames; ++i)
+    {
+        const auto v = static_cast<std::int16_t>(8000.0 * std::sin(i / 20.0));
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            pcm.append(static_cast<char>(v & 0xFF));
+            pcm.append(static_cast<char>((v >> 8) & 0xFF));
+        }
+    }
+    const auto le = [](std::uint32_t x, int bytes) {
+        QByteArray b;
+        for (int k = 0; k < bytes; ++k)
+            b.append(static_cast<char>((x >> (8 * k)) & 0xFF));
+        return b;
+    };
+    const auto size = static_cast<std::uint32_t>(pcm.size());
+    return "RIFF" + le(36 + size, 4) + "WAVEfmt " + le(16, 4) + le(1, 2) + le(channels, 2) + le(48000, 4) + le(48000u * 2u * channels, 4) + le(2u * channels, 2) + le(16, 2) + "data" + le(size, 4) + pcm;
+}
+
+// Job results as they reach the test's thread, leaving out Simple mode's successful scans. A QSignalSpy on JobQueue::finished records on the
 // job thread, so a job that ends before wait() starts is missed.
 class JobResults : public QObject
 {
 public:
     explicit JobResults(JobQueue& jobs)
     {
-        connect(&jobs, &JobQueue::finished, this, [this](int, const QString&, const JobOutcome& outcome) { pending_ << outcome; });
+        connect(&jobs, &JobQueue::finished, this, [this](int, const QString& title, const JobOutcome& outcome) {
+            if (!title.startsWith("Scanning files") || outcome.status != ZP_OK)
+                pending_ << outcome;
+        });
     }
 
     // Waits until a result is pending.
@@ -190,6 +218,79 @@ private slots:
         qInfo("opened 100,000 entries in %lld ms", static_cast<long long>(ms));
         // The spec target is 1 s on a desktop; shared CI runners and sanitizer builds get some slack.
         QVERIFY2(ms < limit_ms, qPrintable(QString("took %1 ms").arg(ms)));
+    }
+
+    void resolution_sheet_lists_every_conflict()
+    {
+        zpp::Input input(zpp::not_null(zp_input_memory()));
+        for (const char* name : { "bad\xFF.txt", "a", "A/b", "x", "X", "ok" })
+            zpp::check(zp_input_memory_add_file(input.get(), name, nullptr, 0, 0, 0644));
+        zpp::Plan plan(zpp::not_null(zp_plan_create(context.get(), input.get(), nullptr)));
+        QVERIFY(!zp_plan_executable(plan.get()));
+        {
+            ResolutionSheet sheet(plan.get());
+            QCOMPARE(sheet.windowTitle(), QString("Some names need changing"));
+            const auto edits = sheet.findChildren<QLineEdit*>();
+            QCOMPARE(edits.size(), 3);
+            QStringList names;
+            for (auto* e : edits)
+                names << e->text();
+            QVERIFY(names.contains("bad_.txt"));
+            QVERIFY(names.contains("a 2"));
+            QVERIFY(names.contains("X 2"));
+            QVERIFY(sheet.apply());
+        }
+        QVERIFY(zp_plan_executable(plan.get()));
+        QCOMPARE(zpp::plan_entries(plan.get()).size(), std::size_t{ 6 });
+
+        zpp::Input again(zpp::not_null(zp_input_memory()));
+        zpp::check(zp_input_memory_add_file(again.get(), "bad\xFF.txt", nullptr, 0, 0, 0644));
+        zpp::check(zp_input_memory_add_file(again.get(), "ok", nullptr, 0, 0, 0644));
+        zpp::Plan skipped(zpp::not_null(zp_plan_create(context.get(), again.get(), nullptr)));
+        ResolutionSheet sheet(skipped.get());
+        QCOMPARE(sheet.windowTitle(), QString("Some names can't be stored"));
+        auto boxes = sheet.findChildren<QCheckBox*>();
+        QCOMPARE(boxes.size(), 1);
+        boxes.front()->setChecked(true);
+        QVERIFY(sheet.apply());
+        QCOMPARE(zpp::plan_entries(skipped.get()).size(), std::size_t{ 1 });
+    }
+
+    void opened_flac_archive_shows_audio_savings()
+    {
+        QDir root(dir_.filePath("savings"));
+        QVERIFY(root.mkpath("proj"));
+        for (const auto& [name, channels] : { std::pair{ "proj/tone.wav", 2 }, std::pair{ "proj/wide.wav", 10 } })
+        {
+            QFile f(root.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(test_wav(48000, static_cast<std::uint16_t>(channels)));
+        }
+        const auto path = dir_.filePath("savings.zip");
+        {
+            const auto plan = make_plan(context.get(), { root.filePath("proj") }, satchel_gui::Settings{});
+            zpp::Stream out(zpp::not_null(zp_stream_create_file(path.toStdString().c_str())));
+            zpp::check(zp_build(plan->get(), out.get(), nullptr, nullptr, nullptr, nullptr));
+            zpp::check(zp_stream_commit(out.get()));
+        }
+        App app;
+        app.show_archive(path);
+        auto* view = app.active()->full();
+        auto& model = view->model();
+        QTRY_VERIFY_WITH_TIMEOUT(model.rowCount() > 0, 5000);
+        const auto folder = model.index(0, ArchiveModel::Name);
+        QCOMPARE(folder.data().toString(), QString("proj"));
+        QTRY_VERIFY_WITH_TIMEOUT(model.index(0, ArchiveModel::Ratio).data().toString().endsWith('%'), 5000);
+        QVERIFY(model.index(0, ArchiveModel::Ratio).data().toString() != "0%");
+        QVERIFY(model.rowCount(folder) >= 2);
+        for (int r = 0; r < model.rowCount(folder); ++r)
+        {
+            const auto name = model.index(r, ArchiveModel::Name, folder).data().toString();
+            if (!name.contains("tone") && !name.contains("wide"))
+                continue;
+            const auto ratio = model.index(r, ArchiveModel::Ratio, folder).data().toString();
+            QVERIFY2(ratio.endsWith('%') && ratio != "0%", qPrintable(name + ": " + ratio));
+        }
     }
 
     void flac_ratio_needs_the_original_size()
@@ -349,6 +450,15 @@ private slots:
 #ifdef Q_OS_MACOS
         QVERIFY(uninstall_available());
 #endif
+    }
+
+    void uninstall_sees_applications_as_writable()
+    {
+        if (!uninstall_available())
+            QSKIP("macOS only");
+        QVERIFY(!on_read_only_volume("/Applications"));
+        QVERIFY(!on_read_only_volume(dir_.path().toStdString()));
+        QVERIFY(on_read_only_volume("/System/Library"));
     }
 
     void uninstall_helper_arguments_round_trip()
@@ -765,6 +875,80 @@ private slots:
         QCOMPARE(verified.entry_status.size(), 8);
     }
 
+    void dragged_items_extract_only_where_dropped()
+    {
+        QDir root(dir_.filePath("drag-out"));
+        QVERIFY(root.mkpath("src/docs"));
+        QVERIFY(write(root.filePath("src/a.txt"), "a"));
+        QVERIFY(write(root.filePath("src/docs/b.txt"), "b"));
+        const auto archive = root.filePath("x.zip");
+        {
+            JobContext jc;
+            jc.context = context.get();
+            const auto plan = make_plan(context.get(), { root.filePath("src") }, satchel_gui::Settings{});
+            QCOMPARE(compress_job(jc, plan->get(), archive, satchel_gui::Settings{}).status, ZP_OK);
+        }
+        App app;
+        app.show_archive(archive);
+        auto* w = app.active()->full();
+        QTRY_VERIFY_WITH_TIMEOUT(!w->session().busy() && w->session().snapshot(), 20000);
+        auto* view = w->findChild<QTreeView*>();
+        view->expandAll();
+        const auto select = [&](const QString& path) {
+            std::function<QModelIndex(const QModelIndex&)> walk = [&](const QModelIndex& parent) -> QModelIndex {
+                for (int r = 0; r < view->model()->rowCount(parent); ++r)
+                {
+                    const auto idx = view->model()->index(r, 0, parent);
+                    if (idx.data(ArchiveModel::PathRole).toString() == path)
+                        return idx;
+                    if (auto found = walk(idx); found.isValid())
+                        return found;
+                }
+                return {};
+            };
+            view->selectionModel()->setCurrentIndex(walk({}), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        };
+        QVERIFY(root.mkpath("out"));
+        const auto export_one = [&](const QString& row, const QString& expected_name) {
+            select(row);
+            const auto items = w->drag_items();
+            QCOMPARE(items.size(), std::size_t{ 1 });
+            QCOMPARE(items.front().name, expected_name);
+            std::optional<QString> error;
+            w->export_dragged(items.front(), root.filePath("out/" + expected_name), [&](const QString& e) { error = e; });
+            QTRY_VERIFY_WITH_TIMEOUT(error.has_value(), 20000);
+            QCOMPARE(*error, QString());
+        };
+        export_one("src/docs", "docs");
+        export_one("src/docs/b.txt", "b.txt");
+        QCOMPARE(QDir(root.filePath("out")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), (QStringList{ "b.txt", "docs" }));
+        QCOMPARE(QDir(root.filePath("out/docs")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), QStringList{ "b.txt" });
+
+        JobContext jc;
+        jc.context = context.get();
+        const auto taken = export_job(jc, archive, root.filePath("out/b.txt"), satchel_gui::Settings{}, w->drag_items().front().entries, "src/docs");
+        QCOMPARE(taken.status, ZP_IO_ERROR);
+        jc.progress = [](std::uint64_t, std::uint64_t) { return false; };
+        const auto cancelled = export_job(jc, archive, root.filePath("out/again"), satchel_gui::Settings{}, w->drag_items().front().entries, "src/docs");
+        QCOMPARE(cancelled.status, ZP_CANCELLED);
+        QCOMPARE(QDir(root.filePath("out")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), (QStringList{ "b.txt", "docs" }));
+
+        // The status bar's stop button cancels every extraction of the window, queued ones too.
+        select("src/docs");
+        const auto folder = w->drag_items().front();
+        std::vector<std::optional<QString>> errors(3);
+        for (std::size_t i = 0; i < errors.size(); ++i)
+            w->export_dragged(folder, root.filePath(QString("out/stop%1").arg(i)), [&errors, i](const QString& e) { errors[i] = e; });
+        auto* stop = w->findChild<QToolButton*>("stopJobs");
+        QVERIFY(stop);
+        stop->click();
+        QTRY_VERIFY_WITH_TIMEOUT(std::ranges::all_of(errors, [](const auto& e) { return e.has_value(); }), 20000);
+        QVERIFY(!errors.back()->isEmpty());
+        for (std::size_t i = 0; i < errors.size(); ++i)
+            QCOMPARE(QFileInfo::exists(root.filePath(QString("out/stop%1").arg(i))), errors[i]->isEmpty());
+        QVERIFY(QDir(root.filePath("out")).entryList({ ".satchel-*" }, QDir::AllEntries | QDir::Hidden).isEmpty());
+    }
+
     void verified_column_is_hidden_by_default()
     {
         QSettings().remove("browser/layout");
@@ -834,7 +1018,7 @@ private slots:
         QCOMPARE(view->currentIndex().data(ArchiveModel::PathRole).toString(), QString("src/docs/b.txt"));
 
         // Nothing of a new archive is on disk, so nothing can be dragged out of the window.
-        QVERIFY(w->drag_names().isEmpty());
+        QVERIFY(w->drag_items().empty());
 
         // A folder cannot move into itself; a file moves into the folder it is dropped on.
         select("src/docs");

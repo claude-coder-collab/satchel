@@ -137,8 +137,9 @@ require the magic; anything else is a foreign comment (`nullopt`).
   case folding. Negation patterns were left out, so pattern order never matters. Cubase/Nuendo
   peak files were left out of the DAW preset because their extension could not be confirmed.
 - Conflict kinds (extension of the design doc's `Conflict`):
-  - `Collision`: equal `collision_key` (NFC + case fold), or a file name that another entry uses as
-    a folder (`a` and `a/b`).
+  - `Collision`: equal `collision_key` (NFC + case fold).
+  - `FileAsFolder`: a file name that other entries use as a folder (`a` and `a/b`); `entries[0]` is
+    the file, so renaming or skipping it resolves the conflict.
   - `InvalidName`: the normalized name fails `validate_for_archive` (invalid UTF-8, absolute, drive
     letter, empty/`.`/`..` segments, backslash, > 65,535 bytes).
 - `replan` applies all resolutions at once; indices refer to the plan passed in; skipped entries are
@@ -207,7 +208,14 @@ require the magic; anything else is a foreign comment (`nullopt`).
 - `ArchiveEditor` indices refer to the current `plan()` order (initially archive order, then
   additions appended).
 - Kept entries are copied raw with their CRC, sizes, method, mtime and mode; names are
-  re-normalized (third-party names are decoded and re-stored as UTF-8 with bit 11).
+  re-normalized (third-party names are decoded and re-stored as UTF-8 with bit 11). The copy
+  reports progress after every 1 MiB chunk (the entry's uncompressed size scaled by the share of
+  raw bytes copied) and stops there when cancelled.
+- Extraction planning reads the FLAC headers of the selected `.flac` entries on the worker pool
+  in batches of 16 (and of every `.flac` entry once a multi-mono member is selected, grouped by
+  group ID in one pass), polling the progress callback with (0, 0) every 100 ms for cancellation.
+- Planning polls its progress callback with (0, 0) before listing the inputs, then with
+  (files read, files) at most every 50 ms while it reads file headers.
 - Symlink entries in the source archive are dropped with a `SYMLINK_SKIPPED` warning.
 - Archives containing encrypted entries or entries with methods other than store/deflate cannot be
   edited (`UNSUPPORTED_METHOD`): minizip-ng only writes raw entries for methods it was built with.
@@ -544,7 +552,7 @@ only.
     and swallows the quit while a workspace is still visible or busy, so "keep running" survives
     Quit. Before, closing the last window with "keep running" quit the app and cancelled the job.
   - Temp files need no per-window handling: spill files and atomic-write temp files have random
-    names, and drag-out folders are `satchel-<ms>`.
+    names, and drag-out folders are `satchel-<ms>` (or `.satchel-<uuid>` beside a macOS drop target).
   - Two windows on one archive are prevented only for Full mode (`App::window_showing`). A
     Simple-mode extract of an archive another window is rewriting is not guarded: on POSIX the
     reader keeps the old file, on Windows the rewrite fails with a sharing error and the session
@@ -582,7 +590,10 @@ only.
     `rename_requested`; the model never changes itself.
   - Extraction: `ExtractDialog` options, then a pre-flight showing issues and existing files.
   - Verify writes nothing and fills the Verified column.
-  - Dragging out extracts to a temporary folder first. The Name column is resizable; column
+  - Dragging out: on macOS `mac_drag.mm` starts the drag itself with `NSFilePromiseProvider`s
+    (Qt has no file promises) and `export_job` extracts each dropped item; the view treats
+    drag events during that session as its own (moves). Elsewhere `EntriesMime` extracts into a
+    temporary folder when the target asks for the URLs. The Name column is resizable; column
     layout is saved under `browser/layout`.
   - `Session::commit` returns the files the build left out because they changed after planning
     (`zp_editor_commit` returns `ZP_SOURCE_CHANGED` with a complete output and a build
@@ -794,7 +805,9 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   (`osascript`, only if running), `pluginkit -r` for every registered `<bundle id>.preview` extension
   (only those: unregistering one that is not registered fails; the bundled extension is tried only
   if `pluginkit -m` cannot be run), `lsregister -u`, move each `Satchel.app` (`/Applications`,
-  `~/Applications`, `--app`) to `~/.Trash`, `defaults delete` the preferences domain, remove
+  `~/Applications`, `--app`) to `~/.Trash` (when the rename is refused for lack of permission, as
+  for a standard user in `/Applications`, through `osascript -e 'do shell script "mv … && chown -R
+  <uid> …" with administrator privileges'`, which shows the system password prompt), `defaults delete` the preferences domain, remove
   `~/Library` data (Preferences, Application Support, Caches, HTTPStorages, Saved Application State,
   Logs; skipped by `--keep-settings`), then `pbs -flush` so the Finder services disappear. The bundle
   ID is read from the app's `Info.plist` with `plutil`. Launch Services, `defaults`, `osascript` and
@@ -821,7 +834,7 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   `~/.config/Satchel/Satchel.conf` on Linux; header layout, last mode, options);
   WinSparkle's own key `HKCU\Software\<ZP_VENDOR>\Satchel\WinSparkle` (the path comes from WinSparkle's
   documentation and the exe's version resource, not yet seen on a real Windows machine); and temp
-  leftovers `satchel-<ms>` (entries extracted for opening or dragging, never deleted by the app) and
+  leftovers `satchel-<ms>` (entries extracted for opening, or for dragging where file promises are unavailable) and
   `satchel-spill-*.flac` (spill files after a crash). It writes nothing to AppData or elsewhere. The
   dialog offers "Delete Settings and Temporary Files", "Delete Settings Only" or Cancel, then quits; the
   deletion runs in `PendingCleanup`'s destructor (declared before `App` in `main`) so nothing rewrites

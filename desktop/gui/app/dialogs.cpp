@@ -250,43 +250,82 @@ ResolutionSheet::ResolutionSheet(zp_plan_t* plan, QWidget* parent) :
     QDialog(parent),
     plan_(plan)
 {
-    setWindowTitle(tr("Some names collide"));
-    auto* layout = new QVBoxLayout(this);
-    layout->addWidget(new QLabel(tr("These files would get the same name in the archive. Suggested new names:"), this));
-    auto* form = new QFormLayout;
     const auto entries = zpp::plan_entries(plan);
-    for (const auto& c : zpp::plan_conflicts(plan))
+    const auto conflicts = zpp::plan_conflicts(plan);
+    const bool any_invalid = std::ranges::any_of(conflicts, [](const zpp::Conflict& c) { return c.kind == ZP_CONFLICT_INVALID_NAME; });
+    const bool any_collision = std::ranges::any_of(conflicts, [](const zpp::Conflict& c) { return c.kind != ZP_CONFLICT_INVALID_NAME; });
+    if (any_invalid && any_collision)
+        setWindowTitle(tr("Some names need changing"));
+    else if (any_invalid)
+        setWindowTitle(tr("Some names can't be stored"));
+    else
+        setWindowTitle(tr("Some names collide"));
+
+    auto* layout = new QVBoxLayout(this);
+    layout->addWidget(new QLabel(tr("Rename or skip these files to continue:"), this));
+    auto* body = new QWidget;
+    auto* form = new QFormLayout(body);
+    const auto existing = [&](const std::filesystem::path& p) {
+        return std::ranges::any_of(entries, [&](const zpp::PlanEntry& x) { return std::filesystem::path(x.output_name) == p; })
+            || std::ranges::any_of(rows_, [&](const Row& r) { return std::filesystem::path(r.edit->text().toStdString()) == p; });
+    };
+    for (const auto& c : conflicts)
     {
-        for (std::size_t k = 1; k < c.entries.size(); ++k)
+        auto* heading = new QLabel(QStringLiteral("<b>%1</b> — %2").arg(QString::fromStdString(entries[c.entries.front()].output_name).toHtmlEscaped(), QString::fromStdString(c.detail).toHtmlEscaped()), body);
+        heading->setWordWrap(true);
+        form->addRow(heading);
+        std::vector<std::size_t> targets;
+        if (c.kind == ZP_CONFLICT_INVALID_NAME || c.entries.size() < 2)
+            targets = c.entries;
+        else if (c.kind == ZP_CONFLICT_FILE_AS_FOLDER)
+            targets = { c.entries.front() };
+        else
+            targets.assign(c.entries.begin() + 1, c.entries.end());
+        for (const auto index : targets)
         {
-            const auto& e = entries[c.entries[k]];
-            const auto existing = [&](const std::filesystem::path& p) {
-                return std::ranges::any_of(entries, [&](const zpp::PlanEntry& x) { return std::filesystem::path(x.output_name) == p; });
-            };
-            const auto suggestion = satchel_gui::unique_path(std::filesystem::path(e.output_name), existing);
-            auto* edit = new QLineEdit(QString::fromStdString(suggestion.generic_string()), this);
-            form->addRow(QString::fromStdString(e.source_path), edit);
-            edits_.emplace_back(c.entries[k], edit);
+            if (std::ranges::any_of(rows_, [&](const Row& r) { return r.entry == index; }))
+                continue;
+            const auto& e = entries[index];
+            const auto name = c.kind == ZP_CONFLICT_INVALID_NAME ? satchel_gui::storable_name(e.output_name) : e.output_name;
+            const auto suggestion = satchel_gui::unique_path(std::filesystem::path(name), existing);
+            auto* row = new QHBoxLayout;
+            auto* edit = new QLineEdit(QString::fromStdString(suggestion.generic_string()), body);
+            auto* skip = new QCheckBox(tr("Skip"), body);
+            connect(skip, &QCheckBox::toggled, edit, &QWidget::setDisabled);
+            row->addWidget(edit, 1);
+            row->addWidget(skip);
+            form->addRow(QString::fromStdString(e.source_path), row);
+            rows_.push_back({ index, edit, skip });
         }
     }
-    layout->addLayout(form);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(body);
+    layout->addWidget(scroll, 1);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    buttons->button(QDialogButtonBox::Ok)->setText(tr("Rename and continue"));
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Continue"));
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     layout->addWidget(buttons);
+    resize(560, std::min(160 + 36 * static_cast<int>(rows_.size() + conflicts.size()), 520));
 }
 
 bool ResolutionSheet::apply()
 {
     std::vector<std::string> names;
-    names.reserve(edits_.size());
+    names.reserve(rows_.size());
+    for (const auto& r : rows_)
+        names.push_back(r.edit->text().toStdString());
     std::vector<zp_resolution_t> res;
-    res.reserve(edits_.size());
-    for (const auto& [index, edit] : edits_)
-        names.push_back(edit->text().toStdString());
-    for (std::size_t i = 0; i < edits_.size(); ++i)
-        res.push_back({ edits_[i].first, ZP_RESOLVE_RENAME, names[i].c_str() });
+    res.reserve(rows_.size());
+    for (std::size_t i = 0; i < rows_.size(); ++i)
+    {
+        if (rows_[i].skip->isChecked())
+            res.push_back({ rows_[i].entry, ZP_RESOLVE_SKIP, nullptr });
+        else
+            res.push_back({ rows_[i].entry, ZP_RESOLVE_RENAME, names[i].c_str() });
+    }
     return zp_plan_resolve(plan_, res.data(), res.size()) == ZP_OK && zp_plan_executable(plan_) != 0;
 }
 

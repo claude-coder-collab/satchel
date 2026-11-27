@@ -57,6 +57,7 @@ signals:
     // A new archive: leave it without creating it.
     void cancel_new();
     void cancel_write();
+    void cancel_scan();
     void resolve(const satchel_gui::op::Resolve& resolution);
     void options_changed(const satchel_gui::Settings& settings, satchel_gui::ExistingEntries existing);
     void reveal(const QString& path);

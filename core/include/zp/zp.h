@@ -78,7 +78,8 @@ enum {
 
 enum {
     ZP_CONFLICT_COLLISION = 0,
-    ZP_CONFLICT_INVALID_NAME = 1
+    ZP_CONFLICT_INVALID_NAME = 1,
+    ZP_CONFLICT_FILE_AS_FOLDER = 2 /* entries[0] is a file; the others are inside a folder of that name */
 };
 
 enum {
@@ -234,6 +235,12 @@ typedef struct zp_plan_options
     int flac_enabled; /* default 1 */
     int deflate_level; /* default 6 */
     int flac_level; /* default 5 */
+    /* Called by zp_plan_create, and by zp_editor_add on an editor opened with these options
+     * (it must stay valid while the editor lives): (0, 0) while folders are listed, then
+     * (files read, files) while file headers are read. Non-zero cancels: zp_plan_create returns
+     * NULL and zp_editor_add leaves the edit unchanged, both with ZP_CANCELLED. Default NULL. */
+    zp_progress_fn progress;
+    void* progress_user;
 } zp_plan_options_t;
 
 ZP_API void zp_plan_options_init(zp_plan_options_t* options);
@@ -405,6 +412,10 @@ typedef struct zp_extract_options
      * root): "docs/a.txt" with base "docs" is written as "a.txt", and the folder entry itself is
      * not written. Entries outside it keep their full path. Default NULL. */
     const char* base_folder;
+    /* Polled with (0, 0) while zp_extract_plan reads FLAC headers; non-zero cancels and
+     * zp_extract_plan returns NULL with ZP_CANCELLED. Default NULL. */
+    zp_progress_fn progress;
+    void* progress_user;
 } zp_extract_options_t;
 
 ZP_API void zp_extract_options_init(zp_extract_options_t* options);

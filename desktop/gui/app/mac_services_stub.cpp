@@ -18,6 +18,11 @@ bool uninstall_available()
 
 void run_uninstall_dialog(QWidget*) {}
 
+bool on_read_only_volume(const std::string&)
+{
+    return false;
+}
+
 void add_uninstall_action(QMenu*, QWidget*) {}
 
 QStringList uninstall_helper_arguments(const UninstallRequest&)

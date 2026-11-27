@@ -56,6 +56,9 @@ std::filesystem::path extract_staging(const std::filesystem::path& wanted_folder
 // itself becomes `wanted_folder`. Names are made unique; returns the final path, or `staging`
 // if it could not be moved.
 std::filesystem::path finalize_extraction(const std::filesystem::path& staging, const std::filesystem::path& wanted_folder, const ExistsFn& exists);
+// A name the archive can store, close to `name`: invalid UTF-8, NUL and backslashes become '_',
+// and drive letters, leading slashes and empty, "." and ".." segments are dropped.
+std::string storable_name(std::string_view name);
 
 // ---- Archive browser rows --------------------------------------------------------------------
 

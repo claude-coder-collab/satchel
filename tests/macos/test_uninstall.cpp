@@ -198,3 +198,30 @@ TEST_CASE("without a pluginkit listing, the bundle's own extension is unregister
     CHECK(report.failed.empty());
     CHECK(std::ranges::any_of(runner.calls, [&](const auto& c) { return c[0] == "pluginkit" && c[1] == "-r" && c[2] == (sandbox.app / "Contents" / "PlugIns" / "SatchelPreview.appex").string(); }));
 }
+
+TEST_CASE("an app the user cannot move is moved with administrator rights", "[uninstall]")
+{
+    Sandbox sandbox;
+    const auto folder = sandbox.app.parent_path();
+    fs::permissions(folder, fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write, fs::perm_options::remove);
+    FakeRunner runner;
+    const auto report = uninstall(sandbox.options(), std::ref(runner));
+    fs::permissions(folder, fs::perms::owner_write, fs::perm_options::add);
+    if (geteuid() == 0)
+        SKIP("root can always move the app");
+
+    CHECK(report.failed.empty());
+    const auto admin = std::ranges::find_if(runner.calls, [](const auto& c) { return c[0] == "osascript" && c[2].find("with administrator privileges") != std::string::npos; });
+    REQUIRE(admin != runner.calls.end());
+    const auto& script = (*admin)[2];
+    CHECK(script.find("/bin/mv '" + sandbox.app.string() + "' '" + (sandbox.root / ".Trash" / "Satchel.app").string() + "'") != std::string::npos);
+    CHECK(script.find("/usr/sbin/chown -R " + std::to_string(getuid())) != std::string::npos);
+}
+
+TEST_CASE("admin move quotes paths for the shell and AppleScript", "[uninstall]")
+{
+    const auto argv = admin_move_command("/Applications/It's \"Sat\\chel\".app", "/Users/a b/.Trash/x.app", 501);
+    REQUIRE(argv.size() == 3);
+    CHECK(argv[0] == "osascript");
+    CHECK(argv[2] == R"(do shell script "/bin/mv '/Applications/It'\\''s \"Sat\\chel\".app' '/Users/a b/.Trash/x.app' && /usr/sbin/chown -R 501 '/Users/a b/.Trash/x.app'" with administrator privileges)");
+}

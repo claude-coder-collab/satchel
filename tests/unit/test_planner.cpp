@@ -78,7 +78,8 @@ TEST_CASE("collisions: exact, case-only, normalization-only, file vs directory",
         in.add_file("a", {});
         in.add_file("A/b", {});
         auto p = test::plan_of(in);
-        REQUIRE(collisions(p) == 1);
+        REQUIRE(p.conflicts.size() == 1);
+        CHECK(p.conflicts[0].kind == ConflictKind::FileAsFolder);
         CHECK(p.conflicts[0].entries == std::vector<std::size_t>{ 0, 1 });
     }
     SECTION("distinct names are fine")

@@ -8,6 +8,7 @@
 #include "io/zip/path_policy.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <format>
 #include <map>
@@ -161,12 +162,20 @@ std::string PlanEntry::restored_name() const
     return flac_stem(output_name, codec) + original_extension;
 }
 
-Result<std::vector<PlanEntry>> ArchivePlanner::make_entries(std::vector<InputItem> items, std::vector<Warning>& warnings) const
+Result<std::vector<PlanEntry>> ArchivePlanner::make_entries(std::vector<InputItem> items, std::vector<Warning>& warnings, ProgressSink* progress) const
 {
     std::vector<PlanEntry> entries;
     entries.reserve(items.size());
-    for (auto& item : items)
+    auto last_report = std::chrono::steady_clock::now();
+    for (std::size_t n = 0; n < items.size(); ++n)
     {
+        if (progress && std::chrono::steady_clock::now() - last_report >= std::chrono::milliseconds(50))
+        {
+            last_report = std::chrono::steady_clock::now();
+            if (!progress->on_progress(n, items.size()))
+                return fail(Status::Cancelled, "cancelled");
+        }
+        auto& item = items[n];
         if (item.kind == ItemKind::Symlink)
         {
             warnings.push_back({ WarningKind::SymlinkSkipped, item.source_path, "symbolic links are not archived" });
@@ -231,14 +240,18 @@ Result<std::vector<PlanEntry>> ArchivePlanner::make_entries(std::vector<InputIte
     return entries;
 }
 
-Result<ArchivePlan> ArchivePlanner::plan(InputSource& input) const
+Result<ArchivePlan> ArchivePlanner::plan(InputSource& input, ProgressSink* progress) const
 {
+    if (progress && !progress->on_progress(0, 0))
+        return fail(Status::Cancelled, "cancelled");
     auto items = input.enumerate();
     if (!items)
         return std::unexpected(items.error());
+    if (progress && !progress->on_progress(0, items->size()))
+        return fail(Status::Cancelled, "cancelled");
     ArchivePlan plan;
     plan.options = options_;
-    auto entries = make_entries(std::move(*items), plan.warnings);
+    auto entries = make_entries(std::move(*items), plan.warnings, progress);
     if (!entries)
         return std::unexpected(entries.error());
     plan.entries = std::move(*entries);
@@ -338,7 +351,7 @@ void ArchivePlanner::check(ArchivePlan& plan)
         }
     }
     for (auto& [key, idx] : parent_clash)
-        plan.conflicts.push_back({ ConflictKind::Collision, key, idx, "a file name is also used as a folder" });
+        plan.conflicts.push_back({ ConflictKind::FileAsFolder, key, idx, "a file name is also used as a folder" });
 
     std::ranges::sort(plan.conflicts, {}, [](const Conflict& c) { return c.entries.front(); });
 }

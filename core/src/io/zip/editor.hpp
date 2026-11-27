@@ -25,7 +25,8 @@ public:
     explicit ArchiveEditor(Context& context, PlannerOptions options = {});
 
     VoidResult open(IChunkedStream& input);
-    VoidResult add(InputSource& input);
+    // `progress` is polled as for ArchivePlanner::plan; when it cancels, the edit is unchanged.
+    VoidResult add(InputSource& input, ProgressSink* progress = nullptr);
     VoidResult remove(std::size_t index);
     VoidResult rename(std::size_t index, const std::string& new_name);
     VoidResult replace(std::size_t index, InputItem item);
