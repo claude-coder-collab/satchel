@@ -36,7 +36,8 @@ enum {
 };
 enum {
     ZP_CONFLICT_COLLISION = 0,
-    ZP_CONFLICT_INVALID_NAME = 1
+    ZP_CONFLICT_INVALID_NAME = 1,
+    ZP_CONFLICT_FILE_AS_FOLDER = 2
 };
 enum {
     ZP_WARNING_SYMLINK_SKIPPED = 0,
@@ -132,6 +133,8 @@ typedef struct zp_plan_options
     int flac_enabled;
     int deflate_level;
     int flac_level;
+    zp_progress_fn progress;
+    void* progress_user;
 } zp_plan_options_t;
 void zp_plan_options_init(zp_plan_options_t* options);
 typedef struct zp_plan_entry
@@ -259,6 +262,8 @@ typedef struct zp_extract_options
     int include_readme;
     int overwrite;
     const char* base_folder;
+    zp_progress_fn progress;
+    void* progress_user;
 } zp_extract_options_t;
 void zp_extract_options_init(zp_extract_options_t* options);
 typedef struct zp_extract_issue
