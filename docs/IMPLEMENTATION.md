@@ -798,7 +798,9 @@ machines with little RAM measure swapping: the benchmark keeps all inputs and ou
   (`osascript`, only if running), `pluginkit -r` for every registered `<bundle id>.preview` extension
   (only those: unregistering one that is not registered fails; the bundled extension is tried only
   if `pluginkit -m` cannot be run), `lsregister -u`, move each `Satchel.app` (`/Applications`,
-  `~/Applications`, `--app`) to `~/.Trash`, `defaults delete` the preferences domain, remove
+  `~/Applications`, `--app`) to `~/.Trash` (when the rename is refused for lack of permission, as
+  for a standard user in `/Applications`, through `osascript -e 'do shell script "mv … && chown -R
+  <uid> …" with administrator privileges'`, which shows the system password prompt), `defaults delete` the preferences domain, remove
   `~/Library` data (Preferences, Application Support, Caches, HTTPStorages, Saved Application State,
   Logs; skipped by `--keep-settings`), then `pbs -flush` so the Finder services disappear. The bundle
   ID is read from the app's `Info.plist` with `plutil`. Launch Services, `defaults`, `osascript` and

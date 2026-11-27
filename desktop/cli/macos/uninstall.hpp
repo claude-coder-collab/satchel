@@ -43,6 +43,10 @@ inline constexpr std::string_view default_bundle_id = "org.satchel.satchel";
 // Runs argv[0] (searched in PATH) and captures stdout; status 127 when it cannot be started.
 CommandResult run_process(const std::vector<std::string>& argv);
 
+// osascript argv that moves `from` to `to` after asking for an administrator's password, then
+// gives `to` to `uid` so the Trash can be emptied normally.
+std::vector<std::string> admin_move_command(const std::filesystem::path& from, const std::filesystem::path& to, unsigned uid);
+
 // `Path = ….appex` lines of `pluginkit -mAvvv`.
 std::vector<std::filesystem::path> parse_registered_extensions(std::string_view pluginkit_output);
 
@@ -50,7 +54,8 @@ std::vector<std::filesystem::path> default_app_paths(const std::filesystem::path
 std::vector<std::filesystem::path> user_data_paths(const std::filesystem::path& home, std::string_view bundle_id);
 
 // Quits the app (unless `quit_running` is off, for the app removing itself), unregisters the Quick Look extension, moves the app to the Trash, deletes settings
-// and flushes the Finder services. Only read-only commands run when `dry_run` is set.
+// and flushes the Finder services. An app the user may not move (in /Applications without admin
+// rights) is moved through admin_move_command. Only read-only commands run when `dry_run` is set.
 UninstallReport uninstall(const UninstallOptions& options, const Runner& runner);
 
 }

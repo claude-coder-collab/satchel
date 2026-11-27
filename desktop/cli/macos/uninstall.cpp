@@ -71,7 +71,7 @@ private:
     UninstallReport& report_;
 };
 
-bool move_to_trash(const fs::path& path, const fs::path& home)
+fs::path trash_target(const fs::path& path, const fs::path& home)
 {
     std::error_code ec;
     const auto trash = home / ".Trash";
@@ -79,8 +79,27 @@ bool move_to_trash(const fs::path& path, const fs::path& home)
     auto target = trash / path.filename();
     if (fs::exists(fs::symlink_status(target)))
         target = trash / (path.stem().string() + " " + std::to_string(std::time(nullptr)) + path.extension().string());
-    fs::rename(path, target, ec);
-    return !ec;
+    return target;
+}
+
+std::string shell_quoted(const std::string& s)
+{
+    std::string out = "'";
+    for (const char c : s)
+        out += c == '\'' ? std::string{ "'\\''" } : std::string(1, c);
+    return out + "'";
+}
+
+std::string applescript_quoted(const std::string& s)
+{
+    std::string out = "\"";
+    for (const char c : s)
+    {
+        if (c == '"' || c == '\\')
+            out += '\\';
+        out += c;
+    }
+    return out + "\"";
 }
 
 bool remove_tree(const fs::path& path)
@@ -90,6 +109,12 @@ bool remove_tree(const fs::path& path)
     return !ec;
 }
 
+}
+
+std::vector<std::string> admin_move_command(const fs::path& from, const fs::path& to, unsigned uid)
+{
+    const auto shell = "/bin/mv " + shell_quoted(from.string()) + " " + shell_quoted(to.string()) + " && /usr/sbin/chown -R " + std::to_string(uid) + " " + shell_quoted(to.string());
+    return { "osascript", "-e", "do shell script " + applescript_quoted(shell) + " with administrator privileges" };
 }
 
 CommandResult run_process(const std::vector<std::string>& argv)
@@ -220,7 +245,14 @@ UninstallReport uninstall(const UninstallOptions& options, const Runner& runner)
     for (const auto& app : existing)
     {
         steps.command("unregister " + app.string() + " from Launch Services", { lsregister, "-u", app.string() }, false);
-        steps.action("move " + app.string() + " to the Trash", [&] { return move_to_trash(app, options.home); });
+        const auto target = options.dry_run ? fs::path{} : trash_target(app, options.home);
+        std::error_code ec;
+        if (!options.dry_run)
+            fs::rename(app, target, ec);
+        if (ec == std::errc::permission_denied || ec == std::errc::operation_not_permitted)
+            steps.command("move " + app.string() + " to the Trash as an administrator", admin_move_command(app, target, getuid()));
+        else
+            steps.action("move " + app.string() + " to the Trash", [&] { return !ec; });
     }
 
     if (!options.keep_settings)
