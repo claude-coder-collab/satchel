@@ -259,7 +259,7 @@ Each platform gets a native previewer and context-menu entries; these are separa
 
 **Previewer content** (Quick Look and Windows preview handler):
 
-- For a `.zip`: entry list (name, size, method), total savings, "created by" version, restorable audio count. Reads only the central directory, so it is instant for any size.
+- For a `.zip`: entry list (name, size, method), total savings, "created by" version, restorable audio count. Sizes and savings of restorable FLAC are measured against the original WAV/AIFF (a multi-mono group counts its original once; channel rows show their own size). Reads the central directory and the FLAC headers (up to 2,000), so it stays fast for any size.
 - For a `.flac` made by this app: audio format, original filename and container, mirrored production tags, track names, multi-mono group info.
 
 **Platform notes**

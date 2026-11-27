@@ -35,9 +35,15 @@ TEST_CASE("zip preview summarises entries, savings and restorable audio", "[prev
     CHECK(p.file_count == p.entry_count - 1);
     CHECK(p.restorable_audio == 2);
     CHECK_FALSE(p.restorable_audio_partial);
+    const auto wav_bytes = test::make_wav(w).size() + test::make_wav(stereo).size();
+    const auto readme = std::ranges::find_if(p.entries, [](const Preview::Entry& e) { return e.name.starts_with("README"); });
+    REQUIRE(readme != p.entries.end());
+    CHECK(p.total_size == 50000 + wav_bytes + readme->size);
     CHECK(p.packed_size < p.total_size);
     const auto take = std::ranges::find(p.entries, std::string("take.flac"), &Preview::Entry::name);
     REQUIRE(take != p.entries.end());
+    CHECK(take->size == test::make_wav(stereo).size());
+    CHECK(take->packed < take->size);
     CHECK(take->method == "FLAC");
     CHECK(take->restores_to == "take.wav");
 

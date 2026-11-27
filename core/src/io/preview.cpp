@@ -306,7 +306,10 @@ Result<Preview> make_preview(IChunkedStream& input, std::string file_name, const
         if (entry.kind != ItemKind::Directory)
         {
             ++p.file_count;
-            p.total_size += entry.uncompressed_size;
+            if (entry.flac_original_size)
+                p.total_size += *entry.flac_original_size;
+            else if (!entry.flac_group || !header)
+                p.total_size += entry.uncompressed_size;
             p.packed_size += entry.compressed_size;
         }
         if (entry.flac_restorable && (!entry.flac_group || groups.insert(entry.flac_group->group_id).second))
@@ -319,7 +322,7 @@ Result<Preview> make_preview(IChunkedStream& input, std::string file_name, const
         Preview::Entry pe;
         pe.name = entry.name;
         pe.directory = entry.kind == ItemKind::Directory;
-        pe.size = entry.uncompressed_size;
+        pe.size = entry.flac_group ? entry.uncompressed_size : entry.flac_original_size.value_or(entry.uncompressed_size);
         pe.packed = entry.compressed_size;
         if (header)
             pe.method = "FLAC";
