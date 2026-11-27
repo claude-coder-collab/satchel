@@ -32,6 +32,7 @@
 #include <QTemporaryDir>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QToolButton>
 #include <QTreeView>
 
 #include <QElapsedTimer>
@@ -823,6 +824,21 @@ private slots:
         const auto cancelled = export_job(jc, archive, root.filePath("out/again"), satchel_gui::Settings{}, w->drag_items().front().entries, "src/docs");
         QCOMPARE(cancelled.status, ZP_CANCELLED);
         QCOMPARE(QDir(root.filePath("out")).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), (QStringList{ "b.txt", "docs" }));
+
+        // The status bar's stop button cancels every extraction of the window, queued ones too.
+        select("src/docs");
+        const auto folder = w->drag_items().front();
+        std::vector<std::optional<QString>> errors(3);
+        for (std::size_t i = 0; i < errors.size(); ++i)
+            w->export_dragged(folder, root.filePath(QString("out/stop%1").arg(i)), [&errors, i](const QString& e) { errors[i] = e; });
+        auto* stop = w->findChild<QToolButton*>("stopJobs");
+        QVERIFY(stop);
+        stop->click();
+        QTRY_VERIFY_WITH_TIMEOUT(std::ranges::all_of(errors, [](const auto& e) { return e.has_value(); }), 20000);
+        QVERIFY(!errors.back()->isEmpty());
+        for (std::size_t i = 0; i < errors.size(); ++i)
+            QCOMPARE(QFileInfo::exists(root.filePath(QString("out/stop%1").arg(i))), errors[i]->isEmpty());
+        QVERIFY(QDir(root.filePath("out")).entryList({ ".satchel-*" }, QDir::AllEntries | QDir::Hidden).isEmpty());
     }
 
     void verified_column_is_hidden_by_default()

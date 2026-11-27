@@ -40,7 +40,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 ## 4. Full mode
 
 - [ ] Open a 100,000-entry archive: lists in under 1 s, scrolls smoothly
-- [ ] Tree; Left selects the enclosing folder; right-click menu; drag rows to move them (not a folder into itself); drag out to Finder (a large folder: no hang, progress in the status bar, ✕ stops it and leaves nothing; cancelling the drag extracts nothing); sort every column; column visibility saved; search; method and restorable filters
+- [ ] Tree; Left selects the enclosing folder; right-click menu; drag rows to move them (not a folder into itself); drag out to Finder (a large folder: no hang, progress in the status bar, ✕ stops all of them and leaves nothing; cancelling the drag extracts nothing); sort every column; column visibility saved; search; method and restorable filters
 - [ ] Multi-mono set is one row, expands to channels; select, extract, rename, delete act on the whole group
 - [ ] Greyed rows with tooltip for unreadable third-party entries
 - [ ] Ratio blank where unknown, and for folders or selections containing such entries

@@ -155,7 +155,6 @@ private:
     int commit_job_ = 0;
     int verify_job_ = 0;
     bool extracting_ = false;
-    int running_job_ = 0;
     std::function<void()> after_commit_;
     QString edit_after_update_;
     bool filtering_ = false;

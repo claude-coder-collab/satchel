@@ -394,6 +394,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Stop All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>No archive open</source>
         <translation type="unfinished"></translation>
     </message>
@@ -529,10 +533,6 @@
     </message>
     <message>
         <source>Speed and time left</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stop</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -714,14 +714,18 @@ void MainWindow::build_ui()
     job_rate_->setAccessibleName(tr("Speed and time left"));
     job_rate_->hide();
     job_cancel_ = new QToolButton(this);
+    job_cancel_->setObjectName("stopJobs");
     job_cancel_->setText(QStringLiteral("✕"));
-    job_cancel_->setToolTip(tr("Stop"));
-    job_cancel_->setAccessibleName(tr("Stop"));
+    job_cancel_->setToolTip(tr("Stop All"));
+    job_cancel_->setAccessibleName(tr("Stop All"));
     job_cancel_->setAutoRaise(true);
     job_cancel_->hide();
     connect(job_cancel_, &QToolButton::clicked, this, [this] {
-        if (running_job_ != 0)
-            ws_.jobs().cancel(running_job_);
+        auto ids = mine_;
+        ids.removeAll(commit_job_);
+        std::ranges::sort(ids, std::greater<>{});
+        for (const auto id : ids)
+            ws_.jobs().cancel(id);
     });
     statusBar()->addPermanentWidget(job_rate_);
     statusBar()->addPermanentWidget(job_bar_);
@@ -1971,7 +1975,6 @@ void MainWindow::on_started(int id, const QString& title)
     if (!mine_.contains(id) || id == commit_job_)
         return;
     statusBar()->showMessage(title);
-    running_job_ = id;
     job_bar_->setValue(0);
     job_bar_->show();
     job_cancel_->show();
@@ -1999,8 +2002,6 @@ void MainWindow::on_finished(int id, const QString& title, const JobOutcome& out
         job_bar_->hide();
         job_rate_->hide();
         job_cancel_->hide();
-        if (running_job_ == id)
-            running_job_ = 0;
         statusBar()->showMessage(ok ? QString("%1 — %2").arg(title, outcome.summary) : QString(), 10000);
     }
     if (!outcome.entry_status.isEmpty() && outcome.output == archive_)
