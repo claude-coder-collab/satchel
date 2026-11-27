@@ -98,6 +98,8 @@ struct zp_editor
 {
     Context* context = nullptr;
     std::unique_ptr<ArchiveEditor> editor;
+    zp_progress_fn progress = nullptr;
+    void* progress_user = nullptr;
 };
 
 namespace
@@ -1586,6 +1588,11 @@ zp_editor_t* zp_editor_open(zp_context_t* ctx, zp_stream_t* input, const zp_plan
             auto* e = new zp_editor();
             e->context = &ctx->context;
             e->editor = std::move(ed);
+            if (options)
+            {
+                e->progress = options->progress;
+                e->progress_user = options->progress_user;
+            }
             return e;
         },
         nullptr
@@ -1597,7 +1604,10 @@ int zp_editor_add(zp_editor_t* editor, zp_input_t* input)
     ZP_REQUIRE(editor && input, ZP_INVALID_ARGUMENT);
     return guarded(
         [&]() -> int {
-            if (auto r = editor->editor->add(*input->source); !r)
+            std::optional<CallbackProgress> progress;
+            if (editor->progress)
+                progress.emplace(editor->progress, editor->progress_user);
+            if (auto r = editor->editor->add(*input->source, progress ? &*progress : nullptr); !r)
                 return set_error(r.error());
             return ZP_OK;
         },

@@ -1168,6 +1168,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Stop scanning the added files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Name collision: %1</source>
         <translation type="unfinished"></translation>
     </message>

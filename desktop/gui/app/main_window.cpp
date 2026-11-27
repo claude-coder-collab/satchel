@@ -682,6 +682,7 @@ void MainWindow::build_ui()
         if (commit_job_)
             ws_.jobs().cancel(commit_job_);
     });
+    connect(bar_, &SessionBar::cancel_scan, controller_, &SessionController::cancel_scan);
     connect(bar_, &SessionBar::resolve, this, [this](const op::Resolve& r) { controller_->apply({ r }); });
     connect(bar_, &SessionBar::reveal, this, [](const QString& path) { reveal_in_file_manager(path); });
     connect(bar_, &SessionBar::options_changed, this, [this](const satchel_gui::Settings& s, satchel_gui::ExistingEntries e) {
@@ -734,7 +735,7 @@ void MainWindow::build_ui()
 
 satchel_gui::SessionOptions MainWindow::session_options() const
 {
-    return { session_settings_.flac, session_settings_.flac_level, session_settings_.deflate_level, exclude_patterns(session_settings_), existing_ };
+    return { session_settings_.flac, session_settings_.flac_level, session_settings_.deflate_level, exclude_patterns(session_settings_), existing_, {} };
 }
 
 bool MainWindow::dirty() const

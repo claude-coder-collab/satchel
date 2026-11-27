@@ -58,6 +58,8 @@ public:
 
     // Writes the session to `output` as a job; returns the job id, or 0 if it cannot start now.
     int commit(const QString& output, const QString& title, const satchel_gui::Settings& settings);
+    // Stops the scan of files being added, if one is running; the addition is dropped.
+    void cancel_scan();
 
     [[nodiscard]] bool active() const { return active_; }
     [[nodiscard]] bool busy() const { return pending_ > 0 || committing_ != 0; }
@@ -78,6 +80,7 @@ private:
     JobQueue& jobs_;
     std::shared_ptr<std::unique_ptr<satchel_gui::Session>> session_;
     std::shared_ptr<const SessionSnapshot> snapshot_;
+    std::shared_ptr<satchel_gui::ScanCancel> cancel_ = std::make_shared<satchel_gui::ScanCancel>();
     bool active_ = false;
     int pending_ = 0;
     int committing_ = 0;

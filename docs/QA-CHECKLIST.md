@@ -62,6 +62,7 @@ Run before each release, on each OS the release targets. Automated tests cover t
 - [ ] Close the window / open another archive / New with staged changes: Apply / Discard / Cancel
 - [ ] Apply with a failure midway (disk full, cancel) keeps the original intact and the changes staged
 - [ ] Cancel a new archive (with and without added files) returns to the start page; Cancel in the action bar while writing, also while the write waits behind another job
+- [ ] Full mode: add a large folder to an archive and press Cancel while "Scanning files…" shows; the folder is not added, earlier staged changes and undo still work, and no error appears
 - [ ] Apply Changes to a large archive with a rename only: the progress bar moves steadily while unchanged entries are copied, and Cancel stops within a second, leaving the archive unchanged and no temp file
 - [ ] Extract / Verify with staged changes act on the archive on disk; double-click does nothing
 - [ ] Archive open in the app is modified or deleted by another program

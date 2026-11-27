@@ -76,11 +76,13 @@ void SessionController::worker()
             item.first(*session_);
         } catch (const zpp::Error& e)
         {
-            error = QString::fromUtf8(e.what());
+            if (e.status() != ZP_CANCELLED)
+                error = QString::fromUtf8(e.what());
         } catch (const std::exception& e)
         {
             error = QString::fromUtf8(e.what());
         }
+        cancel_->requested = false;
         std::shared_ptr<const SessionSnapshot> snap;
         if (*session_)
         {
@@ -123,8 +125,14 @@ void SessionController::publish(std::shared_ptr<const SessionSnapshot> snapshot,
         emit busy_changed(false);
 }
 
+void SessionController::cancel_scan()
+{
+    cancel_->requested = true;
+}
+
 void SessionController::open(const QString& archive, satchel_gui::SessionOptions options)
 {
+    options.cancel = cancel_;
     active_ = true;
     snapshot_.reset();
     auto* ctx = jobs_.context();
@@ -137,6 +145,7 @@ void SessionController::open(const QString& archive, satchel_gui::SessionOptions
 
 void SessionController::create(const QString& target, satchel_gui::SessionOptions options, satchel_gui::Change initial)
 {
+    options.cancel = cancel_;
     active_ = true;
     snapshot_.reset();
     auto* ctx = jobs_.context();
@@ -195,6 +204,7 @@ void SessionController::discard()
 
 void SessionController::set_options(satchel_gui::SessionOptions options)
 {
+    options.cancel = cancel_;
     if (active_ && !committing_)
         post([options = std::move(options)](auto& s) mutable {
             if (s)

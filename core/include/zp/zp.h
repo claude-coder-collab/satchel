@@ -235,9 +235,10 @@ typedef struct zp_plan_options
     int flac_enabled; /* default 1 */
     int deflate_level; /* default 6 */
     int flac_level; /* default 5 */
-    /* zp_plan_create only: called with (0, 0) while folders are listed, then (files read, files)
-     * while file headers are read; non-zero cancels and zp_plan_create returns NULL with
-     * ZP_CANCELLED. Default NULL. */
+    /* Called by zp_plan_create, and by zp_editor_add on an editor opened with these options
+     * (it must stay valid while the editor lives): (0, 0) while folders are listed, then
+     * (files read, files) while file headers are read. Non-zero cancels: zp_plan_create returns
+     * NULL and zp_editor_add leaves the edit unchanged, both with ZP_CANCELLED. Default NULL. */
     zp_progress_fn progress;
     void* progress_user;
 } zp_plan_options_t;

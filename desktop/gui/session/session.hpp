@@ -8,10 +8,12 @@
 
 #include "zp_cpp.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -28,6 +30,14 @@ enum class ExistingEntries {
     Keep,
 };
 
+// Lets another thread stop the scan of files being added. Only a scan started by apply() can be
+// stopped, never the replay of earlier changes.
+struct ScanCancel
+{
+    std::atomic<bool> requested{ false };
+    std::atomic<bool> armed{ false };
+};
+
 struct SessionOptions
 {
     bool flac = true;
@@ -35,6 +45,7 @@ struct SessionOptions
     int deflate_level = 6;
     std::vector<std::string> excludes;
     ExistingEntries existing = ExistingEntries::Ask;
+    std::shared_ptr<ScanCancel> cancel;
 
     bool operator==(const SessionOptions&) const = default;
 };

@@ -175,6 +175,11 @@ SessionBar::SessionBar(QWidget* parent) :
             emit discard();
     });
     connect(cancel_write_, &QPushButton::clicked, this, [this] {
+        if (!committing_)
+        {
+            emit cancel_scan();
+            return;
+        }
         cancel_write_->setEnabled(false);
         emit cancel_write();
     });
@@ -310,7 +315,8 @@ void SessionBar::update_visibility()
         progress_->setRange(0, 1000);
     progress_->setVisible(committing_ || scanning_);
     rate_->setVisible(committing_);
-    cancel_write_->setVisible(committing_);
+    cancel_write_->setVisible(committing_ || scanning_);
+    cancel_write_->setAccessibleName(committing_ ? tr("Cancel writing the archive") : tr("Stop scanning the added files"));
     issues_->setVisible(staged && !committing_ && (!v->conflicts.empty() || !v->warnings.empty() || !v->excluded.empty() || !v->problems.empty()));
     setVisible(staged || committing_ || scanning_ || !result_output_.isEmpty() || !result_->isHidden());
 }

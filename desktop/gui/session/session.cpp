@@ -53,6 +53,14 @@ zp_plan_options_t plan_options(const SessionOptions& o)
     p.flac_enabled = o.flac ? 1 : 0;
     p.flac_level = o.flac_level;
     p.deflate_level = o.deflate_level;
+    if (o.cancel)
+    {
+        p.progress = [](void* user, std::uint64_t, std::uint64_t) -> int {
+            const auto* c = static_cast<const ScanCancel*>(user);
+            return c->armed.load() && c->requested.load() ? 1 : 0;
+        };
+        p.progress_user = o.cancel.get();
+    }
     return p;
 }
 
@@ -295,10 +303,36 @@ void Session::rebuild()
 void Session::apply(Change change)
 {
     std::vector<EntryKey> renamed;
+    std::size_t done = 0;
+    struct Arm
+    {
+        ScanCancel* c;
+        explicit Arm(ScanCancel* cancel) :
+            c(cancel)
+        {
+            if (c)
+                c->armed = true;
+        }
+        Arm(const Arm&) = delete;
+        Arm& operator=(const Arm&) = delete;
+        Arm(Arm&&) = delete;
+        Arm& operator=(Arm&&) = delete;
+        ~Arm()
+        {
+            if (c)
+                c->armed = false;
+        }
+    };
     try
     {
-        for (const auto& o : change)
-            apply_op(o, renamed);
+        {
+            const Arm arm(options_.cancel.get());
+            for (const auto& o : change)
+            {
+                apply_op(o, renamed);
+                ++done;
+            }
+        }
         if (!renamed.empty())
         {
             zpp::Plan plan(zpp::not_null(zp_editor_plan(editor_.get())));
@@ -313,6 +347,11 @@ void Session::apply(Change change)
                 }
             }
         }
+    } catch (const zpp::Error& e)
+    {
+        if (e.status() != ZP_CANCELLED || done > 0 || !std::holds_alternative<op::Add>(change.front()))
+            rebuild();
+        throw;
     } catch (...)
     {
         rebuild();
