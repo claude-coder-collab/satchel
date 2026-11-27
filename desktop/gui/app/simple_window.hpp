@@ -36,6 +36,7 @@ protected:
 
 private:
     void start_compress(const QStringList& paths);
+    int start_build(const std::shared_ptr<zpp::Plan>& plan, const QString& output, const satchel_gui::Settings& settings);
     void start_extract(const QString& archive);
     void on_started(int id, const QString& title);
     void on_progress(int id, quint64 done, quint64 total);
@@ -56,6 +57,7 @@ private:
     QList<int> mine_;
     QHash<int, QString> cancelled_text_;
     QSet<int> quit_when_clean_;
+    QHash<int, std::function<int()>> scans_;
     int current_ = 0;
     QString last_output_;
     QStringList last_input_;

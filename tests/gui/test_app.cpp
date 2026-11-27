@@ -88,14 +88,17 @@ QByteArray test_wav(int frames, std::uint16_t channels = 2)
     return "RIFF" + le(36 + size, 4) + "WAVEfmt " + le(16, 4) + le(1, 2) + le(channels, 2) + le(48000, 4) + le(48000u * 2u * channels, 4) + le(2u * channels, 2) + le(16, 2) + "data" + le(size, 4) + pcm;
 }
 
-// Job results as they reach the test's thread. A QSignalSpy on JobQueue::finished records on the
+// Job results as they reach the test's thread, leaving out Simple mode's successful scans. A QSignalSpy on JobQueue::finished records on the
 // job thread, so a job that ends before wait() starts is missed.
 class JobResults : public QObject
 {
 public:
     explicit JobResults(JobQueue& jobs)
     {
-        connect(&jobs, &JobQueue::finished, this, [this](int, const QString&, const JobOutcome& outcome) { pending_ << outcome; });
+        connect(&jobs, &JobQueue::finished, this, [this](int, const QString& title, const JobOutcome& outcome) {
+            if (!title.startsWith("Scanning files") || outcome.status != ZP_OK)
+                pending_ << outcome;
+        });
     }
 
     // Waits until a result is pending.

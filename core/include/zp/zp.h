@@ -235,6 +235,11 @@ typedef struct zp_plan_options
     int flac_enabled; /* default 1 */
     int deflate_level; /* default 6 */
     int flac_level; /* default 5 */
+    /* zp_plan_create only: called with (0, 0) while folders are listed, then (files read, files)
+     * while file headers are read; non-zero cancels and zp_plan_create returns NULL with
+     * ZP_CANCELLED. Default NULL. */
+    zp_progress_fn progress;
+    void* progress_user;
 } zp_plan_options_t;
 
 ZP_API void zp_plan_options_init(zp_plan_options_t* options);

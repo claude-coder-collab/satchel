@@ -219,24 +219,27 @@ void SimpleWindow::start_compress(const QStringList& paths)
     for (const auto& p : paths)
         items.push_back(fs_path(p));
     const auto output = q_path(satchel_gui::compress_output(items, s.simple_output_folder, exists));
-    std::shared_ptr<zpp::Plan> plan;
-    try
-    {
-        plan = make_plan(ws_.jobs().context(), paths, s);
-    } catch (const zpp::Error& e)
-    {
-        QMessageBox::critical(this, tr("Cannot compress"), QString::fromUtf8(e.what()));
-        return;
-    }
+    auto planned = std::make_shared<std::shared_ptr<zpp::Plan>>();
+    const auto settings = s;
+    const auto scan = ws_.jobs().enqueue(tr("Scanning files for %1").arg(QFileInfo(output).fileName()), [planned, paths, settings](JobContext& jc) {
+        *planned = make_plan(jc.context, paths, settings, jc.progress);
+        return JobOutcome{ .status = ZP_OK };
+    });
+    mine_ << scan;
+    cancelled_text_.insert(scan, tr("Cancelled. %1 was not created.").arg(QFileInfo(output).fileName()));
+    scans_.insert(scan, [this, planned, output, settings] { return start_build(*planned, output, settings); });
+}
+
+int SimpleWindow::start_build(const std::shared_ptr<zpp::Plan>& plan, const QString& output, const satchel_gui::Settings& settings)
+{
     while (!zp_plan_executable(plan->get()))
     {
         ResolutionSheet sheet(plan->get(), this);
         if (sheet.exec() != QDialog::Accepted)
-            return;
+            return -1;
         if (!sheet.apply())
             QMessageBox::warning(this, tr("Cannot use those names"), tr("Some of the new names are invalid or still collide. Please choose others."));
     }
-    const auto settings = s;
     const auto id = ws_.jobs().enqueue(tr("Compressing to %1").arg(QFileInfo(output).fileName()), [plan, output, settings](JobContext& jc) {
         auto o = compress_job(jc, plan->get(), output, settings);
         if (o.status == ZP_OK && settings.verify_after_build)
@@ -249,6 +252,7 @@ void SimpleWindow::start_compress(const QStringList& paths)
     });
     mine_ << id;
     cancelled_text_.insert(id, tr("Cancelled. %1 was not created.").arg(QFileInfo(output).fileName()));
+    return id;
 }
 
 void SimpleWindow::start_extract(const QString& archive)
@@ -286,13 +290,27 @@ void SimpleWindow::on_progress(int id, quint64 done, quint64 total)
         return;
     bar_->setMaximum(total ? 1000 : 0);
     bar_->setValue(total ? static_cast<int>(1000.0 * static_cast<double>(done) / static_cast<double>(total)) : 0);
-    rate_->report(done, total);
+    if (!scans_.contains(id))
+        rate_->report(done, total);
 }
 
 void SimpleWindow::on_finished(int id, const QString& title, const JobOutcome& outcome)
 {
-    if (!mine_.removeOne(id))
+    if (!mine_.contains(id))
         return;
+    if (auto next = scans_.take(id); next && outcome.status == ZP_OK)
+    {
+        mine_.removeOne(id);
+        cancelled_text_.remove(id);
+        const bool quit = quit_when_clean_.remove(id);
+        const auto build = next();
+        if (build >= 0 && quit)
+            quit_when_clean_.insert(build);
+        if (build < 0 && mine_.isEmpty())
+            pages_->setCurrentIndex(0);
+        return;
+    }
+    mine_.removeOne(id);
     const bool quit_if_clean = quit_when_clean_.remove(id);
     const auto cancelled_text = cancelled_text_.take(id);
     last_output_ = outcome.output;

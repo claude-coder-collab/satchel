@@ -994,6 +994,8 @@ void zp_plan_options_init(zp_plan_options_t* options)
     options->flac_enabled = d.flac_enabled ? 1 : 0;
     options->deflate_level = d.deflate_level;
     options->flac_level = d.flac_level;
+    options->progress = nullptr;
+    options->progress_user = nullptr;
 }
 
 zp_plan_t* zp_plan_create(zp_context_t* ctx, zp_input_t* input, const zp_plan_options_t* options)
@@ -1007,7 +1009,10 @@ zp_plan_t* zp_plan_create(zp_context_t* ctx, zp_input_t* input, const zp_plan_op
                 set_error(o.error());
                 return nullptr;
             }
-            auto plan = ArchivePlanner(*o).plan(*input->source);
+            std::optional<CallbackProgress> progress;
+            if (options && options->progress)
+                progress.emplace(options->progress, options->progress_user);
+            auto plan = ArchivePlanner(*o).plan(*input->source, progress ? &*progress : nullptr);
             if (!plan)
             {
                 set_error(plan.error());

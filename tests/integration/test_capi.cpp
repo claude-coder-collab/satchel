@@ -4,6 +4,7 @@
 #include "test_support.hpp"
 #include "zp/zp.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstring>
@@ -741,4 +742,43 @@ TEST_CASE("C API editor commit reports progress inside kept entries and cancels 
     for ([[maybe_unused]] const auto& e : std::filesystem::directory_iterator(dir.path()))
         ++files;
     CHECK(files == 1);
+}
+
+TEST_CASE("C API planning reports scanned files and can be cancelled", "[capi]")
+{
+    Ctx c;
+    zp::test::TempDir dir;
+    for (int i = 0; i < 5; ++i)
+        std::ofstream(dir.path() / std::format("f{}.txt", i)) << "text";
+    const auto root = dir.path().string();
+    const char* paths[] = { root.c_str() };
+    struct Seen
+    {
+        std::uint64_t total = 0;
+        int calls = 0;
+        bool cancel = false;
+    } seen;
+    zp_plan_options_t options;
+    zp_plan_options_init(&options);
+    options.progress = [](void* user, uint64_t, uint64_t total) -> int {
+        auto& s = *static_cast<Seen*>(user);
+        s.total = std::max<std::uint64_t>(s.total, total);
+        ++s.calls;
+        return s.cancel ? 1 : 0;
+    };
+    options.progress_user = &seen;
+
+    zp_input_t* in = zp_input_from_paths(paths, 1);
+    zp_plan_t* plan = zp_plan_create(c.ctx, in, &options);
+    REQUIRE(plan);
+    CHECK(seen.calls >= 2);
+    CHECK(seen.total == zp_plan_entry_count(plan));
+    zp_plan_free(plan);
+    zp_input_free(in);
+
+    seen.cancel = true;
+    in = zp_input_from_paths(paths, 1);
+    CHECK(zp_plan_create(c.ctx, in, &options) == nullptr);
+    CHECK(zp_last_status() == ZP_CANCELLED);
+    zp_input_free(in);
 }

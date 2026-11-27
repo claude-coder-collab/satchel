@@ -93,7 +93,8 @@ std::vector<std::string> exclude_patterns(const satchel_gui::Settings& settings)
 QString exclude_pattern_error(const std::vector<std::string>& patterns);
 
 // Plans `inputs` with the settings' compression and Leave out options (Simple mode).
-std::shared_ptr<zpp::Plan> make_plan(zp_context_t* context, const QStringList& inputs, const satchel_gui::Settings& settings);
+// `progress` (optional) is polled while the inputs are listed and read; false cancels.
+std::shared_ptr<zpp::Plan> make_plan(zp_context_t* context, const QStringList& inputs, const satchel_gui::Settings& settings, const std::function<bool(std::uint64_t, std::uint64_t)>& progress = {});
 
 // Job bodies; they run on `jc.context`.
 JobOutcome compress_job(JobContext& jc, zp_plan_t* plan, const QString& output, const satchel_gui::Settings& settings);

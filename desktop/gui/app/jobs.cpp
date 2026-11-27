@@ -166,7 +166,7 @@ void JobQueue::loop()
     }
 }
 
-std::shared_ptr<zpp::Plan> make_plan(zp_context_t* context, const QStringList& inputs, const satchel_gui::Settings& settings)
+std::shared_ptr<zpp::Plan> make_plan(zp_context_t* context, const QStringList& inputs, const satchel_gui::Settings& settings, const std::function<bool(std::uint64_t, std::uint64_t)>& progress)
 {
     std::vector<std::string> paths;
     for (const auto& i : inputs)
@@ -178,6 +178,12 @@ std::shared_ptr<zpp::Plan> make_plan(zp_context_t* context, const QStringList& i
     options.flac_enabled = settings.flac ? 1 : 0;
     options.deflate_level = settings.deflate_level;
     options.flac_level = settings.flac_level;
+    zpp::ProgressAdapter adapter{ progress };
+    if (progress)
+    {
+        options.progress = zpp::ProgressAdapter::call;
+        options.progress_user = &adapter;
+    }
     return std::make_shared<zpp::Plan>(zpp::not_null(zp_plan_create(context, input.get(), &options)));
 }
 
