@@ -78,7 +78,8 @@ enum {
 
 enum {
     ZP_CONFLICT_COLLISION = 0,
-    ZP_CONFLICT_INVALID_NAME = 1
+    ZP_CONFLICT_INVALID_NAME = 1,
+    ZP_CONFLICT_FILE_AS_FOLDER = 2 /* entries[0] is a file; the others are inside a folder of that name */
 };
 
 enum {

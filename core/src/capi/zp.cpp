@@ -541,7 +541,10 @@ char* zp_plan_describe(const zp_plan_t* plan)
             j.end_array().key("conflicts").begin_array();
             for (const auto& c : plan->plan.conflicts)
             {
-                j.begin_object().field("kind", c.kind == ConflictKind::Collision ? "collision" : "invalid_name").field("key", c.collision_key).field("detail", c.detail);
+                j.begin_object().field("kind", c.kind == ConflictKind::Collision ? "collision" : c.kind == ConflictKind::InvalidName ? "invalid_name"
+                                                                                                                                     : "file_as_folder")
+                    .field("key", c.collision_key)
+                    .field("detail", c.detail);
                 j.key("entries").begin_array();
                 for (const auto i : c.entries)
                     j.value(static_cast<std::uint64_t>(i));

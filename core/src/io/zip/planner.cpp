@@ -338,7 +338,7 @@ void ArchivePlanner::check(ArchivePlan& plan)
         }
     }
     for (auto& [key, idx] : parent_clash)
-        plan.conflicts.push_back({ ConflictKind::Collision, key, idx, "a file name is also used as a folder" });
+        plan.conflicts.push_back({ ConflictKind::FileAsFolder, key, idx, "a file name is also used as a folder" });
 
     std::ranges::sort(plan.conflicts, {}, [](const Conflict& c) { return c.entries.front(); });
 }

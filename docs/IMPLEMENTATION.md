@@ -137,8 +137,9 @@ require the magic; anything else is a foreign comment (`nullopt`).
   case folding. Negation patterns were left out, so pattern order never matters. Cubase/Nuendo
   peak files were left out of the DAW preset because their extension could not be confirmed.
 - Conflict kinds (extension of the design doc's `Conflict`):
-  - `Collision`: equal `collision_key` (NFC + case fold), or a file name that another entry uses as
-    a folder (`a` and `a/b`).
+  - `Collision`: equal `collision_key` (NFC + case fold).
+  - `FileAsFolder`: a file name that other entries use as a folder (`a` and `a/b`); `entries[0]` is
+    the file, so renaming or skipping it resolves the conflict.
   - `InvalidName`: the normalized name fails `validate_for_archive` (invalid UTF-8, absolute, drive
     letter, empty/`.`/`..` segments, backslash, > 65,535 bytes).
 - `replan` applies all resolutions at once; indices refer to the plan passed in; skipped entries are

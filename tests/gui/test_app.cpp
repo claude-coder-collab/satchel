@@ -194,6 +194,42 @@ private slots:
         QVERIFY2(ms < limit_ms, qPrintable(QString("took %1 ms").arg(ms)));
     }
 
+    void resolution_sheet_lists_every_conflict()
+    {
+        zpp::Input input(zpp::not_null(zp_input_memory()));
+        for (const char* name : { "bad\xFF.txt", "a", "A/b", "x", "X", "ok" })
+            zpp::check(zp_input_memory_add_file(input.get(), name, nullptr, 0, 0, 0644));
+        zpp::Plan plan(zpp::not_null(zp_plan_create(context.get(), input.get(), nullptr)));
+        QVERIFY(!zp_plan_executable(plan.get()));
+        {
+            ResolutionSheet sheet(plan.get());
+            QCOMPARE(sheet.windowTitle(), QString("Some names need changing"));
+            const auto edits = sheet.findChildren<QLineEdit*>();
+            QCOMPARE(edits.size(), 3);
+            QStringList names;
+            for (auto* e : edits)
+                names << e->text();
+            QVERIFY(names.contains("bad_.txt"));
+            QVERIFY(names.contains("a 2"));
+            QVERIFY(names.contains("X 2"));
+            QVERIFY(sheet.apply());
+        }
+        QVERIFY(zp_plan_executable(plan.get()));
+        QCOMPARE(zpp::plan_entries(plan.get()).size(), std::size_t{ 6 });
+
+        zpp::Input again(zpp::not_null(zp_input_memory()));
+        zpp::check(zp_input_memory_add_file(again.get(), "bad\xFF.txt", nullptr, 0, 0, 0644));
+        zpp::check(zp_input_memory_add_file(again.get(), "ok", nullptr, 0, 0, 0644));
+        zpp::Plan skipped(zpp::not_null(zp_plan_create(context.get(), again.get(), nullptr)));
+        ResolutionSheet sheet(skipped.get());
+        QCOMPARE(sheet.windowTitle(), QString("Some names can't be stored"));
+        auto boxes = sheet.findChildren<QCheckBox*>();
+        QCOMPARE(boxes.size(), 1);
+        boxes.front()->setChecked(true);
+        QVERIFY(sheet.apply());
+        QCOMPARE(zpp::plan_entries(skipped.get()).size(), std::size_t{ 1 });
+    }
+
     void flac_ratio_needs_the_original_size()
     {
         zpp::EntryInfo text;

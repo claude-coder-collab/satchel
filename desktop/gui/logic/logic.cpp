@@ -82,18 +82,66 @@ std::filesystem::path compress_output(const std::vector<std::filesystem::path>& 
 {
     if (items.empty())
         return {};
+    auto first = items.front();
+    if (!first.has_filename())
+        first = first.parent_path();
     if (items.size() == 1)
-    {
-        auto item = items.front();
-        if (!item.has_filename())
-            item = item.parent_path();
-        return unique_path(output_dir(item.parent_path(), output_folder) / (item.filename().u8string() + u8".zip"), exists);
-    }
-    const auto parent = items.front().parent_path();
+        return unique_path(output_dir(first.parent_path(), output_folder) / (first.filename().u8string() + u8".zip"), exists);
+    const auto parent = first.parent_path();
     auto name = parent.filename();
     if (name.empty())
         name = "Archive";
     return unique_path(output_dir(parent, output_folder) / (name.u8string() + u8".zip"), exists);
+}
+
+std::string storable_name(std::string_view name)
+{
+    std::string clean;
+    for (std::size_t i = 0; i < name.size();)
+    {
+        const auto c = static_cast<unsigned char>(name[i]);
+        const std::size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2
+            : (c >> 4) == 0xE                                  ? 3
+            : (c >> 3) == 0x1E                                 ? 4
+                                                               : 0;
+        bool ok = len > 0 && i + len <= name.size();
+        for (std::size_t k = 1; ok && k < len; ++k)
+            ok = (static_cast<unsigned char>(name[i + k]) & 0xC0) == 0x80;
+        if (ok && len > 1)
+        {
+            std::uint32_t cp{ c & (0xFFu >> (len + 1)) };
+            for (std::size_t k = 1; k < len; ++k)
+                cp = (cp << 6) | (static_cast<unsigned char>(name[i + k]) & 0x3Fu);
+            constexpr std::array<std::uint32_t, 5> min{ 0, 0, 0x80, 0x800, 0x10000 };
+            ok = cp >= min[len] && cp <= 0x10FFFF && (cp < 0xD800 || cp > 0xDFFF);
+        }
+        if (!ok || c == 0 || c == '\\')
+        {
+            clean += '_';
+            ++i;
+            continue;
+        }
+        clean.append(name.substr(i, len));
+        i += len;
+    }
+    if (clean.size() >= 2 && std::isalpha(static_cast<unsigned char>(clean[0])) && clean[1] == ':')
+        clean.erase(0, 2);
+    std::string out;
+    for (std::size_t pos = 0; pos <= clean.size();)
+    {
+        auto next = clean.find('/', pos);
+        if (next == std::string::npos)
+            next = clean.size();
+        const auto part = std::string_view{ clean }.substr(pos, next - pos);
+        if (!part.empty() && part != "." && part != "..")
+        {
+            if (!out.empty())
+                out += '/';
+            out += part;
+        }
+        pos = next + 1;
+    }
+    return out.empty() ? std::string{ "unnamed" } : out;
 }
 
 std::filesystem::path extract_output(const std::filesystem::path& archive, const std::optional<std::filesystem::path>& output_folder, const ExistsFn& exists)

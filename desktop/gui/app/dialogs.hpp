@@ -98,8 +98,14 @@ public:
     bool apply();
 
 private:
+    struct Row
+    {
+        std::size_t entry;
+        QLineEdit* edit;
+        QCheckBox* skip;
+    };
     zp_plan_t* plan_;
-    std::vector<std::pair<std::size_t, QLineEdit*>> edits_;
+    std::vector<Row> rows_;
 };
 
 struct ExtractChoice

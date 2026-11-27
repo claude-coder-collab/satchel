@@ -319,7 +319,7 @@ QStringList SessionBar::notes(const satchel_gui::SessionView& view)
 {
     QStringList lines;
     for (const auto& c : view.conflicts)
-        lines << (c.kind == ZP_CONFLICT_COLLISION ? tr("Name collision: %1") : tr("Invalid name: %1")).arg(qs(c.detail));
+        lines << (c.kind == ZP_CONFLICT_INVALID_NAME ? tr("Invalid name: %1") : tr("Name collision: %1")).arg(qs(c.detail));
     for (const auto& p : view.problems)
         lines << tr("Dropped a change: %1").arg(qs(p));
     for (const auto& w : view.warnings)

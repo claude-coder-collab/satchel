@@ -228,11 +228,13 @@ void SimpleWindow::start_compress(const QStringList& paths)
         QMessageBox::critical(this, tr("Cannot compress"), QString::fromUtf8(e.what()));
         return;
     }
-    if (!zp_plan_executable(plan->get()))
+    while (!zp_plan_executable(plan->get()))
     {
         ResolutionSheet sheet(plan->get(), this);
-        if (sheet.exec() != QDialog::Accepted || !sheet.apply())
+        if (sheet.exec() != QDialog::Accepted)
             return;
+        if (!sheet.apply())
+            QMessageBox::warning(this, tr("Cannot use those names"), tr("Some of the new names are invalid or still collide. Please choose others."));
     }
     const auto settings = s;
     const auto id = ws_.jobs().enqueue(tr("Compressing to %1").arg(QFileInfo(output).fileName()), [plan, output, settings](JobContext& jc) {
