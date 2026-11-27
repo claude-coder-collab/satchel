@@ -1012,15 +1012,27 @@
 <context>
     <name>ResolutionSheet</name>
     <message>
+        <source>Some names need changing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Some names can&apos;t be stored</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Some names collide</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>These files would get the same name in the archive. Suggested new names:</source>
+        <source>Rename or skip these files to continue:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Rename and continue</source>
+        <source>Skip</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1446,6 +1458,18 @@ or drop a .zip to extract it.</source>
         <source>Copied</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Scanning files for %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot use those names</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Some of the new names are invalid or still collide. Please choose others.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message numerus="yes">
         <source>
 … and %n more</source>
@@ -1470,10 +1494,6 @@ or drop a .zip to extract it.</source>
     </message>
     <message>
         <source>Close Window</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cannot compress</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
