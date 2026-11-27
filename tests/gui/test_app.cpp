@@ -452,6 +452,15 @@ private slots:
 #endif
     }
 
+    void uninstall_sees_applications_as_writable()
+    {
+        if (!uninstall_available())
+            QSKIP("macOS only");
+        QVERIFY(!on_read_only_volume("/Applications"));
+        QVERIFY(!on_read_only_volume(dir_.path().toStdString()));
+        QVERIFY(on_read_only_volume("/System/Library"));
+    }
+
     void uninstall_helper_arguments_round_trip()
     {
         if (!uninstall_available())

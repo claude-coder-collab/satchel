@@ -11,12 +11,12 @@
 #include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
-#include <QStorageInfo>
 
 #include <cerrno>
 #include <csignal>
 #include <cstdlib>
 #include <string_view>
+#include <sys/mount.h>
 #include <thread>
 #include <utility>
 
@@ -108,10 +108,16 @@ int run_uninstall_helper(const UninstallRequest& request, std::chrono::milliseco
     return 1;
 }
 
+bool on_read_only_volume(const std::string& path)
+{
+    struct statfs info{};
+    return statfs(path.c_str(), &info) == 0 && (info.f_flags & MNT_RDONLY) != 0;
+}
+
 void run_uninstall_dialog(QWidget* parent)
 {
     const auto bundle = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../..");
-    if (QStorageInfo(bundle).isReadOnly())
+    if (on_read_only_volume(bundle.toStdString()))
     {
         QMessageBox::information(parent, QObject::tr("Uninstall Satchel"), QObject::tr("Satchel is running from a disk image or another read-only location, so there is nothing to uninstall here. Quit Satchel and eject the disk image instead."));
         return;
